@@ -1,0 +1,32 @@
+name: Validate deploy environment
+description: Fail-closed check that required secrets/vars are present before prepare-env injection
+
+inputs:
+  required_keys:
+    description: Comma-separated GitHub secret/var names required for deploy
+    required: true
+  infra_ops_ref:
+    description: Tag or SHA of optimizr-infra-ops (hosts validate_deploy_env.py)
+    required: false
+    default: v1
+  infra_ops_read_token:
+    description: Org PAT (OPTIMIZR_INFRA_OPS_READ_TOKEN) for private sparse checkout from consumer repos
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Python
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      with:
+        python-version: "3.12"
+
+    - name: Validate required secrets/vars
+      shell: bash
+      env:
+        REQUIRED_DEPLOY_KEYS: ${{ inputs.required_keys }}
+      run: |
+        set -euo pipefail
+        export PYTHONPATH="${{ github.action_path }}/../../.."
+        python -m scripts.ci.validate_deploy_env

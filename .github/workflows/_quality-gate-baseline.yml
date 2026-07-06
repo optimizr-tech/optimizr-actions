@@ -1,0 +1,77 @@
+name: _quality-gate-baseline
+
+# Emit quality-gate-baseline artifact on main after producer jobs succeed.
+# Presets: python-backend (payment) | monorepo-serve (optimizr-serve).
+
+on:
+  workflow_call:
+    inputs:
+      preset:
+        description: "Artifact layout preset: python-backend | monorepo-serve"
+        required: true
+        type: string
+      infra_ops_ref:
+        description: optimizr-infra-ops ref for scripts
+        required: false
+        type: string
+        default: v1
+      baseline_retention_days:
+        description: Retention for quality-gate-baseline artifact
+        required: false
+        type: number
+        default: 90
+    secrets:
+      OPTIMIZR_INFRA_OPS_READ_TOKEN:
+        description: Org PAT for sparse checkout of scripts/quality_gate
+        required: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  quality-gate-baseline:
+    name: Quality gate baseline (main)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout caller
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Setup quality-gate scripts
+        uses: optimizr-tech/optimizr-infra-ops/.github/actions/quality-gate-scripts@v1
+        with:
+          infra_ops_ref: ${{ inputs.infra_ops_ref }}
+          infra_ops_read_token: ${{ secrets.OPTIMIZR_INFRA_OPS_READ_TOKEN }}
+
+      - name: Download artifacts (python-backend)
+        if: inputs.preset == 'python-backend'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          path: artifacts
+
+      - name: Download artifacts (monorepo-serve)
+        if: inputs.preset == 'monorepo-serve'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          path: artifacts
+
+      - name: Build baseline JSON
+        env:
+          PYTHONPATH: ${{ github.workspace }}/_qg
+        run: |
+          set -euo pipefail
+          python -m scripts.quality_gate.run \
+            --artifacts-dir artifacts \
+            --head-sha "${GITHUB_SHA}" \
+            emit-baseline > quality-gate-baseline.json
+          python -m json.tool quality-gate-baseline.json > /dev/null
+          echo "baseline metrics: $(python -c 'import json; print(len(json.load(open("quality-gate-baseline.json"))["metrics"]))')"
+
+      - name: Upload baseline
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: quality-gate-baseline
+          path: quality-gate-baseline.json
+          retention-days: ${{ inputs.baseline_retention_days }}
+          if-no-files-found: error

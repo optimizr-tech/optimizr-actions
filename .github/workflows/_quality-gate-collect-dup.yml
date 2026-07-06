@@ -1,0 +1,96 @@
+name: _quality-gate-collect-dup
+
+# jscpd duplication scans per scope for quality-gate metrics.
+
+on:
+  workflow_call:
+    inputs:
+      scopes:
+        description: "Comma-separated scopes: backend,frontend-storefront,frontend-admin"
+        required: false
+        type: string
+        default: "backend"
+      scope_paths:
+        description: "Optional CSV paths aligned with scopes (defaults per scope name)"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Plan duplication matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.build.outputs.matrix }}
+    steps:
+      - id: build
+        run: |
+          set -euo pipefail
+          matrix_json="$(python3 -c "
+          import json, os
+          defaults = {
+              'backend': 'app/',
+              'frontend-storefront': 'frontend/apps/storefront/src/',
+              'frontend-admin': 'frontend/apps/admin/src/',
+          }
+          scopes = [s.strip() for s in os.environ.get('SCOPES', '').split(',') if s.strip()]
+          paths = [p.strip() for p in os.environ.get('PATHS', '').split(',') if p.strip()]
+          include = []
+          for i, scope in enumerate(scopes):
+              path = paths[i] if i < len(paths) else defaults.get(scope, '.')
+              include.append({'scope': scope, 'paths': path})
+          if not include:
+              include.append({'scope': 'backend', 'paths': 'app/'})
+          print(json.dumps({'include': include}))
+          ")"
+          echo "matrix=${matrix_json}" >> "$GITHUB_OUTPUT"
+        env:
+          SCOPES: ${{ inputs.scopes }}
+          PATHS: ${{ inputs.scope_paths }}
+
+  collect-dup:
+    name: Quality gate dup (${{ matrix.scope }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093  # v6.0.8
+        with:
+          version: 10
+
+      - name: Install Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        with:
+          node-version: 20
+
+      - name: Run jscpd
+        run: |
+          set -euo pipefail
+          mkdir -p .qg-dup
+          pnpm dlx jscpd@4 \
+            --reporters json \
+            --output .qg-dup \
+            --gitignore \
+            --silent \
+            --threshold 100 \
+            ${{ matrix.paths }}
+          test -s .qg-dup/jscpd-report.json
+
+      - name: Upload dup report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: dup-${{ matrix.scope }}
+          path: .qg-dup/jscpd-report.json
+          retention-days: 7
+          if-no-files-found: warn

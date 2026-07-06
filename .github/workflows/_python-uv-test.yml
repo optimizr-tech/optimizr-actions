@@ -1,0 +1,199 @@
+# Reusable: uv sync + ruff + pytest com gate de cobertura.
+# Consome via: uses: optimizr-tech/optimizr-infra-ops/.github/workflows/_python-uv-test.yml@v1
+# Monorepo integration preset (serve): input integration_preset=serve — issue #59.
+
+name: _python-uv-test
+
+# Concurrency: caller workflow only (CI_STANDARDS §8.1).
+
+on:
+  workflow_call:
+    inputs:
+      python_version:
+        description: "Versão Python"
+        required: false
+        type: string
+        default: "3.12"
+      coverage_min:
+        description: "Cobertura mínima (%)"
+        required: false
+        type: number
+        default: 80
+      extras:
+        description: "Extras pra instalar via uv sync (--extra X), espaço-separados"
+        required: false
+        type: string
+        default: ""
+      sync_all_extras:
+        description: "uv sync --all-extras (ignora extras quando true)"
+        required: false
+        type: boolean
+        default: false
+      ruff_check:
+        description: "Rodar ruff check"
+        required: false
+        type: boolean
+        default: true
+      ruff_paths:
+        description: "Paths pro ruff check"
+        required: false
+        type: string
+        default: "."
+      mypy_enabled:
+        description: "Rodar mypy após ruff"
+        required: false
+        type: boolean
+        default: false
+      mypy_target:
+        description: "Target do mypy"
+        required: false
+        type: string
+        default: "app/"
+      extra_steps:
+        description: "Script shell multiline entre lint e pytest"
+        required: false
+        type: string
+        default: ""
+      integration_preset:
+        description: "Preset de services de integração (vazio = sem services; serve = postgres+redis+rabbitmq)"
+        required: false
+        type: string
+        default: ""
+      pytest_env:
+        description: "Env multiline KEY=VAL exportado antes do pytest"
+        required: false
+        type: string
+        default: ""
+      cov_package:
+        description: "Pacote para --cov= (vazio usa --cov genérico)"
+        required: false
+        type: string
+        default: ""
+      coverage_branch:
+        description: "Habilitar --cov-branch"
+        required: false
+        type: boolean
+        default: false
+      coverage_xml_path:
+        description: "Caminho do relatório Cobertura XML"
+        required: false
+        type: string
+        default: ""
+      coverage_json_path:
+        description: "Caminho do relatório JSON de cobertura"
+        required: false
+        type: string
+        default: ""
+      upload_artifact_name:
+        description: "Nome do artifact de cobertura (vazio = sem upload)"
+        required: false
+        type: string
+        default: ""
+      upload_artifact_paths:
+        description: "Paths multiline pro artifact de cobertura"
+        required: false
+        type: string
+        default: ""
+      pytest_args:
+        description: "Args extras pro pytest"
+        required: false
+        type: string
+        default: ""
+      timeout_minutes:
+        description: "Timeout máximo do job de teste"
+        required: false
+        type: number
+        default: 10
+
+jobs:
+  test:
+    if: inputs.integration_preset == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Python test steps
+        uses: optimizr-tech/optimizr-infra-ops/.github/actions/python-uv-test-steps@v1
+        with:
+          python_version: ${{ inputs.python_version }}
+          sync_all_extras: ${{ inputs.sync_all_extras }}
+          extras: ${{ inputs.extras }}
+          ruff_check: ${{ inputs.ruff_check }}
+          ruff_paths: ${{ inputs.ruff_paths }}
+          mypy_enabled: ${{ inputs.mypy_enabled }}
+          mypy_target: ${{ inputs.mypy_target }}
+          extra_steps: ${{ inputs.extra_steps }}
+          coverage_min: ${{ inputs.coverage_min }}
+          cov_package: ${{ inputs.cov_package }}
+          coverage_branch: ${{ inputs.coverage_branch }}
+          coverage_xml_path: ${{ inputs.coverage_xml_path }}
+          coverage_json_path: ${{ inputs.coverage_json_path }}
+          pytest_args: ${{ inputs.pytest_args }}
+          pytest_env: ${{ inputs.pytest_env }}
+          upload_artifact_name: ${{ inputs.upload_artifact_name }}
+          upload_artifact_paths: ${{ inputs.upload_artifact_paths }}
+
+  test-integration:
+    if: inputs.integration_preset == 'serve'
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: serve_test
+          POSTGRES_USER: serve_app
+          POSTGRES_PASSWORD: testpass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U serve_app -d serve_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+      rabbitmq:
+        image: rabbitmq:3.13-alpine
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q check_running"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Python test steps
+        uses: optimizr-tech/optimizr-infra-ops/.github/actions/python-uv-test-steps@v1
+        with:
+          python_version: ${{ inputs.python_version }}
+          sync_all_extras: ${{ inputs.sync_all_extras }}
+          extras: ${{ inputs.extras }}
+          ruff_check: ${{ inputs.ruff_check }}
+          ruff_paths: ${{ inputs.ruff_paths }}
+          mypy_enabled: ${{ inputs.mypy_enabled }}
+          mypy_target: ${{ inputs.mypy_target }}
+          extra_steps: ${{ inputs.extra_steps }}
+          coverage_min: ${{ inputs.coverage_min }}
+          cov_package: ${{ inputs.cov_package }}
+          coverage_branch: ${{ inputs.coverage_branch }}
+          coverage_xml_path: ${{ inputs.coverage_xml_path }}
+          coverage_json_path: ${{ inputs.coverage_json_path }}
+          pytest_args: ${{ inputs.pytest_args }}
+          pytest_env: ${{ inputs.pytest_env }}
+          upload_artifact_name: ${{ inputs.upload_artifact_name }}
+          upload_artifact_paths: ${{ inputs.upload_artifact_paths }}

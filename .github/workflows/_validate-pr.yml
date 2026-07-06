@@ -1,0 +1,73 @@
+name: _validate-pr
+
+# Concurrency: caller workflow only (CI_STANDARDS §8.1).
+# PR metadata must be passed as inputs — github.event.pull_request is empty under workflow_call.
+
+on:
+  workflow_call:
+    inputs:
+      run_self_tests:
+        description: "Run validator regression tests"
+        required: false
+        type: boolean
+        default: true
+      pr_title:
+        description: "PR title (caller: github.event.pull_request.title)"
+        required: true
+        type: string
+      pr_body:
+        description: "PR body (caller: github.event.pull_request.body)"
+        required: false
+        type: string
+        default: ""
+      base_sha:
+        description: "PR base SHA (caller: github.event.pull_request.base.sha)"
+        required: true
+        type: string
+      head_sha:
+        description: "PR head SHA (caller: github.event.pull_request.head.sha)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  validate-pr:
+    name: PR title + commits
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Self-test validators
+        if: inputs.run_self_tests
+        run: |
+          bash scripts/git-hooks/test_validate_subject.sh
+          bash scripts/git-hooks/test_validate_commit_subject.sh
+          bash scripts/git-hooks/test_validate_pr_body.sh
+
+      - name: Validate PR title
+        env:
+          PR_TITLE: ${{ inputs.pr_title }}
+          VALIDATE_SUBJECT_LABEL: PR title
+        run: bash scripts/git-hooks/validate-subject.sh "$PR_TITLE"
+
+      - name: Validate PR body
+        env:
+          PR_BODY: ${{ inputs.pr_body }}
+          BODY_FILE: ${{ runner.temp }}/pr-body.md
+          VALIDATE_PR_BODY_LABEL: PR body
+        run: |
+          python3 -c 'import os, pathlib; pathlib.Path(os.environ["BODY_FILE"]).write_text(os.environ.get("PR_BODY") or "", encoding="utf-8")'
+          bash scripts/git-hooks/validate-pr-body.sh "$BODY_FILE"
+
+      - name: Validate PR commit subjects
+        run: |
+          bash scripts/git-hooks/validate-pr-commits.sh \
+            "${{ inputs.base_sha }}" \
+            "${{ inputs.head_sha }}"

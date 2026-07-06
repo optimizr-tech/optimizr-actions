@@ -1,0 +1,53 @@
+name: Quality gate scripts checkout
+description: Checkout canonical quality_gate package from optimizr-infra-ops
+
+inputs:
+  infra_ops_ref:
+    description: Tag or SHA of optimizr-infra-ops
+    required: false
+    default: v1
+  infra_ops_read_token:
+    description: Org PAT (OPTIMIZR_INFRA_OPS_READ_TOKEN) for private sparse checkout from consumer repos
+    required: false
+    default: ''
+  python_version:
+    description: Python version for setup-python
+    required: false
+    default: "3.12"
+
+outputs:
+  scripts_path:
+    description: Absolute path to the checkout containing scripts/quality_gate
+    value: ${{ github.workspace }}/_qg
+
+runs:
+  using: composite
+  steps:
+    - name: Require infra-ops read token (cross-repo)
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -n "${{ inputs.infra_ops_read_token }}" ]; then
+          exit 0
+        fi
+        if [ "${{ github.repository }}" = "optimizr-tech/optimizr-infra-ops" ]; then
+          exit 0
+        fi
+        echo "::error::Missing infra_ops_read_token (org secret OPTIMIZR_INFRA_OPS_READ_TOKEN). See docs/QUALITY_GATE.md" >&2
+        exit 1
+
+    - name: Checkout quality-gate scripts
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      with:
+        repository: optimizr-tech/optimizr-infra-ops
+        ref: ${{ inputs.infra_ops_ref }}
+        path: _qg
+        sparse-checkout-cone-mode: false
+        sparse-checkout: |
+          scripts/quality_gate
+        token: ${{ inputs.infra_ops_read_token != '' && inputs.infra_ops_read_token || github.token }}
+
+    - name: Setup Python
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      with:
+        python-version: ${{ inputs.python_version }}

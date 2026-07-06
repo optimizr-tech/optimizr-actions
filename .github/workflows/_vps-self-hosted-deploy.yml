@@ -1,0 +1,241 @@
+# Reusable: deploy a self-hosted runner no VPS.
+# Consome via: uses: optimizr-tech/optimizr-infra-ops/.github/workflows/_vps-self-hosted-deploy.yml@<SHA>
+# Veja docs/CI_STANDARDS.md + docs/CI_RUNBOOK.md.
+
+name: _vps-self-hosted-deploy
+
+concurrency:
+  group: deploy-${{ inputs.service_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+on:
+  workflow_call:
+    inputs:
+      service_name:
+        description: "Nome do repo (usado como deploy path: /opt/optimizr/<service_name>)"
+        required: true
+        type: string
+      container_name:
+        description: "Nome do container Docker para healthcheck"
+        required: true
+        type: string
+      runner_label:
+        description: "Label do self-hosted runner (sem 'self-hosted, Linux' — só o curto)"
+        required: true
+        type: string
+      compose_file:
+        description: "Compose file path (relativo a $DEPLOY_PATH)"
+        required: false
+        type: string
+        default: docker-compose.yml
+      pre_deploy_validation:
+        description: "Rodar 'docker compose run nginx -t' antes do up (apenas para nginx)"
+        required: false
+        type: boolean
+        default: false
+      build_image:
+        description: "Rodar docker compose build antes do up"
+        required: false
+        type: boolean
+        default: true
+      build_no_cache:
+        description: "Passar --no-cache no build (efetivo apenas se build_image=true)"
+        required: false
+        type: boolean
+        default: true
+      health_timeout:
+        description: "Segundos esperando container ficar healthy"
+        required: false
+        type: number
+        default: 120
+      ensure_networks:
+        description: "Networks Docker a garantir (espaço-separado)"
+        required: false
+        type: string
+        default: "optimizr_infra"
+      ensure_volumes:
+        description: "Volumes Docker a garantir (espaço-separado)"
+        required: false
+        type: string
+        default: ""
+      run_prune:
+        description: "Rodar docker prune ao fim (skip se repo não builda imagem)"
+        required: false
+        type: boolean
+        default: true
+      image_age_threshold:
+        description: "Idade mínima pra image prune untagged (Docker filter, ex 168h). Mantém em sincronia com .github/actions/docker-prune-safe."
+        required: false
+        type: string
+        default: "168h"
+
+jobs:
+  deploy:
+    runs-on:
+      - self-hosted
+      - Linux
+      - ${{ inputs.runner_label }}
+    timeout-minutes: 15
+    environment:
+      name: production
+
+    env:
+      DEPLOY_PATH: /opt/optimizr/${{ inputs.service_name }}
+      CONTAINER_NAME: ${{ inputs.container_name }}
+      COMPOSE_FILE: ${{ inputs.compose_file }}
+      HEALTH_TIMEOUT: ${{ inputs.health_timeout }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Backup and sync files
+        run: |
+          set -euo pipefail
+
+          # Backup root convention (DEPLOY_PATH_CONVENTION.md "Backup
+          # Path" section): per-service subdir under /opt/optimizr/backups/
+          # so each repo owns its own retention surface and tarballs never
+          # collide. `deploys/` holds reusable-emitted snapshots; `runtime/`
+          # is reserved for service-managed dumps (e.g. dbaas pg_dump cron).
+          BACKUP_ROOT="/opt/optimizr/backups/${{ inputs.service_name }}/deploys"
+          sudo mkdir -p "$DEPLOY_PATH" "$BACKUP_ROOT"
+          sudo chown -R "$(id -un):$(id -gn)" "$DEPLOY_PATH" "$BACKUP_ROOT"
+
+          if [ -d "$DEPLOY_PATH" ] && [ "$(ls -A "$DEPLOY_PATH" 2>/dev/null)" ]; then
+            BACKUP_DATE=$(date -u +%Y%m%dT%H%M%SZ)
+            tar -czf "${BACKUP_ROOT}/${BACKUP_DATE}.tar.gz" \
+              -C "$DEPLOY_PATH" . 2>/dev/null || echo "⚠️  Backup failed, continuing"
+            echo "✅ Configuration backed up to ${BACKUP_ROOT}/${BACKUP_DATE}.tar.gz"
+          fi
+
+          # `rsync --delete` faz o destino refletir o source exatamente — cobre
+          # arquivos novos, removidos e dotfiles (rm -rf */* não pega dotfiles).
+          # .deployignore na raiz do consumer controla o que vai pra VPS
+          # (PRODUCTION_DEPLOY_HYGIENE.md).
+          # `.env` excluido pra preservar arquivo escrito pelo caller (pattern
+          # canonico: caller tem job `prepare-env` que injeta secrets via
+          # printf+chmod 600 antes deste reusable rodar — ver
+          # CI_STANDARDS.md secao "Secret injection").
+          if [ -f "$GITHUB_WORKSPACE/.deployignore" ]; then
+            rsync -a --delete \
+              --exclude='.git' \
+              --exclude='.github' \
+              --exclude='.env' \
+              --exclude='*.tar.gz' \
+              --exclude='backup/' \
+              --exclude-from="$GITHUB_WORKSPACE/.deployignore" \
+              "$GITHUB_WORKSPACE/" "$DEPLOY_PATH/"
+          else
+            rsync -a --delete \
+              --exclude='.git' \
+              --exclude='.github' \
+              --exclude='.env' \
+              --exclude='*.tar.gz' \
+              --exclude='backup/' \
+              "$GITHUB_WORKSPACE/" "$DEPLOY_PATH/"
+          fi
+
+          find "$DEPLOY_PATH" -name '*.sh' -exec chmod +x {} \;
+          echo "✅ Files synced to $DEPLOY_PATH"
+
+      - name: Ensure networks and volumes exist
+        if: inputs.ensure_networks != '' || inputs.ensure_volumes != ''
+        run: |
+          set -euo pipefail
+          for net in ${{ inputs.ensure_networks }}; do
+            sudo docker network inspect "$net" >/dev/null 2>&1 || sudo docker network create "$net"
+          done
+          for vol in ${{ inputs.ensure_volumes }}; do
+            sudo docker volume inspect "$vol" >/dev/null 2>&1 || sudo docker volume create "$vol"
+          done
+
+      - name: Build image
+        if: inputs.build_image
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          if [ "${{ inputs.build_no_cache }}" = "true" ]; then
+            sudo docker compose -f "$COMPOSE_FILE" build --no-cache
+          else
+            sudo docker compose -f "$COMPOSE_FILE" build
+          fi
+
+      - name: Pre-deploy validation (nginx -t)
+        if: inputs.pre_deploy_validation
+        # Para repos nginx: roda `nginx -t` num container efêmero atado à
+        # rede real ANTES de tocar o container de produção. Falha aqui mantém
+        # o container atual servindo.
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          echo "🧪 Pre-deploy validation: nginx -t..."
+          sudo docker compose -f "$COMPOSE_FILE" run --rm --no-deps --entrypoint "" nginx nginx -t
+          echo "✅ Pre-deploy validation passed"
+
+      - name: Deploy
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+
+          sudo docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+
+          echo "Waiting for $CONTAINER_NAME to become healthy..."
+          counter=0
+          until [ "$(sudo docker inspect -f '{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null)" = "healthy" ]; do
+            if [ $counter -ge $HEALTH_TIMEOUT ]; then
+              echo "❌ Timed out waiting for $CONTAINER_NAME to become healthy" >&2
+              sudo docker compose -f "$COMPOSE_FILE" logs --tail=50 >&2
+              exit 1
+            fi
+            status="$(sudo docker inspect -f '{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo 'not found')"
+            if [ "$status" = "not found" ] || [ "$status" = "" ]; then
+              echo "❌ Container not found" >&2
+              sudo docker compose -f "$COMPOSE_FILE" logs --tail=50 >&2
+              exit 1
+            fi
+            sleep 5
+            counter=$((counter + 5))
+            echo "  ...${counter}s (status: $status)"
+          done
+          echo "✅ $CONTAINER_NAME is healthy"
+
+      - name: Cleanup runner + docker leftovers
+        if: always() && inputs.run_prune
+        # Higiene de disco — PRODUCTION_DEPLOY_HYGIENE.md seção "Higiene de Runner".
+        # Nota: lógica espelha .github/actions/docker-prune-safe. Composite NÃO é
+        # invocado aqui pra evitar SHA-coupling entre reusable workflow e composite
+        # action no mesmo repo (tag bump teria que atualizar ambos atomicamente).
+        # Bumps mantêm os dois em sincronia manualmente; image_age_threshold é o
+        # input compartilhado.
+        env:
+          IMAGE_AGE: ${{ inputs.image_age_threshold }}
+        run: |
+          set -euo pipefail
+          echo "::group::Disk before cleanup"
+          df -h / || true
+          sudo docker system df || true
+          echo "::endgroup::"
+
+          sudo docker container prune -f
+          sudo docker image prune -f
+          sudo docker image prune -af --filter "until=${IMAGE_AGE}"
+          sudo docker builder prune -f
+
+          if [ -n "${RUNNER_WORKSPACE:-}" ]; then
+            runner_root="$(dirname "$RUNNER_WORKSPACE")"
+            sudo find "$runner_root/_temp" -mindepth 1 -maxdepth 1 -mmin +60 -exec rm -rf {} + 2>/dev/null || true
+          fi
+
+          echo "::group::Disk after cleanup"
+          df -h / || true
+          sudo docker system df || true
+          echo "::endgroup::"
+
+      - name: Clean Runner Workspace
+        if: always() && !inputs.run_prune
+        # `find -mindepth 1 -delete` cobre dotfiles (rm -rf */* não cobre)
+        # e quoting protege de espaços no path.
+        run: sudo find "$GITHUB_WORKSPACE" -mindepth 1 -delete

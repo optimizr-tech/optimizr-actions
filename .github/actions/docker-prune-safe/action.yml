@@ -1,0 +1,40 @@
+# Composite action: prune Docker safe (containers/images/builder; nunca volumes/networks).
+# Uso: uses: optimizr-tech/optimizr-infra-ops/.github/actions/docker-prune-safe@<SHA>
+# Veja PRODUCTION_DEPLOY_HYGIENE.md seção "Higiene de Runner".
+
+name: docker-prune-safe
+description: Prune containers/images/builder + workspace temp; nunca toca volumes ou networks
+
+inputs:
+  image_age_threshold:
+    description: "Idade mínima pra image prune untagged (formato Docker filter, ex 168h)"
+    required: false
+    default: "168h"
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        IMAGE_AGE: ${{ inputs.image_age_threshold }}
+      run: |
+        set -euo pipefail
+        echo "::group::Disk before cleanup"
+        df -h / || true
+        sudo docker system df || true
+        echo "::endgroup::"
+
+        sudo docker container prune -f
+        sudo docker image prune -f
+        sudo docker image prune -af --filter "until=${IMAGE_AGE}"
+        sudo docker builder prune -f
+
+        if [ -n "${RUNNER_WORKSPACE:-}" ]; then
+          runner_root="$(dirname "$RUNNER_WORKSPACE")"
+          sudo find "$runner_root/_temp" -mindepth 1 -maxdepth 1 -mmin +60 -exec rm -rf {} + 2>/dev/null || true
+        fi
+
+        echo "::group::Disk after cleanup"
+        df -h / || true
+        sudo docker system df || true
+        echo "::endgroup::"

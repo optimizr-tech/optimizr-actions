@@ -1,0 +1,257 @@
+# Reusable: deploy monorepo compose no VPS (alembic, builds por serviço, up --no-deps).
+# Consome via: optimizr-tech/optimizr-infra-ops/.github/workflows/_vps-monorepo-deploy.yml@v1
+# Caller mantém job prepare-env (CI_STANDARDS.md secao 7) — issue #59.
+
+name: _vps-monorepo-deploy
+
+concurrency:
+  group: deploy-${{ inputs.service_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+on:
+  workflow_call:
+    inputs:
+      service_name:
+        description: "Nome do repo (/opt/optimizr/<service_name>)"
+        required: true
+        type: string
+      container_name:
+        description: "Container Docker para healthcheck pos-deploy"
+        required: true
+        type: string
+      runner_label:
+        description: "Label curto do self-hosted runner"
+        required: true
+        type: string
+      compose_file:
+        description: "Compose file relativo a DEPLOY_PATH"
+        required: false
+        type: string
+        default: docker-compose.yml
+      pre_deploy_commands:
+        description: "Shell multiline apos rsync (ex.: alembic upgrade head)"
+        required: false
+        type: string
+        default: ""
+      services_build:
+        description: "Servicos pra docker compose build --no-cache (espaco-separados)"
+        required: false
+        type: string
+        default: ""
+      services_build_optional:
+        description: "Servicos opcionais (warn on fail, mantem imagem anterior)"
+        required: false
+        type: string
+        default: ""
+      services_up:
+        description: "Servicos pro docker compose up -d (espaco-separados)"
+        required: false
+        type: string
+        default: ""
+      compose_up_flags:
+        description: "Flags extras pro compose up (ex.: --no-deps)"
+        required: false
+        type: string
+        default: ""
+      post_deploy_commands:
+        description: "Shell multiline apos healthcheck (ex.: seed script)"
+        required: false
+        type: string
+        default: ""
+      health_timeout:
+        description: "Segundos esperando container healthy"
+        required: false
+        type: number
+        default: 120
+      ensure_networks:
+        description: "Networks Docker a garantir (espaco-separado)"
+        required: false
+        type: string
+        default: "optimizr_infra"
+      ensure_volumes:
+        description: "Volumes Docker a garantir (espaco-separado)"
+        required: false
+        type: string
+        default: ""
+      run_prune:
+        description: "Rodar docker prune ao fim"
+        required: false
+        type: boolean
+        default: true
+      image_age_threshold:
+        description: "Idade minima pra image prune untagged (ex 168h)"
+        required: false
+        type: string
+        default: "168h"
+      timeout_minutes:
+        description: "Timeout maximo do job de deploy"
+        required: false
+        type: number
+        default: 20
+
+jobs:
+  deploy:
+    runs-on:
+      - self-hosted
+      - Linux
+      - ${{ inputs.runner_label }}
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    environment:
+      name: production
+
+    env:
+      DEPLOY_PATH: /opt/optimizr/${{ inputs.service_name }}
+      CONTAINER_NAME: ${{ inputs.container_name }}
+      COMPOSE_FILE: ${{ inputs.compose_file }}
+      HEALTH_TIMEOUT: ${{ inputs.health_timeout }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Backup and sync files
+        run: |
+          set -euo pipefail
+
+          BACKUP_ROOT="/opt/optimizr/backups/${{ inputs.service_name }}/deploys"
+          sudo mkdir -p "$DEPLOY_PATH" "$BACKUP_ROOT"
+          sudo chown -R "$(id -un):$(id -gn)" "$DEPLOY_PATH" "$BACKUP_ROOT"
+
+          if [ -d "$DEPLOY_PATH" ] && [ "$(ls -A "$DEPLOY_PATH" 2>/dev/null)" ]; then
+            BACKUP_DATE=$(date -u +%Y%m%dT%H%M%SZ)
+            tar -czf "${BACKUP_ROOT}/${BACKUP_DATE}.tar.gz" \
+              -C "$DEPLOY_PATH" . 2>/dev/null || echo "⚠️  Backup failed, continuing"
+            echo "✅ Configuration backed up to ${BACKUP_ROOT}/${BACKUP_DATE}.tar.gz"
+          fi
+
+          if [ -f "$GITHUB_WORKSPACE/.deployignore" ]; then
+            rsync -a --delete \
+              --exclude='.git' \
+              --exclude='.github' \
+              --exclude='.env' \
+              --exclude='*.tar.gz' \
+              --exclude='backup/' \
+              --exclude-from="$GITHUB_WORKSPACE/.deployignore" \
+              "$GITHUB_WORKSPACE/" "$DEPLOY_PATH/"
+          else
+            rsync -a --delete \
+              --exclude='.git' \
+              --exclude='.github' \
+              --exclude='.env' \
+              --exclude='*.tar.gz' \
+              --exclude='backup/' \
+              "$GITHUB_WORKSPACE/" "$DEPLOY_PATH/"
+          fi
+
+          find "$DEPLOY_PATH" -name '*.sh' -exec chmod +x {} \;
+          echo "✅ Files synced to $DEPLOY_PATH"
+
+      - name: Ensure networks and volumes exist
+        if: inputs.ensure_networks != '' || inputs.ensure_volumes != ''
+        run: |
+          set -euo pipefail
+          for net in ${{ inputs.ensure_networks }}; do
+            sudo docker network inspect "$net" >/dev/null 2>&1 || sudo docker network create "$net"
+          done
+          for vol in ${{ inputs.ensure_volumes }}; do
+            sudo docker volume inspect "$vol" >/dev/null 2>&1 || sudo docker volume create "$vol"
+          done
+
+      - name: Pre-deploy commands
+        if: inputs.pre_deploy_commands != ''
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          ${{ inputs.pre_deploy_commands }}
+
+      - name: Build required services
+        if: inputs.services_build != ''
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          for svc in ${{ inputs.services_build }}; do
+            echo "Building $svc..."
+            sudo docker compose -f "$COMPOSE_FILE" build --no-cache "$svc"
+          done
+
+      - name: Build optional services
+        if: inputs.services_build_optional != ''
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          for svc in ${{ inputs.services_build_optional }}; do
+            echo "Building optional $svc..."
+            if ! sudo docker compose -f "$COMPOSE_FILE" build --no-cache "$svc"; then
+              echo "::warning title=${svc} build failed::Keeping previous ${svc} image. Next deploy will retry." >&2
+            fi
+          done
+
+      - name: Roll out services
+        if: inputs.services_up != ''
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          # shellcheck disable=SC2086
+          sudo docker compose -f "$COMPOSE_FILE" up -d ${{ inputs.compose_up_flags }} ${{ inputs.services_up }}
+
+      - name: Wait for healthcheck
+        uses: optimizr-tech/optimizr-infra-ops/.github/actions/wait-for-healthcheck@v1
+        with:
+          container_name: ${{ inputs.container_name }}
+          timeout: ${{ inputs.health_timeout }}
+
+      - name: Post-deploy commands
+        if: inputs.post_deploy_commands != ''
+        # Run from checkout (matches serve seed_baianos_roles.sh — not DEPLOY_PATH).
+        run: |
+          set -euo pipefail
+          ${{ inputs.post_deploy_commands }}
+
+      - name: Verify deployment
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            running=$(sudo docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null || echo false)
+            health=$(sudo docker inspect -f '{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo none)
+            if [ "$running" = "true" ] && [ "$health" = "healthy" ]; then
+              echo "✅ Container $CONTAINER_NAME is running and healthy"
+              exit 0
+            fi
+            echo "Attempt $attempt/3: running=$running health=$health — retrying in 2s..."
+            sleep 2
+          done
+          echo "❌ Container $CONTAINER_NAME not running/healthy after retries" >&2
+          sudo docker logs --tail=50 "$CONTAINER_NAME" >&2 || true
+          exit 1
+
+      - name: Cleanup runner + docker leftovers
+        if: always() && inputs.run_prune
+        env:
+          IMAGE_AGE: ${{ inputs.image_age_threshold }}
+        run: |
+          set -euo pipefail
+          echo "::group::Disk before cleanup"
+          df -h / || true
+          sudo docker system df || true
+          echo "::endgroup::"
+
+          sudo docker container prune -f
+          sudo docker image prune -f
+          sudo docker image prune -af --filter "until=${IMAGE_AGE}"
+          sudo docker builder prune -f
+
+          if [ -n "${RUNNER_WORKSPACE:-}" ]; then
+            runner_root="$(dirname "$RUNNER_WORKSPACE")"
+            sudo find "$runner_root/_temp" -mindepth 1 -maxdepth 1 -mmin +60 -exec rm -rf {} + 2>/dev/null || true
+          fi
+
+          echo "::group::Disk after cleanup"
+          df -h / || true
+          sudo docker system df || true
+          echo "::endgroup::"
+
+      - name: Clean Runner Workspace
+        if: always() && !inputs.run_prune
+        run: sudo find "$GITHUB_WORKSPACE" -mindepth 1 -delete

@@ -1,0 +1,17 @@
+optimizr-deploy-key-*
+
+# Node / release artifacts
+node_modules/
+
+# Local commit/PR drafts (Windows UTF-8 helpers)
+.commit-msg*.txt
+.pr-*
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# OS artifacts
+.DS_Store
+Thumbs.db

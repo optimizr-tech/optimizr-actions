@@ -1,0 +1,41 @@
+# Composite action: garante networks e volumes Docker (idempotente).
+# Uso: uses: optimizr-tech/optimizr-infra-ops/.github/actions/ensure-network-volume@<SHA>
+
+name: ensure-network-volume
+description: Cria networks e volumes Docker se não existirem (idempotente)
+
+inputs:
+  networks:
+    description: "Networks a garantir (espaço-separado)"
+    required: false
+    default: ""
+  volumes:
+    description: "Volumes a garantir (espaço-separado)"
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        NETWORKS: ${{ inputs.networks }}
+        VOLUMES: ${{ inputs.volumes }}
+      run: |
+        set -euo pipefail
+        for net in $NETWORKS; do
+          if sudo docker network inspect "$net" >/dev/null 2>&1; then
+            echo "✅ network $net exists"
+          else
+            sudo docker network create "$net"
+            echo "✨ created network $net"
+          fi
+        done
+        for vol in $VOLUMES; do
+          if sudo docker volume inspect "$vol" >/dev/null 2>&1; then
+            echo "✅ volume $vol exists"
+          else
+            sudo docker volume create "$vol"
+            echo "✨ created volume $vol"
+          fi
+        done

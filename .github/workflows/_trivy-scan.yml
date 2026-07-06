@@ -1,0 +1,72 @@
+# Reusable: trivy fs/image scan + table report como artifact.
+# Consome via: uses: optimizr-tech/optimizr-infra-ops/.github/workflows/_trivy-scan.yml@<SHA>
+# Nota: NÃO emite SARIF — pra Code Scanning ver header de permissions abaixo.
+
+name: _trivy-scan
+
+# Concurrency: caller workflow only (CI_STANDARDS §8.1).
+
+on:
+  workflow_call:
+    inputs:
+      scan_type:
+        description: "Tipo: fs (filesystem) ou image"
+        required: false
+        type: string
+        default: fs
+      scan_ref:
+        description: "Path/imagem alvo (. para fs, repo:tag para image)"
+        required: false
+        type: string
+        default: "."
+      severity:
+        description: "Severidades a reportar"
+        required: false
+        type: string
+        default: "CRITICAL,HIGH"
+      exit_code:
+        description: "Exit code do trivy (1 falha CI quando achar; 0 só relata)"
+        required: false
+        type: string
+        default: "0"
+      upload_artifact:
+        description: "Subir trivy-results.txt como artifact (formato table, não SARIF)"
+        required: false
+        type: boolean
+        default: true
+
+# Nota: este reusable emite relatório table como artifact, NÃO SARIF pra
+# Code Scanning. Pra integração com GitHub Advanced Security, criar
+# `_trivy-sarif-scan.yml` separado com `format: sarif` + `github/codeql-action/upload-sarif`
+# (precisa permissão `security-events: write`).
+permissions:
+  contents: read
+  # trivy-action built-in cache uses actions/cache — requires write (CI_CACHE_STANDARDS §3.2).
+  actions: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          scan-type: ${{ inputs.scan_type }}
+          scan-ref: ${{ inputs.scan_ref }}
+          format: "table"
+          output: "trivy-results.txt"
+          severity: ${{ inputs.severity }}
+          exit-code: ${{ inputs.exit_code }}
+          cache: "true"
+
+      - name: Upload Trivy scan results as artifact
+        if: always() && inputs.upload_artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: trivy-security-results
+          path: trivy-results.txt
+          retention-days: 30

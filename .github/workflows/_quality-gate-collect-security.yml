@@ -1,0 +1,147 @@
+name: _quality-gate-collect-security
+
+# Matrix security scans for quality-gate metrics (JSON mode, non-blocking).
+# Replaces inline quality-gate-security jobs in optimizr-serve.
+
+on:
+  workflow_call:
+    inputs:
+      tools:
+        description: "Comma-separated: bandit,pip-audit,pnpm-audit"
+        required: false
+        type: string
+        default: "bandit,pip-audit"
+      pnpm_apps:
+        description: "Comma-separated app dirs for pnpm-audit (e.g. storefront,admin)"
+        required: false
+        type: string
+        default: ""
+      python_app_path:
+        description: Path scanned by bandit
+        required: false
+        type: string
+        default: app/
+      uv_sync_args:
+        description: uv sync arguments
+        required: false
+        type: string
+        default: "--all-extras"
+
+permissions:
+  contents: read
+
+jobs:
+  collect-security:
+    name: Quality gate sec (${{ matrix.tool }} ${{ matrix.scope }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    needs: plan
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Install uv
+        if: matrix.tool != 'pnpm-audit'
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Sync Python dependencies
+        if: matrix.tool != 'pnpm-audit'
+        run: uv sync ${{ inputs.uv_sync_args }}
+
+      - name: Install pnpm
+        if: matrix.tool == 'pnpm-audit'
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093  # v6.0.8
+        with:
+          version: 10
+
+      - name: Install Node.js
+        if: matrix.tool == 'pnpm-audit'
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: ${{ matrix.workdir }}/pnpm-lock.yaml
+
+      - name: Run bandit
+        if: matrix.tool == 'bandit'
+        run: |
+          set -euo pipefail
+          mkdir -p .qg-sec
+          uvx bandit -r ${{ inputs.python_app_path }} -f json -o .qg-sec/report.json || true
+          test -s .qg-sec/report.json
+
+      - name: Run pip-audit
+        if: matrix.tool == 'pip-audit'
+        run: |
+          set -euo pipefail
+          mkdir -p .qg-sec
+          uv export --format requirements-txt --no-hashes --no-emit-project > /tmp/req.txt
+          uvx pip-audit --requirement /tmp/req.txt --format json --output .qg-sec/report.json || true
+          test -s .qg-sec/report.json
+
+      - name: Run pnpm audit
+        if: matrix.tool == 'pnpm-audit'
+        working-directory: ${{ matrix.workdir }}
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile 2>/dev/null || pnpm install
+          mkdir -p .qg-sec
+          pnpm audit --json --audit-level low > .qg-sec/report.json || true
+          test -s .qg-sec/report.json
+
+      - name: Move pnpm report to workspace root
+        if: matrix.tool == 'pnpm-audit'
+        run: |
+          set -euo pipefail
+          mkdir -p "${GITHUB_WORKSPACE}/.qg-sec"
+          mv "${{ matrix.workdir }}/.qg-sec/report.json" "${GITHUB_WORKSPACE}/.qg-sec/report.json"
+
+      - name: Upload security report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: ${{ matrix.artifact }}
+          path: .qg-sec/report.json
+          retention-days: 7
+          if-no-files-found: warn
+
+  plan:
+    name: Plan security matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.build.outputs.matrix }}
+    steps:
+      - id: build
+        run: |
+          set -euo pipefail
+          matrix_json="$(python3 -c "
+          import json, os
+          tools = [t.strip() for t in os.environ.get('TOOLS', '').split(',') if t.strip()]
+          apps = [a.strip() for a in os.environ.get('PNPM_APPS', '').split(',') if a.strip()]
+          include = []
+          if 'bandit' in tools:
+              include.append({'tool': 'bandit', 'scope': 'backend', 'artifact': 'security-bandit', 'workdir': '.'})
+          if 'pip-audit' in tools:
+              include.append({'tool': 'pip-audit', 'scope': 'backend', 'artifact': 'security-pip-audit', 'workdir': '.'})
+          if 'pnpm-audit' in tools:
+              for app in apps:
+                  include.append({
+                      'tool': 'pnpm-audit',
+                      'scope': f'frontend-{app}',
+                      'artifact': f'security-pnpm-audit-{app}',
+                      'workdir': f'frontend/apps/{app}',
+                  })
+          if not include:
+              include.append({'tool': 'pip-audit', 'scope': 'backend', 'artifact': 'security-pip-audit', 'workdir': '.'})
+          print(json.dumps({'include': include}))
+          ")"
+          echo "matrix=${matrix_json}" >> "$GITHUB_OUTPUT"
+        env:
+          TOOLS: ${{ inputs.tools }}
+          PNPM_APPS: ${{ inputs.pnpm_apps }}

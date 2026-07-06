@@ -1,0 +1,177 @@
+# Composite: shared uv sync + lint + pytest steps for _python-uv-test.yml.
+# Not intended for direct consumer use — call the reusable workflow instead.
+
+name: python-uv-test-steps
+description: uv sync, ruff, optional mypy/extra steps, pytest with coverage gate
+
+inputs:
+  python_version:
+    description: Python version for setup-uv
+    required: false
+    default: "3.12"
+  sync_all_extras:
+    description: Run uv sync --all-extras instead of uv sync
+    required: false
+    default: "false"
+  extras:
+    description: Space-separated extras for uv sync (--extra X)
+    required: false
+    default: ""
+  ruff_check:
+    description: Run ruff check
+    required: false
+    default: "true"
+  ruff_paths:
+    description: Paths passed to ruff check
+    required: false
+    default: "."
+  mypy_enabled:
+    description: Run mypy after ruff
+    required: false
+    default: "false"
+  mypy_target:
+    description: Target path for mypy
+    required: false
+    default: "app/"
+  extra_steps:
+    description: Multiline shell script run after lint, before pytest
+    required: false
+    default: ""
+  coverage_min:
+    description: Minimum coverage percentage (--cov-fail-under)
+    required: false
+    default: "80"
+  cov_package:
+    description: Package for --cov= (empty uses bare --cov)
+    required: false
+    default: ""
+  coverage_branch:
+    description: Enable --cov-branch
+    required: false
+    default: "false"
+  coverage_xml_path:
+    description: Path for Cobertura XML report (empty uses default xml report)
+    required: false
+    default: ""
+  coverage_json_path:
+    description: Path for JSON coverage report (empty skips json report)
+    required: false
+    default: ""
+  pytest_args:
+    description: Extra arguments appended to pytest
+    required: false
+    default: ""
+  pytest_env:
+    description: Multiline KEY=VAL exported before pytest
+    required: false
+    default: ""
+  upload_artifact_name:
+    description: Artifact name for coverage upload (empty skips upload)
+    required: false
+    default: ""
+  upload_artifact_paths:
+    description: Multiline paths for coverage artifact
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Setup uv
+      uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+      with:
+        python-version: ${{ inputs.python_version }}
+        enable-cache: true
+
+    - name: Install dependencies
+      shell: bash
+      env:
+        SYNC_ALL_EXTRAS: ${{ inputs.sync_all_extras }}
+        EXTRAS: ${{ inputs.extras }}
+      run: |
+        set -euo pipefail
+        if [ "$SYNC_ALL_EXTRAS" = "true" ]; then
+          uv sync --all-extras
+        elif [ -n "$EXTRAS" ]; then
+          EXTRA_ARGS=""
+          for e in $EXTRAS; do
+            EXTRA_ARGS="$EXTRA_ARGS --extra $e"
+          done
+          uv sync $EXTRA_ARGS
+        else
+          uv sync
+        fi
+
+    - name: Ruff check
+      if: inputs.ruff_check == 'true'
+      shell: bash
+      run: uv run ruff check ${{ inputs.ruff_paths }}
+
+    - name: Type check (mypy)
+      if: inputs.mypy_enabled == 'true'
+      shell: bash
+      run: uv run mypy ${{ inputs.mypy_target }}
+
+    - name: Extra steps
+      if: inputs.extra_steps != ''
+      shell: bash
+      run: |
+        set -euo pipefail
+        ${{ inputs.extra_steps }}
+
+    - name: Pytest with coverage
+      shell: bash
+      env:
+        COVERAGE_MIN: ${{ inputs.coverage_min }}
+        COV_PACKAGE: ${{ inputs.cov_package }}
+        COVERAGE_BRANCH: ${{ inputs.coverage_branch }}
+        COVERAGE_XML_PATH: ${{ inputs.coverage_xml_path }}
+        COVERAGE_JSON_PATH: ${{ inputs.coverage_json_path }}
+        PYTEST_ARGS: ${{ inputs.pytest_args }}
+        PYTEST_ENV: ${{ inputs.pytest_env }}
+      run: |
+        set -euo pipefail
+        if [ -n "$PYTEST_ENV" ]; then
+          while IFS= read -r line || [ -n "$line" ]; do
+            [ -z "$line" ] && continue
+            case "$line" in \#*) continue ;; esac
+            export "$line"
+          done <<< "$PYTEST_ENV"
+        fi
+
+        COV_FLAG="--cov"
+        if [ -n "$COV_PACKAGE" ]; then
+          COV_FLAG="--cov=$COV_PACKAGE"
+        fi
+
+        REPORT_ARGS="--cov-report=term-missing"
+        if [ -n "$COVERAGE_XML_PATH" ]; then
+          REPORT_ARGS="$REPORT_ARGS --cov-report=xml:$COVERAGE_XML_PATH"
+        else
+          REPORT_ARGS="$REPORT_ARGS --cov-report=xml"
+        fi
+        if [ -n "$COVERAGE_JSON_PATH" ]; then
+          REPORT_ARGS="$REPORT_ARGS --cov-report=json:$COVERAGE_JSON_PATH"
+        fi
+
+        BRANCH_FLAG=""
+        if [ "$COVERAGE_BRANCH" = "true" ]; then
+          BRANCH_FLAG="--cov-branch"
+        fi
+
+        # shellcheck disable=SC2086
+        uv run pytest \
+          $COV_FLAG \
+          $BRANCH_FLAG \
+          $REPORT_ARGS \
+          --cov-fail-under="$COVERAGE_MIN" \
+          $PYTEST_ARGS
+
+    - name: Upload coverage artifact
+      if: inputs.upload_artifact_name != '' && always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+      with:
+        name: ${{ inputs.upload_artifact_name }}
+        path: ${{ inputs.upload_artifact_paths }}
+        retention-days: 7
+        if-no-files-found: warn

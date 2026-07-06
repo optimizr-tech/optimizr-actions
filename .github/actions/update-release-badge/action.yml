@@ -1,0 +1,70 @@
+# Composite: patch assets/badges/release.svg and optionally commit+push.
+# Primary caller: _semantic-release.yml job update-release-badge (same workflow run).
+# Recovery: templates/workflows/update-badges.yml (workflow_dispatch).
+
+name: update-release-badge
+description: Update versioned release badge SVG with targeted sed replacements
+
+inputs:
+  version:
+    description: Release tag (e.g. v1.2.3)
+    required: true
+  badge_path:
+    description: Path to release badge SVG
+    required: false
+    default: assets/badges/release.svg
+  commit:
+    description: Commit and push when the SVG changed
+    required: false
+    default: "true"
+  commit_message:
+    description: Commit subject (version substituted as {version})
+    required: false
+    default: ":ok_hand: chore(badges): update release badge to {version} [skip ci]"
+
+runs:
+  using: composite
+  steps:
+    - name: Patch release badge SVG
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        BADGE: ${{ inputs.badge_path }}
+      run: |
+        set -euo pipefail
+        if [ -z "${VERSION}" ]; then
+          echo "Empty version; skipping"
+          exit 0
+        fi
+        if [ ! -f "${BADGE}" ]; then
+          echo "Missing ${BADGE}" >&2
+          exit 1
+        fi
+        sed -i "s/aria-label=\"Release: [^\"]*\"/aria-label=\"Release: ${VERSION}\"/" "${BADGE}"
+        sed -i "s/<title>Release: [^<]*<\\/title>/<title>Release: ${VERSION}<\\/title>/" "${BADGE}"
+        sed -i "s/<text x=\"105\" y=\"14\">v[^<]*<\\/text>/<text x=\"105\" y=\"14\">${VERSION}<\\/text>/" "${BADGE}"
+
+    - name: Commit and push badge
+      if: inputs.commit == 'true'
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        BADGE: ${{ inputs.badge_path }}
+        COMMIT_TEMPLATE: ${{ inputs.commit_message }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        BRANCH="${GITHUB_REF#refs/heads/}"
+        if [ "${BRANCH}" = "${GITHUB_REF}" ]; then
+          BRANCH="${GITHUB_REF_NAME}"
+        fi
+        git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+        git add "${BADGE}"
+        git diff --staged --quiet && echo "no changes" && exit 0
+        MSG="${COMMIT_TEMPLATE//\{version\}/${VERSION}}"
+        git commit -m "${MSG}"
+        # semantic-release pushes to main before this job; rebase avoids non-fast-forward
+        git pull --rebase origin "${BRANCH}"
+        git push origin "HEAD:${BRANCH}"

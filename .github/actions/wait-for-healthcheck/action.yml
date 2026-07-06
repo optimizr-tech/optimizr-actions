@@ -1,0 +1,49 @@
+# Composite action: aguarda container Docker reportar healthy.
+# Uso: uses: optimizr-tech/optimizr-infra-ops/.github/actions/wait-for-healthcheck@<SHA>
+
+name: wait-for-healthcheck
+description: Aguarda container Docker reportar healthy via docker inspect
+
+inputs:
+  container_name:
+    description: "Nome do container"
+    required: true
+  timeout:
+    description: "Segundos máximos de espera"
+    required: false
+    default: "120"
+  poll_interval:
+    description: "Segundos entre polls"
+    required: false
+    default: "5"
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        CONTAINER_NAME: ${{ inputs.container_name }}
+        TIMEOUT: ${{ inputs.timeout }}
+        POLL: ${{ inputs.poll_interval }}
+      run: |
+        set -euo pipefail
+        echo "Waiting for $CONTAINER_NAME to become healthy (timeout=${TIMEOUT}s, poll=${POLL}s)..."
+        counter=0
+        until [ "$(sudo docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null)" = "true" ] \
+          && [ "$(sudo docker inspect -f '{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null)" = "healthy" ]; do
+          if [ $counter -ge $TIMEOUT ]; then
+            echo "❌ Timed out waiting for $CONTAINER_NAME" >&2
+            sudo docker logs --tail=50 "$CONTAINER_NAME" >&2 || true
+            exit 1
+          fi
+          running="$(sudo docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null || echo false)"
+          health="$(sudo docker inspect -f '{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo 'not found')"
+          if [ "$health" = "not found" ] || [ "$health" = "" ]; then
+            echo "❌ Container $CONTAINER_NAME not found" >&2
+            exit 1
+          fi
+          sleep "$POLL"
+          counter=$((counter + POLL))
+          echo "  ...${counter}s (running: $running, health: $health)"
+        done
+        echo "✅ $CONTAINER_NAME is healthy"

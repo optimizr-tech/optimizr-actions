@@ -1,0 +1,123 @@
+# Reusable: valida sintaxe de docker-compose + bash de scripts.
+# Consome via: uses: optimizr-tech/optimizr-infra-ops/.github/workflows/_docker-compose-validate.yml@<SHA>
+
+name: _docker-compose-validate
+
+# Concurrency: caller workflow only (CI_STANDARDS §8.1). Top-level group here
+# collides with ci-${{ github.ref }} when github.workflow is "ci".
+
+on:
+  workflow_call:
+    inputs:
+      compose_files:
+        description: "Compose files a validar standalone (espaço-separado, um -f cada)"
+        required: false
+        type: string
+        default: "docker-compose.yml"
+      compose_stacks:
+        description: >-
+          Stacks mergeados a validar. Grupos separados por espaço; dentro de cada
+          grupo, arquivos separados por vírgula (ex. docker-compose.yml,docker-compose.dev.yml).
+          Overlays locais não são compose standalone — use este input.
+        required: false
+        type: string
+        default: ""
+      script_globs:
+        description: "Globs de scripts shell pra checar sintaxe (espaço-separado)"
+        required: false
+        type: string
+        default: "scripts/**/*.sh"
+      build_image:
+        description: "Build da imagem Docker como sanity check final"
+        required: false
+        type: boolean
+        default: false
+      skip:
+        description: "Skip validation (e.g. when no GitHub-hosted runner billing available)"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  validate:
+    if: ${{ !inputs.skip }}
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.build_image && 15 || 10 }}
+    permissions:
+      contents: read
+      # buildx GHA cache backend (CI_CACHE_STANDARDS §3.2).
+      actions: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Set up Docker Buildx
+        if: inputs.build_image
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
+
+      - name: Validate docker-compose files
+        run: |
+          set -euo pipefail
+          for f in ${{ inputs.compose_files }}; do
+            if [ -f "$f" ]; then
+              echo "📋 Validating $f..."
+              docker compose -f "$f" config --quiet
+              echo "✅ $f is valid"
+            else
+              echo "⚠️  $f not found, skipping"
+            fi
+          done
+
+      - name: Validate docker-compose merge stacks
+        if: inputs.compose_stacks != ''
+        run: |
+          set -euo pipefail
+          for stack in ${{ inputs.compose_stacks }}; do
+            [ -n "$stack" ] || continue
+            IFS=',' read -ra files <<< "$stack"
+            args=()
+            label=""
+            for f in "${files[@]}"; do
+              f="${f#"${f%%[![:space:]]*}"}"
+              f="${f%"${f##*[![:space:]]}"}"
+              [ -n "$f" ] || continue
+              if [ ! -f "$f" ]; then
+                echo "::error::Compose stack file not found: $f (stack: $stack)" >&2
+                exit 1
+              fi
+              args+=(-f "$f")
+              label="${label:+$label + }$f"
+            done
+            if [ "${#args[@]}" -eq 0 ]; then
+              echo "::warning::Empty compose stack after parse: $stack"
+              continue
+            fi
+            echo "📋 Validating merge stack: $label"
+            docker compose "${args[@]}" config --quiet
+            echo "✅ Merge stack valid: $label"
+          done
+
+      - name: Test container script syntax
+        run: |
+          set -euo pipefail
+          shopt -s globstar nullglob
+          for glob in ${{ inputs.script_globs }}; do
+            for script in $glob; do
+              if [ -f "$script" ]; then
+                echo "Checking $script..."
+                bash -n "$script"
+              fi
+            done
+          done
+          echo "✅ All scripts have valid syntax"
+
+      - name: Build Docker image (sanity check)
+        if: inputs.build_image
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        with:
+          context: .
+          push: false
+          load: true
+          tags: ci-build-test:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
