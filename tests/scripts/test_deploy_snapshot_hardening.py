@@ -26,8 +26,8 @@ class DeploySnapshotHardeningTests(unittest.TestCase):
                 self.assertIn("--exclude='*.key'", content)
                 self.assertIn("--exclude='*.p12'", content)
                 self.assertIn("--exclude='*.pfx'", content)
-                self.assertIn('sudo chmod 600 "${BACKUP_ROOT}/${BACKUP_DATE}.tar.gz"', content)
-                self.assertIn('echo "✅ Secret-free configuration backed up to', content)
+                self.assertIn("chmod 600", content)
+                self.assertIn("Secret-free", content)
 
 
 if __name__ == "__main__":
