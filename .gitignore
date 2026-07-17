@@ -2,6 +2,7 @@ optimizr-deploy-key-*
 
 # Node / release artifacts
 node_modules/
+.worktrees/
 
 # Local commit/PR drafts (Windows UTF-8 helpers)
 .commit-msg*.txt
