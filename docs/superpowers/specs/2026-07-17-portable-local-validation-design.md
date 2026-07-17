@@ -3,12 +3,18 @@
 ## Decision
 
 Local-first validation is an organization capability, not a Fiscal-only
-execution model. This repository will provide one portable, versioned contract
-that a consumer repository invokes locally. A Fiscal preset is the first
-strict consumer of that contract.
+execution model. This public repository will provide one portable, versioned
+contract that consumer repositories invoke locally. A Fiscal preset is the
+first strict consumer of that contract.
 
 GitHub reusable workflows remain optional adapters. They must delegate to the
 same contract and must not become the authoritative implementation.
+
+The public boundary permits generic commands, version requirements, service
+roles, paths supplied as inputs, and reusable validation logic. It forbids
+credentials, host addresses, customer data, production-specific configuration,
+and assumptions that require access to a private repository. Private product
+repositories remain the owners of their secrets and service lifecycle.
 
 ## Components
 
