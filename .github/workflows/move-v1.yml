@@ -1,0 +1,40 @@
+name: Move v1 compatibility tag
+
+# Keep legacy @v1 consumers aligned with backward-compatible reusable/action
+# changes. Current production callers remain pinned by immutable SHA.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/actions/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: move-v1-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  move-v1:
+    runs-on: [self-hosted, Linux, infra-ops]
+    timeout-minutes: 5
+    steps:
+      - name: Move v1 to main HEAD
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          SHA=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.sha')
+          if gh api "repos/${GITHUB_REPOSITORY}/git/refs/tags/v1" >/dev/null 2>&1; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/v1" \
+              -f sha="$SHA" -F force=true
+            echo "Moved v1 -> $SHA"
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/tags/v1" -f sha="$SHA"
+            echo "Created v1 -> $SHA"
+          fi
