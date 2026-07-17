@@ -1,7 +1,8 @@
 name: Validate and move v1 compatibility tag
 
 # `v1` is the floating compatibility contract for backward-compatible changes.
-# This workflow never runs for pull requests from the public repository.
+# Standard GitHub-hosted runners are free for this public repository. This
+# workflow never runs for pull requests, so untrusted fork code is not executed.
 
 on:
   push:
@@ -21,7 +22,7 @@ concurrency:
 jobs:
   validate:
     name: Validate workflows and composite actions
-    runs-on: [self-hosted, Linux, infra-ops]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
@@ -32,7 +33,7 @@ jobs:
       - name: Run actionlint
         run: |
           set -euo pipefail
-          sudo docker run --rm \
+          docker run --rm \
             -v "$GITHUB_WORKSPACE:/repo" \
             -w /repo \
             rhysd/actionlint:1.7.12
@@ -40,7 +41,7 @@ jobs:
       - name: Validate composite action metadata
         run: |
           set -euo pipefail
-          sudo docker run --rm \
+          docker run --rm \
             -v "$GITHUB_WORKSPACE:/repo" \
             -w /repo \
             mikefarah/yq:4.47.2 \
@@ -49,7 +50,7 @@ jobs:
   move-v1:
     name: Move floating v1 tag
     needs: [validate]
-    runs-on: [self-hosted, Linux, infra-ops]
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Move v1 to main HEAD
