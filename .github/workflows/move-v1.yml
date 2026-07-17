@@ -1,0 +1,70 @@
+name: Validate and move v1 compatibility tag
+
+# `v1` is the floating compatibility contract for backward-compatible changes.
+# Standard GitHub-hosted runners are free for this public repository. This
+# workflow never runs for pull requests, so untrusted fork code is not executed.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/actions/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: move-v1-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate workflows and composite actions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Run actionlint
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/repo" \
+            -w /repo \
+            rhysd/actionlint:1.7.12
+
+      - name: Validate composite action metadata
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/repo" \
+            -w /repo \
+            mikefarah/yq:4.47.2 \
+            eval 'true' .github/actions/*/action.yml
+
+  move-v1:
+    name: Move floating v1 tag
+    needs: [validate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Move v1 to main HEAD
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          SHA=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.sha')
+          if gh api "repos/${GITHUB_REPOSITORY}/git/refs/tags/v1" >/dev/null 2>&1; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/v1" \
+              -f sha="$SHA" -F force=true
+            echo "Moved v1 -> $SHA"
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/tags/v1" -f sha="$SHA"
+            echo "Created v1 -> $SHA"
+          fi

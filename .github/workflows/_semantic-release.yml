@@ -1,58 +1,62 @@
-# Reusable: semantic-release com dry-run previo.
-# Consome via: uses: optimizr-tech/optimizr-infra-ops/.github/workflows/_semantic-release.yml@<SHA>
+# Reusable: semantic-release with a dry-run and optional release badge update.
+# Consume via: uses: optimizr-tech/optimizr-actions/.github/workflows/_semantic-release.yml@<immutable-sha>
 
 name: _semantic-release
 
-# Sem concurrency no reusable: release.yml (caller) ja usa group release-<ref>.
-# Duplicar o mesmo group no callee causa falha imediata do workflow_call (GitHub
-# docs — reusing workflow configurations). Ver fix release deadlock 2026-06-08.
+# Concurrency belongs to the caller release.yml. Repeating the same concurrency
+# group in a reusable workflow can deadlock workflow_call executions.
 
 on:
   workflow_call:
     inputs:
       node_version:
-        description: "Node.js version (semantic-release v25+ exige >=22.14)"
+        description: "Node.js version (semantic-release v25+ requires >=22.14)"
         required: false
         type: string
         default: "22.14"
       install_command:
-        description: "Comando de install (npm ci ou npm install)"
+        description: "Dependency install command"
         required: false
         type: string
         default: "npm ci"
       semantic_release_version:
-        description: "Versao do semantic-release instalada no runtime efemero do job"
+        description: "semantic-release version installed in the ephemeral runtime"
         required: false
         type: string
         default: "25.0.5"
       semantic_release_extra_packages:
-        description: "Lista opcional de pacotes adicionais do runtime semantic-release (separados por espaco)"
+        description: "Optional extra semantic-release runtime packages, separated by spaces"
         required: false
         type: string
         default: ""
       runs_on:
-        description: "Runner JSON array (ex: ['self-hosted', 'Linux'] ou ['ubuntu-latest'])"
+        description: "Runner JSON array, for example ['self-hosted', 'Linux', 'service']"
         required: false
         type: string
         default: '["self-hosted"]'
       releaserc_source:
-        description: "'local' = .releaserc.json do repo; 'canonical' = templates/.releaserc.json do infra-ops"
+        description: "local uses the caller .releaserc.json; canonical downloads the infra-ops template"
         required: false
         type: string
         default: "local"
       infra_ops_ref:
-        description: "Tag ou SHA do infra-ops para releaserc canonical (ex: v1)"
+        description: "Tag or immutable SHA used for the canonical infra-ops releaserc"
         required: false
         type: string
         default: "v1"
       update_release_badge:
-        description: "Atualizar assets/badges/release.svg apos release (job no mesmo workflow — evita workflow_run)"
+        description: "Update assets/badges/release.svg after semantic-release completes"
+        required: false
+        type: boolean
+        default: false
+      skip:
+        description: "Explicitly skip release by caller policy; [skip-tests] never controls releases"
         required: false
         type: boolean
         default: false
     secrets:
       OPTIMIZR_INFRA_OPS_READ_TOKEN:
-        description: "Org PAT with contents:read on optimizr-infra-ops (canonical releaserc cross-repo; name must match org secret)"
+        description: "Organization token with contents:read on optimizr-infra-ops"
         required: false
 
 permissions:
@@ -62,6 +66,9 @@ permissions:
 
 jobs:
   release:
+    # Test bypass markers are intentionally ignored here. Release is a separate,
+    # self-hosted stage and semantic-release decides whether a version is due.
+    if: ${{ !inputs.skip }}
     name: Release
     runs-on: ${{ fromJSON(inputs.runs_on) }}
     timeout-minutes: 15
@@ -89,22 +96,24 @@ jobs:
         run: |
           set -euo pipefail
           DEST=".releaserc.json"
-          # infra-ops self: template is already in the checkout (private repo — raw.githubusercontent 404).
+
+          # infra-ops itself already contains the canonical template.
           if [[ -f templates/.releaserc.json ]]; then
             cp templates/.releaserc.json "$DEST"
-            echo "Using canonical releaserc from workspace templates/.releaserc.json"
+            echo "Using canonical releaserc from workspace"
             exit 0
           fi
-          # Cross-repo consumer: GITHUB_TOKEN cannot read private infra-ops — org secret required.
+
           if [[ -z "${OPTIMIZR_INFRA_OPS_READ_TOKEN:-}" ]]; then
-            echo "::error::Missing org secret OPTIMIZR_INFRA_OPS_READ_TOKEN (contents:read on optimizr-infra-ops). See optimizr-infra-ops docs/SEMANTIC_RELEASE.md"
+            echo "::error::Missing OPTIMIZR_INFRA_OPS_READ_TOKEN for canonical releaserc"
             exit 1
           fi
+
           export GH_TOKEN="${OPTIMIZR_INFRA_OPS_READ_TOKEN}"
           gh api -H "Accept: application/vnd.github.raw" \
             "repos/optimizr-tech/optimizr-infra-ops/contents/templates/.releaserc.json?ref=${REF}" \
             > "$DEST"
-          echo "Using canonical releaserc from optimizr-infra-ops@${REF} (gh api + org PAT)"
+          echo "Using canonical releaserc from optimizr-infra-ops@${REF}"
 
       - name: Install semantic-release runtime
         env:
@@ -113,19 +122,17 @@ jobs:
         run: |
           set -euo pipefail
           if [[ ! -f .releaserc.json ]]; then
-            echo "::error::.releaserc.json not found after releaserc resolution"
+            echo "::error::.releaserc.json not found"
             exit 1
           fi
 
           mapfile -t plugin_packages < <(
-            node -e "const fs=require('fs'); const cfg=JSON.parse(fs.readFileSync('.releaserc.json','utf8')); const plugins=Array.isArray(cfg.plugins)?cfg.plugins:[]; const names=plugins.map((plugin)=>Array.isArray(plugin)?plugin[0]:plugin).filter((plugin)=>typeof plugin==='string').filter((plugin)=>!/^[./]/.test(plugin)); process.stdout.write([...new Set(names)].join('\n'));"
+            node -e "const fs=require('fs'); const cfg=JSON.parse(fs.readFileSync('.releaserc.json','utf8')); const plugins=Array.isArray(cfg.plugins)?cfg.plugins:[]; const names=plugins.map((plugin)=>Array.isArray(plugin)?plugin[0]:plugin).filter((plugin)=>typeof plugin==='string').filter((plugin)=>!/^[./]/.test(plugin)); process.stdout.write([...new Set(names)].join('\\n'));"
           )
 
           install_packages=("semantic-release@${SEMANTIC_RELEASE_VERSION}")
           for pkg in "${plugin_packages[@]}"; do
-            if [[ -n "${pkg}" ]]; then
-              install_packages+=("${pkg}")
-            fi
+            [[ -n "$pkg" ]] && install_packages+=("$pkg")
           done
 
           if [[ -n "${SEMANTIC_RELEASE_EXTRA_PACKAGES}" ]]; then
@@ -137,7 +144,7 @@ jobs:
           printf 'Installing semantic-release runtime packages:\n%s\n' "${install_packages[@]}"
           npm install --no-save --package-lock=false --no-audit --no-fund "${install_packages[@]}"
 
-      - name: Verify release plan (dry-run)
+      - name: Verify release plan
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release --dry-run
@@ -150,13 +157,13 @@ jobs:
   update-release-badge:
     name: Update release badge
     needs: release
-    if: inputs.update_release_badge && always() && needs.release.result != 'cancelled' && needs.release.result != 'skipped'
+    if: ${{ inputs.update_release_badge && needs.release.result == 'success' }}
     runs-on: ${{ fromJSON(inputs.runs_on) }}
     timeout-minutes: 5
     permissions:
       contents: write
     steps:
-      - name: Checkout
+      - name: Checkout released branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 0
@@ -170,18 +177,17 @@ jobs:
           git checkout "${GITHUB_REF_NAME}"
           git reset --hard "origin/${GITHUB_REF_NAME}"
 
-      - name: Resolve latest tag
+      - name: Resolve latest semantic version tag
         id: tag
         run: |
           set -euo pipefail
           git fetch --tags origin
-          # Skip floating @v1 consumer tag — badge shows semver from semantic-release
           VERSION=$(git tag -l 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
-          if [ -z "${VERSION}" ]; then
-            echo "No semver tags found; skipping badge update"
+          if [[ -z "$VERSION" ]]; then
+            echo "No semantic version tag found; badge update is a no-op"
             exit 0
           fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Update badge
         if: steps.tag.outputs.version != ''
