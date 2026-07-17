@@ -1,7 +1,7 @@
-name: Move v1 compatibility tag
+name: Validate and move v1 compatibility tag
 
-# Keep legacy @v1 consumers aligned with backward-compatible reusable/action
-# changes. Current production callers remain pinned by immutable SHA.
+# `v1` is the floating compatibility contract for backward-compatible changes.
+# This workflow never runs for pull requests from the public repository.
 
 on:
   push:
@@ -19,7 +19,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  validate:
+    name: Validate workflows and composite actions
+    runs-on: [self-hosted, Linux, infra-ops]
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Run actionlint
+        run: |
+          set -euo pipefail
+          sudo docker run --rm \
+            -v "$GITHUB_WORKSPACE:/repo" \
+            -w /repo \
+            rhysd/actionlint:1.7.12
+
+      - name: Validate composite action metadata
+        run: |
+          set -euo pipefail
+          sudo docker run --rm \
+            -v "$GITHUB_WORKSPACE:/repo" \
+            -w /repo \
+            mikefarah/yq:4.47.2 \
+            eval 'true' .github/actions/*/action.yml
+
   move-v1:
+    name: Move floating v1 tag
+    needs: [validate]
     runs-on: [self-hosted, Linux, infra-ops]
     timeout-minutes: 5
     steps:
