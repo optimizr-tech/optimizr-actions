@@ -201,7 +201,7 @@ jobs:
           echo "Waiting for $CONTAINER_NAME to become healthy..."
           counter=0
           until [ "$(sudo docker inspect -f '{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null)" = "healthy" ]; do
-            if [ $counter -ge $HEALTH_TIMEOUT ]; then
+            if [ "$counter" -ge "$HEALTH_TIMEOUT" ]; then
               echo "❌ Timed out waiting for $CONTAINER_NAME to become healthy" >&2
               sudo docker compose -f "$COMPOSE_FILE" logs --tail=50 >&2
               exit 1
