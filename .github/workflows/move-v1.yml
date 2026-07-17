@@ -36,7 +36,7 @@ jobs:
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/repo" \
             -w /repo \
-            rhysd/actionlint:1.7.12
+            rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
 
       - name: Validate composite action metadata
         run: |
@@ -44,7 +44,7 @@ jobs:
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/repo" \
             -w /repo \
-            mikefarah/yq:4.47.2 \
+            mikefarah/yq@sha256:76def1f56f456ecc1c3173ea275218ee17139bc2018c5a07887b15afd88ec03e \
             eval 'true' .github/actions/*/action.yml
 
   move-v1:

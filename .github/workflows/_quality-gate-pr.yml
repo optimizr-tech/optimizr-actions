@@ -97,13 +97,13 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/_qg
         run: |
           set -euo pipefail
-          baseline_arg=""
+          baseline_args=()
           if [ -f artifacts/baseline/quality-gate-baseline.json ]; then
-            baseline_arg="--baseline artifacts/baseline/quality-gate-baseline.json"
+            baseline_args+=(--baseline "artifacts/baseline/quality-gate-baseline.json")
           fi
-          post_arg=""
+          post_args=()
           if [ "${{ inputs.post_comment }}" = "true" ]; then
-            post_arg="--post --repo ${{ github.repository }}"
+            post_args+=(--post --repo "${{ github.repository }}")
           fi
           set +e
           python -m scripts.quality_gate.run \
@@ -111,8 +111,8 @@ jobs:
             --head-sha "${GITHUB_SHA}" \
             pr \
             --pr "${{ github.event.pull_request.number }}" \
-            $baseline_arg \
-            $post_arg
+            "${baseline_args[@]}" \
+            "${post_args[@]}"
           verdict_rc=$?
           set -e
           echo "quality-gate verdict exit code: $verdict_rc (0=green, 1=yellow, 2=red, 3=unknown)"
