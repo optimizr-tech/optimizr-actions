@@ -103,12 +103,29 @@ jobs:
           BACKUP_ROOT="/opt/optimizr/backups/${{ inputs.service_name }}/deploys"
           sudo mkdir -p "$DEPLOY_PATH" "$BACKUP_ROOT"
           sudo chown -R "$(id -un):$(id -gn)" "$DEPLOY_PATH" "$BACKUP_ROOT"
+          sudo chmod 750 "$BACKUP_ROOT"
 
           if [ -d "$DEPLOY_PATH" ] && [ "$(ls -A "$DEPLOY_PATH" 2>/dev/null)" ]; then
             BACKUP_DATE=$(date -u +%Y%m%dT%H%M%SZ)
-            tar -czf "${BACKUP_ROOT}/${BACKUP_DATE}.tar.gz" \
-              -C "$DEPLOY_PATH" . 2>/dev/null || echo "⚠️  Backup failed, continuing"
-            echo "✅ Configuration backed up to ${BACKUP_ROOT}/${BACKUP_DATE}.tar.gz"
+            if (
+              umask 077
+              tar \
+                --exclude='.env' \
+                --exclude='*/.env' \
+                --exclude='.env.*' \
+                --exclude='*/.env.*' \
+                --exclude='*.pem' \
+                --exclude='*.key' \
+                --exclude='*.p12' \
+                --exclude='*.pfx' \
+                -czf "${BACKUP_ROOT}/${BACKUP_DATE}.tar.gz" \
+                -C "$DEPLOY_PATH" . 2>/dev/null
+            ); then
+              sudo chmod 600 "${BACKUP_ROOT}/${BACKUP_DATE}.tar.gz"
+              echo "✅ Secret-free configuration backed up to ${BACKUP_ROOT}/${BACKUP_DATE}.tar.gz"
+            else
+              echo "⚠️  Backup failed, continuing"
+            fi
           fi
 
           # `rsync --delete` faz o destino refletir o source exatamente — cobre
