@@ -1,24 +1,28 @@
 # Composite: patch assets/badges/release.svg and optionally commit+push.
-# Primary caller: _semantic-release.yml job update-release-badge (same workflow run).
-# Recovery: templates/workflows/update-badges.yml (workflow_dispatch).
+# Safe for push, workflow_dispatch and release events because the target branch
+# is explicit instead of being inferred from GITHUB_REF (which may be a tag).
 
 name: update-release-badge
-description: Update versioned release badge SVG with targeted sed replacements
+description: Update versioned release badge SVG with targeted replacements
 
 inputs:
   version:
-    description: Release tag (e.g. v1.2.3)
+    description: Release tag, for example v1.2.3
     required: true
   badge_path:
     description: Path to release badge SVG
     required: false
     default: assets/badges/release.svg
+  branch:
+    description: Branch that owns the badge file
+    required: false
+    default: main
   commit:
     description: Commit and push when the SVG changed
     required: false
     default: "true"
   commit_message:
-    description: Commit subject (version substituted as {version})
+    description: Commit subject, with {version} replaced by the release tag
     required: false
     default: ":ok_hand: chore(badges): update release badge to {version} [skip ci]"
 
@@ -32,17 +36,18 @@ runs:
         BADGE: ${{ inputs.badge_path }}
       run: |
         set -euo pipefail
-        if [ -z "${VERSION}" ]; then
+        if [[ -z "$VERSION" ]]; then
           echo "Empty version; skipping"
           exit 0
         fi
-        if [ ! -f "${BADGE}" ]; then
-          echo "Missing ${BADGE}" >&2
+        if [[ ! -f "$BADGE" ]]; then
+          echo "Missing $BADGE" >&2
           exit 1
         fi
-        sed -i "s/aria-label=\"Release: [^\"]*\"/aria-label=\"Release: ${VERSION}\"/" "${BADGE}"
-        sed -i "s/<title>Release: [^<]*<\\/title>/<title>Release: ${VERSION}<\\/title>/" "${BADGE}"
-        sed -i "s/<text x=\"105\" y=\"14\">v[^<]*<\\/text>/<text x=\"105\" y=\"14\">${VERSION}<\\/text>/" "${BADGE}"
+
+        sed -i "s/aria-label=\"Release: [^\"]*\"/aria-label=\"Release: ${VERSION}\"/" "$BADGE"
+        sed -i "s/<title>Release: [^<]*<\\/title>/<title>Release: ${VERSION}<\\/title>/" "$BADGE"
+        sed -i "s/<text x=\"105\" y=\"14\">v[^<]*<\\/text>/<text x=\"105\" y=\"14\">${VERSION}<\\/text>/" "$BADGE"
 
     - name: Commit and push badge
       if: inputs.commit == 'true'
@@ -50,21 +55,22 @@ runs:
       env:
         VERSION: ${{ inputs.version }}
         BADGE: ${{ inputs.badge_path }}
+        TARGET_BRANCH: ${{ inputs.branch }}
         COMMIT_TEMPLATE: ${{ inputs.commit_message }}
         GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        BRANCH="${GITHUB_REF#refs/heads/}"
-        if [ "${BRANCH}" = "${GITHUB_REF}" ]; then
-          BRANCH="${GITHUB_REF_NAME}"
-        fi
         git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-        git add "${BADGE}"
+
+        git add "$BADGE"
         git diff --staged --quiet && echo "no changes" && exit 0
+
         MSG="${COMMIT_TEMPLATE//\{version\}/${VERSION}}"
-        git commit -m "${MSG}"
-        # semantic-release pushes to main before this job; rebase avoids non-fast-forward
-        git pull --rebase origin "${BRANCH}"
-        git push origin "HEAD:${BRANCH}"
+        git commit -m "$MSG"
+
+        # semantic-release or another badge workflow may have moved main since
+        # checkout. Rebase the idempotent badge commit before the final push.
+        git pull --rebase origin "$TARGET_BRANCH"
+        git push origin "HEAD:${TARGET_BRANCH}"
