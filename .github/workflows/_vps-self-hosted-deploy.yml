@@ -1,5 +1,5 @@
 # Reusable: deploy a self-hosted runner no VPS.
-# Consome via: uses: optimizr-tech/optimizr-infra-ops/.github/workflows/_vps-self-hosted-deploy.yml@<SHA>
+# Consome via: uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@<SHA>
 # Veja docs/CI_STANDARDS.md + docs/CI_RUNBOOK.md.
 
 name: _vps-self-hosted-deploy
@@ -95,20 +95,36 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Backup root convention (DEPLOY_PATH_CONVENTION.md "Backup
-          # Path" section): per-service subdir under /opt/optimizr/backups/
-          # so each repo owns its own retention surface and tarballs never
-          # collide. `deploys/` holds reusable-emitted snapshots; `runtime/`
-          # is reserved for service-managed dumps (e.g. dbaas pg_dump cron).
+          # Backups intentionally exclude runtime credentials. The deployment
+          # directory contains .env and may also contain TLS/private-key material.
           BACKUP_ROOT="/opt/optimizr/backups/${{ inputs.service_name }}/deploys"
           sudo mkdir -p "$DEPLOY_PATH" "$BACKUP_ROOT"
           sudo chown -R "$(id -un):$(id -gn)" "$DEPLOY_PATH" "$BACKUP_ROOT"
+          sudo chmod 750 "$BACKUP_ROOT"
 
           if [ -d "$DEPLOY_PATH" ] && [ "$(ls -A "$DEPLOY_PATH" 2>/dev/null)" ]; then
             BACKUP_DATE=$(date -u +%Y%m%dT%H%M%SZ)
-            tar -czf "${BACKUP_ROOT}/${BACKUP_DATE}.tar.gz" \
-              -C "$DEPLOY_PATH" . 2>/dev/null || echo "⚠️  Backup failed, continuing"
-            echo "✅ Configuration backed up to ${BACKUP_ROOT}/${BACKUP_DATE}.tar.gz"
+            BACKUP_FILE="${BACKUP_ROOT}/${BACKUP_DATE}.tar.gz"
+            if (
+              umask 077
+              tar \
+                --exclude='.env' \
+                --exclude='*/.env' \
+                --exclude='.env.*' \
+                --exclude='*/.env.*' \
+                --exclude='*.pem' \
+                --exclude='*.key' \
+                --exclude='*.p12' \
+                --exclude='*.pfx' \
+                -czf "$BACKUP_FILE" \
+                -C "$DEPLOY_PATH" . 2>/dev/null
+            ); then
+              chmod 600 "$BACKUP_FILE"
+              echo "✅ Secret-free configuration backed up to $BACKUP_FILE"
+            else
+              rm -f "$BACKUP_FILE"
+              echo "⚠️  Backup failed, continuing"
+            fi
           fi
 
           # `rsync --delete` faz o destino refletir o source exatamente — cobre
