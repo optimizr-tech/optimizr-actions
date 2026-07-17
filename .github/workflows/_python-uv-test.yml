@@ -1,5 +1,5 @@
 # Reusable: uv sync + ruff + pytest com gate de cobertura.
-# Consome via: uses: optimizr-tech/optimizr-infra-ops/.github/workflows/_python-uv-test.yml@v1
+# Consome via: uses: optimizr-tech/optimizr-actions/.github/workflows/_python-uv-test.yml@<ref>
 # Monorepo integration preset (serve): input integration_preset=serve — issue #59.
 
 name: _python-uv-test
@@ -104,10 +104,19 @@ on:
         required: false
         type: number
         default: 10
+      skip:
+        description: "Skip hosted Python validation (billing emergency or caller policy)"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   test:
-    if: inputs.integration_preset == ''
+    if: >-
+      !inputs.skip &&
+      inputs.integration_preset == '' &&
+      (github.event_name != 'push' ||
+       !contains(github.event.head_commit.message, '[skip-tests]'))
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.timeout_minutes }}
     steps:
@@ -136,7 +145,11 @@ jobs:
           upload_artifact_paths: ${{ inputs.upload_artifact_paths }}
 
   test-integration:
-    if: inputs.integration_preset == 'serve'
+    if: >-
+      !inputs.skip &&
+      inputs.integration_preset == 'serve' &&
+      (github.event_name != 'push' ||
+       !contains(github.event.head_commit.message, '[skip-tests]'))
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.timeout_minutes }}
 
