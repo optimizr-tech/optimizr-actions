@@ -4,6 +4,10 @@ optimizr-deploy-key-*
 node_modules/
 .worktrees/
 
+# Python generated files
+__pycache__/
+*.py[cod]
+
 # Local commit/PR drafts (Windows UTF-8 helpers)
 .commit-msg*.txt
 .pr-*
