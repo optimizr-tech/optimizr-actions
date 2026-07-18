@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import re
 import unittest
@@ -15,6 +16,21 @@ def read(path: str) -> str:
 
 
 class WorkflowStaticPolicyTests(unittest.TestCase):
+    def test_canonical_release_commit_uses_org_allowlisted_gitmoji(self) -> None:
+        config = json.loads(read("templates/.releaserc.json"))
+        git_plugin = next(
+            options
+            for plugin, options in config["plugins"]
+            if plugin == "@semantic-release/git"
+        )
+        subject = git_plugin["message"].split("\\n", 1)[0]
+
+        self.assertEqual(
+            subject,
+            ":bookmark_tabs: chore(release): ${nextRelease.version} [skip ci]",
+        )
+        self.assertLessEqual(len(subject.replace("${nextRelease.version}", "1.2.3")), 72)
+
     def test_v1_pr_workflows_preserve_legacy_caller_contract(self) -> None:
         commitlint = read(".github/workflows/_commitlint.yml")
         validate_pr = read(".github/workflows/_validate-pr.yml")
