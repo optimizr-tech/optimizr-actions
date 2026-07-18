@@ -1,6 +1,6 @@
 # Reusable: commitlint on pull_request commit range.
-# Consume: optimizr-tech/optimizr-infra-ops/.github/workflows/_commitlint.yml@v1
-# Pass base_sha/head_sha from caller — github.event.pull_request is empty under workflow_call.
+# Consume: optimizr-tech/optimizr-actions/.github/workflows/_commitlint.yml@v1
+# Explicit SHAs override the caller pull_request event for non-PR dispatches.
 
 name: _commitlint
 
@@ -26,12 +26,14 @@ on:
         default: "commitlint.config.cjs"
       base_sha:
         description: "PR base SHA (caller: github.event.pull_request.base.sha)"
-        required: true
+        required: false
         type: string
+        default: ""
       head_sha:
         description: "PR head SHA (caller: github.event.pull_request.head.sha)"
-        required: true
+        required: false
         type: string
+        default: ""
 
 permissions:
   contents: read
@@ -60,12 +62,20 @@ jobs:
       - name: Run commitlint on PR commits
         env:
           COMMITLINT_CONFIG: ${{ inputs.config_path }}
+          INPUT_BASE_SHA: ${{ inputs.base_sha }}
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          INPUT_HEAD_SHA: ${{ inputs.head_sha }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          BASE_SHA="${{ inputs.base_sha }}"
-          HEAD_SHA="${{ inputs.head_sha }}"
+          BASE_SHA="${INPUT_BASE_SHA:-$EVENT_BASE_SHA}"
+          HEAD_SHA="${INPUT_HEAD_SHA:-$EVENT_HEAD_SHA}"
+          if [ -z "$BASE_SHA" ] || [ -z "$HEAD_SHA" ]; then
+            echo "Unable to resolve pull request base/head SHAs"
+            exit 1
+          fi
           if [ ! -f "${COMMITLINT_CONFIG}" ] && [ ! -f ".commitlintrc.cjs" ]; then
-            echo "No commitlint config — copy templates/commitlint.config.cjs from optimizr-infra-ops"
+            echo "No commitlint config — copy templates/commitlint.config.cjs from optimizr-actions"
             exit 1
           fi
           npx --no-install commitlint --from="$BASE_SHA" --to="$HEAD_SHA" \

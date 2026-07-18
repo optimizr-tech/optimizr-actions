@@ -9,9 +9,12 @@ credentials, private keys, host addresses, customer data, production
 configuration, or private-repository dependencies. Consumer repositories own
 their secrets, service lifecycle, and product-specific checks.
 
-Pin reusable workflows and composite actions to an immutable commit SHA in
-production consumers. The floating `v1` tag is a compatibility convenience;
-it moves only after this repository's release validation succeeds.
+Optimizr-managed consumers should use the floating `v1` tag so compatible
+automation fixes propagate without repository-by-repository pin updates. The
+tag moves only after this repository's release validation succeeds, and every
+change published within `v1` must preserve existing caller contracts. Use an
+immutable commit SHA only where a consumer's threat model requires independent
+review and explicit upgrades.
 
 ## Validation
 
