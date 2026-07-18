@@ -35,15 +35,15 @@ on:
         type: string
         default: '["self-hosted"]'
       releaserc_source:
-        description: "local uses the caller .releaserc.json; canonical downloads the infra-ops template"
+        description: "local uses the caller .releaserc.json; canonical downloads the optimizr-actions template"
         required: false
         type: string
         default: "local"
-      infra_ops_ref:
-        description: "Tag or immutable SHA used for the canonical infra-ops releaserc"
+      actions_ref:
+        description: "Tag or immutable SHA used for the canonical optimizr-actions releaserc"
         required: false
         type: string
-        default: "v1"
+        default: "main"
       update_release_badge:
         description: "Update assets/badges/release.svg after semantic-release completes"
         required: false
@@ -54,11 +54,6 @@ on:
         required: false
         type: boolean
         default: false
-    secrets:
-      OPTIMIZR_INFRA_OPS_READ_TOKEN:
-        description: "Organization token with contents:read on optimizr-infra-ops"
-        required: false
-
 permissions:
   contents: write
   issues: write
@@ -91,29 +86,16 @@ jobs:
       - name: Resolve canonical releaserc
         if: inputs.releaserc_source == 'canonical'
         env:
-          REF: ${{ inputs.infra_ops_ref }}
-          OPTIMIZR_INFRA_OPS_READ_TOKEN: ${{ secrets.OPTIMIZR_INFRA_OPS_READ_TOKEN }}
+          REF: ${{ inputs.actions_ref }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           DEST=".releaserc.json"
 
-          # infra-ops itself already contains the canonical template.
-          if [[ -f templates/.releaserc.json ]]; then
-            cp templates/.releaserc.json "$DEST"
-            echo "Using canonical releaserc from workspace"
-            exit 0
-          fi
-
-          if [[ -z "${OPTIMIZR_INFRA_OPS_READ_TOKEN:-}" ]]; then
-            echo "::error::Missing OPTIMIZR_INFRA_OPS_READ_TOKEN for canonical releaserc"
-            exit 1
-          fi
-
-          export GH_TOKEN="${OPTIMIZR_INFRA_OPS_READ_TOKEN}"
           gh api -H "Accept: application/vnd.github.raw" \
-            "repos/optimizr-tech/optimizr-infra-ops/contents/templates/.releaserc.json?ref=${REF}" \
+            "repos/optimizr-tech/optimizr-actions/contents/templates/.releaserc.json?ref=${REF}" \
             > "$DEST"
-          echo "Using canonical releaserc from optimizr-infra-ops@${REF}"
+          echo "Using canonical releaserc from optimizr-actions@${REF}"
 
       - name: Install semantic-release runtime
         env:
@@ -191,6 +173,6 @@ jobs:
 
       - name: Update badge
         if: steps.tag.outputs.version != ''
-        uses: optimizr-tech/optimizr-infra-ops/.github/actions/update-release-badge@v1
+        uses: optimizr-tech/optimizr-actions/.github/actions/update-release-badge@10c7623bf2a5fb1db1d0e11f3b21e00ae6d442a1
         with:
           version: ${{ steps.tag.outputs.version }}
