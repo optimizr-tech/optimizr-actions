@@ -27,6 +27,9 @@ python -m unittest discover -v
 The portable local validation contract and Fiscal preset are documented in
 [`docs/LOCAL_VALIDATION.md`](docs/LOCAL_VALIDATION.md) once released.
 
+The canonical semantic-release configuration emits an organization-compliant
+`:bookmark_tabs: chore(release): <version> [skip ci]` commit subject.
+
 ## Security
 
 Report vulnerabilities privately as described in
