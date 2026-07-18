@@ -10,6 +10,7 @@ on:
     paths:
       - ".github/actions/**"
       - ".github/workflows/**"
+      - "templates/**"
   workflow_dispatch:
 
 permissions:
