@@ -23,12 +23,15 @@ class WorkflowStaticPolicyTests(unittest.TestCase):
             for plugin, options in config["plugins"]
             if plugin == "@semantic-release/git"
         )
-        subject = git_plugin["message"].split("\\n", 1)[0]
+        message = git_plugin["message"]
+        subject, notes_template = message.split("\n\n", 1)
 
         self.assertEqual(
             subject,
             ":bookmark_tabs: chore(release): ${nextRelease.version} [skip ci]",
         )
+        self.assertEqual(notes_template, "${nextRelease.notes}")
+        self.assertNotIn("\\n", message)
         self.assertLessEqual(len(subject.replace("${nextRelease.version}", "1.2.3")), 72)
 
     def test_v1_pr_workflows_preserve_legacy_caller_contract(self) -> None:
