@@ -1,0 +1,51 @@
+{
+  "branches": ["main"],
+  "plugins": [
+    [
+      "@semantic-release/commit-analyzer",
+      {
+        "preset": false,
+        "releaseRules": [
+          { "type": "feat", "release": "minor" },
+          { "type": "fix", "release": "patch" },
+          { "type": "security", "release": "patch" },
+          { "type": "hotfix", "release": "patch" },
+          { "type": "remove", "release": "minor" },
+          { "breaking": true, "release": "major" }
+        ],
+        "parserOpts": {
+          "noteKeywords": ["BREAKING CHANGE", "BREAKING CHANGES"],
+          "headerPattern": "^(:[a-z_]+:)?\\s*(feat|fix|security|config|docs|style|refactor|perf|test|build|ci|chore|revert|hotfix|raw|cleanup|remove)(?:\\(([\\w\\s*\\-]+)\\))?:?\\s*(.*)$",
+          "headerCorrespondence": ["emoji", "type", "scope", "subject"]
+        }
+      }
+    ],
+    [
+      "@semantic-release/release-notes-generator",
+      {
+        "parserOpts": {
+          "noteKeywords": ["BREAKING CHANGE", "BREAKING CHANGES"],
+          "headerPattern": "^(:[a-z_]+:)?\\s*(feat|fix|security|config|docs|style|refactor|perf|test|build|ci|chore|revert|hotfix|raw|cleanup|remove)(?:\\(([\\w\\s*\\-]+)\\))?:?\\s*(.*)$",
+          "headerCorrespondence": ["emoji", "type", "scope", "subject"]
+        },
+        "writerOpts": {
+          "commitsSort": ["subject", "scope"]
+        }
+      }
+    ],
+    ["@semantic-release/changelog", { "changelogFile": "CHANGELOG.md" }],
+    ["@semantic-release/npm", { "npmPublish": false }],
+    [
+      "@semantic-release/github",
+      { "assets": [], "successComment": false, "failComment": false, "releasedLabels": false }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": ["CHANGELOG.md", "package.json", "package-lock.json"],
+        "message": ":bookmark: chore(release): ${nextRelease.version} [skip ci]\\n\\n${nextRelease.notes}"
+      }
+    ]
+  ],
+  "tagFormat": "v${version}"
+}
