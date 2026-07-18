@@ -196,7 +196,27 @@ jobs:
           set -euo pipefail
           cd "$DEPLOY_PATH"
 
+          # `docker compose up` can fail before the healthcheck loop starts
+          # (for example when a one-shot init service exits non-zero). Capture
+          # the failing service logs here while the containers still exist;
+          # otherwise callers only see Compose's generic exit code.
+          set +e
           sudo docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+          compose_status=$?
+          set -e
+          if [ "$compose_status" -ne 0 ]; then
+            echo "❌ docker compose up failed (exit $compose_status)" >&2
+            echo "::group::Compose service status" >&2
+            sudo docker compose -f "$COMPOSE_FILE" ps >&2 || true
+            echo "::endgroup::" >&2
+            echo "::group::minio-init logs" >&2
+            sudo docker compose -f "$COMPOSE_FILE" logs --tail=200 minio-init >&2 || true
+            echo "::endgroup::" >&2
+            echo "::group::Compose logs" >&2
+            sudo docker compose -f "$COMPOSE_FILE" logs --tail=100 >&2 || true
+            echo "::endgroup::" >&2
+            exit "$compose_status"
+          fi
 
           echo "Waiting for $CONTAINER_NAME to become healthy..."
           counter=0
