@@ -214,10 +214,10 @@ jobs:
             # exited containers and print logs solely for non-zero exits,
             # avoiding unrelated application logs and service-name coupling.
             mapfile -t exited_services < <(
-              sudo docker compose -f "$COMPOSE_FILE" ps --status exited --services 2>/dev/null
+              sudo docker compose -f "$COMPOSE_FILE" ps -a --status exited --services 2>/dev/null
             )
             for service in "${exited_services[@]}"; do
-              container_id="$(sudo docker compose -f "$COMPOSE_FILE" ps -q "$service" 2>/dev/null || true)"
+              container_id="$(sudo docker compose -f "$COMPOSE_FILE" ps -a -q "$service" 2>/dev/null || true)"
               [ -n "$container_id" ] || continue
               service_exit="$(sudo docker inspect -f '{{.State.ExitCode}}' "$container_id" 2>/dev/null || echo unknown)"
               [ "$service_exit" != "0" ] || continue

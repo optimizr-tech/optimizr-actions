@@ -14,7 +14,12 @@ automation fixes propagate without repository-by-repository pin updates. The
 tag moves only after this repository's release validation succeeds, and every
 change published within `v1` must preserve existing caller contracts. Use an
 immutable commit SHA only where a consumer's threat model requires independent
-review and explicit upgrades.
+review and explicit upgrades. Changes to reusable workflows, composite actions,
+or canonical consumer templates trigger validation and publication of `v1`.
+
+The self-hosted VPS deploy reusable captures status and logs from failed
+one-shot Compose services, including containers that have already stopped, so
+consumer runs retain the root-cause output instead of only Compose's exit code.
 
 ## Validation
 
