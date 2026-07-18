@@ -99,6 +99,21 @@ class WorkflowStaticPolicyTests(unittest.TestCase):
             content,
         )
 
+    def test_v1_moves_when_canonical_release_template_changes(self) -> None:
+        content = read(".github/workflows/move-v1.yml")
+        self.assertIn('- "templates/**"', content)
+
+    def test_failed_compose_diagnostics_include_stopped_services(self) -> None:
+        content = read(".github/workflows/_vps-self-hosted-deploy.yml")
+        self.assertIn(
+            'docker compose -f "$COMPOSE_FILE" ps -a --status exited --services',
+            content,
+        )
+        self.assertIn(
+            'docker compose -f "$COMPOSE_FILE" ps -a -q "$service"',
+            content,
+        )
+
     def test_deploy_workflows_do_not_use_unquoted_numeric_or_unused_loop_variables(self) -> None:
         self_hosted = read(".github/workflows/_vps-self-hosted-deploy.yml")
         monorepo = read(".github/workflows/_vps-monorepo-deploy.yml")
