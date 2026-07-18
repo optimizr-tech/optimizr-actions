@@ -207,14 +207,24 @@ jobs:
           if [ "$compose_status" -ne 0 ]; then
             echo "❌ docker compose up failed (exit $compose_status)" >&2
             echo "::group::Compose service status" >&2
-            sudo docker compose -f "$COMPOSE_FILE" ps >&2 || true
+            sudo docker compose -f "$COMPOSE_FILE" ps -a >&2 || true
             echo "::endgroup::" >&2
-            echo "::group::minio-init logs" >&2
-            sudo docker compose -f "$COMPOSE_FILE" logs --tail=200 minio-init >&2 || true
-            echo "::endgroup::" >&2
-            echo "::group::Compose logs" >&2
-            sudo docker compose -f "$COMPOSE_FILE" logs --tail=100 >&2 || true
-            echo "::endgroup::" >&2
+
+            # Keep this reusable workflow service-agnostic. Inspect only
+            # exited containers and print logs solely for non-zero exits,
+            # avoiding unrelated application logs and service-name coupling.
+            mapfile -t exited_services < <(
+              sudo docker compose -f "$COMPOSE_FILE" ps --status exited --services 2>/dev/null
+            )
+            for service in "${exited_services[@]}"; do
+              container_id="$(sudo docker compose -f "$COMPOSE_FILE" ps -q "$service" 2>/dev/null || true)"
+              [ -n "$container_id" ] || continue
+              service_exit="$(sudo docker inspect -f '{{.State.ExitCode}}' "$container_id" 2>/dev/null || echo unknown)"
+              [ "$service_exit" != "0" ] || continue
+              echo "::group::Logs for failed service: $service (exit $service_exit)" >&2
+              sudo docker compose -f "$COMPOSE_FILE" logs --no-color --tail=200 "$service" >&2 || true
+              echo "::endgroup::" >&2
+            done
             exit "$compose_status"
           fi
 
