@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import unittest
 
 
@@ -14,6 +15,53 @@ def read(path: str) -> str:
 
 
 class WorkflowStaticPolicyTests(unittest.TestCase):
+    def test_v1_pr_workflows_preserve_legacy_caller_contract(self) -> None:
+        commitlint = read(".github/workflows/_commitlint.yml")
+        validate_pr = read(".github/workflows/_validate-pr.yml")
+
+        for workflow in (commitlint, validate_pr):
+            self.assertIn("INPUT_BASE_SHA: ${{ inputs.base_sha }}", workflow)
+            self.assertIn(
+                "EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha }}",
+                workflow,
+            )
+            self.assertIn('BASE_SHA="${INPUT_BASE_SHA:-$EVENT_BASE_SHA}"', workflow)
+            self.assertIn("INPUT_HEAD_SHA: ${{ inputs.head_sha }}", workflow)
+            self.assertIn(
+                "EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
+                workflow,
+            )
+            self.assertIn('HEAD_SHA="${INPUT_HEAD_SHA:-$EVENT_HEAD_SHA}"', workflow)
+
+        self.assertIn("EVENT_PR_TITLE: ${{ github.event.pull_request.title }}", validate_pr)
+        self.assertIn('PR_TITLE="${INPUT_PR_TITLE:-$EVENT_PR_TITLE}"', validate_pr)
+
+    def test_v1_pr_workflow_compatibility_inputs_are_optional(self) -> None:
+        commitlint = read(".github/workflows/_commitlint.yml")
+        validate_pr = read(".github/workflows/_validate-pr.yml")
+
+        for workflow in (commitlint, validate_pr):
+            for input_name in ("base_sha", "head_sha"):
+                match = re.search(
+                    rf"^      {input_name}:\n(?P<body>(?:        .*\n)+)",
+                    workflow,
+                    re.MULTILINE,
+                )
+                self.assertIsNotNone(match)
+                input_block = match.group("body")
+                self.assertIn("required: false", input_block)
+                self.assertIn('default: ""', input_block)
+
+        title_match = re.search(
+            r"^      pr_title:\n(?P<body>(?:        .*\n)+)",
+            validate_pr,
+            re.MULTILINE,
+        )
+        self.assertIsNotNone(title_match)
+        title_block = title_match.group("body")
+        self.assertIn("required: false", title_block)
+        self.assertIn('default: ""', title_block)
+
     def test_quality_gate_uses_argument_arrays_for_optional_flags(self) -> None:
         content = read(".github/workflows/_quality-gate-pr.yml")
         self.assertIn("baseline_args=()", content)

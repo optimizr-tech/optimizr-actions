@@ -1,7 +1,7 @@
 name: _validate-pr
 
 # Concurrency: caller workflow only (CI_STANDARDS §8.1).
-# PR metadata must be passed as inputs — github.event.pull_request is empty under workflow_call.
+# Explicit metadata inputs override the caller pull_request event when provided.
 
 on:
   workflow_call:
@@ -13,8 +13,9 @@ on:
         default: true
       pr_title:
         description: "PR title (caller: github.event.pull_request.title)"
-        required: true
+        required: false
         type: string
+        default: ""
       pr_body:
         description: "PR body (caller: github.event.pull_request.body)"
         required: false
@@ -22,12 +23,14 @@ on:
         default: ""
       base_sha:
         description: "PR base SHA (caller: github.event.pull_request.base.sha)"
-        required: true
+        required: false
         type: string
+        default: ""
       head_sha:
         description: "PR head SHA (caller: github.event.pull_request.head.sha)"
-        required: true
+        required: false
         type: string
+        default: ""
 
 permissions:
   contents: read
@@ -53,21 +56,42 @@ jobs:
 
       - name: Validate PR title
         env:
-          PR_TITLE: ${{ inputs.pr_title }}
+          INPUT_PR_TITLE: ${{ inputs.pr_title }}
+          EVENT_PR_TITLE: ${{ github.event.pull_request.title }}
           VALIDATE_SUBJECT_LABEL: PR title
-        run: bash scripts/git-hooks/validate-subject.sh "$PR_TITLE"
+        run: |
+          PR_TITLE="${INPUT_PR_TITLE:-$EVENT_PR_TITLE}"
+          if [ -z "$PR_TITLE" ]; then
+            echo "Unable to resolve pull request title"
+            exit 1
+          fi
+          bash scripts/git-hooks/validate-subject.sh "$PR_TITLE"
 
       - name: Validate PR body
         env:
-          PR_BODY: ${{ inputs.pr_body }}
+          INPUT_PR_BODY: ${{ inputs.pr_body }}
+          EVENT_PR_BODY: ${{ github.event.pull_request.body }}
           BODY_FILE: ${{ runner.temp }}/pr-body.md
           VALIDATE_PR_BODY_LABEL: PR body
         run: |
+          PR_BODY="${INPUT_PR_BODY:-$EVENT_PR_BODY}"
+          export PR_BODY
           python3 -c 'import os, pathlib; pathlib.Path(os.environ["BODY_FILE"]).write_text(os.environ.get("PR_BODY") or "", encoding="utf-8")'
           bash scripts/git-hooks/validate-pr-body.sh "$BODY_FILE"
 
       - name: Validate PR commit subjects
+        env:
+          INPUT_BASE_SHA: ${{ inputs.base_sha }}
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          INPUT_HEAD_SHA: ${{ inputs.head_sha }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          BASE_SHA="${INPUT_BASE_SHA:-$EVENT_BASE_SHA}"
+          HEAD_SHA="${INPUT_HEAD_SHA:-$EVENT_HEAD_SHA}"
+          if [ -z "$BASE_SHA" ] || [ -z "$HEAD_SHA" ]; then
+            echo "Unable to resolve pull request base/head SHAs"
+            exit 1
+          fi
           bash scripts/git-hooks/validate-pr-commits.sh \
-            "${{ inputs.base_sha }}" \
-            "${{ inputs.head_sha }}"
+            "$BASE_SHA" \
+            "$HEAD_SHA"
