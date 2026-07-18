@@ -22,13 +22,14 @@ def _tool_version(executable: str) -> str:
     return result.stdout.strip().splitlines()[0] if result.returncode == 0 and result.stdout else "unknown"
 
 
-def _parse_services(values: list[str]) -> dict[str, str]:
-    services: dict[str, str] = {}
+def _parse_services(values: list[str]) -> dict[str, dict[str, str]]:
+    services: dict[str, dict[str, str]] = {}
     for value in values:
         name, separator, version = value.partition("=")
+        version, digest_separator, digest = version.partition("@")
         if not separator or not name or not version:
             raise ValueError("service values must use name=version")
-        services[name] = version
+        services[name] = {"version": version, "digest": digest if digest_separator else "unknown"}
     return services
 
 
@@ -45,10 +46,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--evidence", type=Path, required=True)
     parser.add_argument("--service", action="append", default=[])
     parser.add_argument("--allow-dirty", action="store_true")
+    parser.add_argument("--command-json", help="JSON array containing the exact command to execute")
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     if args.command[:1] == ["--"]:
         args.command = args.command[1:]
+    if args.command_json:
+        args.command = json.loads(args.command_json)
+        if not isinstance(args.command, list) or not all(isinstance(value, str) for value in args.command):
+            raise ValueError("command-json must be a JSON string array")
 
     preset = json.loads(args.preset.read_text(encoding="utf-8"))
     provided_services = _parse_services(args.service)
@@ -63,7 +69,7 @@ def main(argv: list[str] | None = None) -> int:
         "repository": {"head_sha": _git("rev-parse", "HEAD"), "base_sha": _git("merge-base", "HEAD", "origin/main"), "clean": not dirty},
         "tools": {tool: _tool_version(tool) for tool in ("python", "git", "docker")},
         "lockfile": {"path": str(lockfile), "sha256": hashlib.sha256(lockfile.read_bytes()).hexdigest() if lockfile.is_file() else "missing"},
-        "services": {name: {"version": version, "kind": "real"} for name, version in provided_services.items()},
+        "services": {name: {**details, "kind": "real"} for name, details in provided_services.items()},
         "commands": [],
         "unresolved_gaps": unresolved,
         "result": "failed",

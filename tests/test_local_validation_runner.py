@@ -25,14 +25,10 @@ class LocalValidationRunnerTests(unittest.TestCase):
                     "--evidence",
                     str(evidence),
                     "--allow-dirty",
-                    "--service",
-                    "postgres=18",
-                    "--service",
-                    "rabbitmq=4.3",
-                    "--service",
-                    "minio=RELEASE.2026",
-                    "--service",
-                    "keycloak=26",
+                    "--service", "postgres=18@sha256:postgres",
+                    "--service", "rabbitmq=4.3@sha256:rabbitmq",
+                    "--service", "minio=RELEASE.2026@sha256:minio",
+                    "--service", "keycloak=26@sha256:keycloak",
                     "--",
                     sys.executable,
                     "-c",
@@ -45,6 +41,7 @@ class LocalValidationRunnerTests(unittest.TestCase):
         self.assertEqual("passed", payload["result"])
         self.assertEqual(0, payload["commands"][0]["exit_code"])
         self.assertIn("head_sha", payload["repository"])
+        self.assertEqual("sha256:postgres", payload["services"]["postgres"]["digest"])
         self.assertNotIn("environment", payload)
 
     def test_runner_fails_closed_when_a_required_service_is_unknown(self) -> None:

@@ -1,0 +1,46 @@
+name: Local validation contract
+description: Run a repository-local validation preset and write redacted evidence
+inputs:
+  preset:
+    description: Path to a preset relative to the caller workspace
+    required: true
+  evidence:
+    description: Evidence path relative to the caller workspace
+    required: true
+  command_json:
+    description: JSON array containing the exact command argv
+    required: true
+  services:
+    description: Newline-separated service=name=version@digest declarations
+    required: false
+    default: ""
+  allow_dirty:
+    description: Allow a dirty worktree for local development only
+    required: false
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - name: Run canonical local validation runner
+      shell: bash
+      env:
+        PRESET: ${{ inputs.preset }}
+        EVIDENCE: ${{ inputs.evidence }}
+        COMMAND_JSON: ${{ inputs.command_json }}
+        SERVICES: ${{ inputs.services }}
+        ALLOW_DIRTY: ${{ inputs.allow_dirty }}
+      run: |
+        set -euo pipefail
+        args=(
+          --preset "$GITHUB_WORKSPACE/$PRESET"
+          --evidence "$GITHUB_WORKSPACE/$EVIDENCE"
+          --command-json "$COMMAND_JSON"
+        )
+        if [ "$ALLOW_DIRTY" = "true" ]; then
+          args+=(--allow-dirty)
+        fi
+        while IFS= read -r service; do
+          [ -z "$service" ] && continue
+          args+=(--service "$service")
+        done <<< "$SERVICES"
+        python "$GITHUB_ACTION_PATH/../../../scripts/local_validation/run.py" "${args[@]}"

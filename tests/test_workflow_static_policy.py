@@ -14,6 +14,11 @@ def read(path: str) -> str:
 
 
 class WorkflowStaticPolicyTests(unittest.TestCase):
+    def test_local_validation_adapter_delegates_to_the_canonical_runner(self) -> None:
+        content = read(".github/actions/local-validation/action.yml")
+        self.assertIn("scripts/local_validation/run.py", content)
+        self.assertIn("command-json", content)
+
     def test_quality_gate_uses_argument_arrays_for_optional_flags(self) -> None:
         content = read(".github/workflows/_quality-gate-pr.yml")
         self.assertIn("baseline_args=()", content)
