@@ -26,6 +26,24 @@ jobs:
       - name: Show Python version
         run: python3 --version
 
+      - name: Inventory legacy infra-ops references
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          grep -RIn --include='*.yml' \
+            'uses: optimizr-tech/optimizr-infra-ops/' \
+            .github/workflows .github/actions \
+            > artifacts/legacy-infra-ops-references.txt || true
+          cat artifacts/legacy-infra-ops-references.txt
+
+      - name: Upload legacy-reference inventory
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: legacy-infra-ops-references
+          path: artifacts/legacy-infra-ops-references.txt
+          retention-days: 1
+          if-no-files-found: error
+
       - name: Verify repository boundary
         run: python3 -m unittest tests.test_repository_boundary -v
 
