@@ -13,6 +13,21 @@ Pin reusable workflows and composite actions to an immutable commit SHA in
 production consumers. The floating `v1` tag is a compatibility convenience;
 it moves only after this repository's release validation succeeds.
 
+`optimizr-actions` is the canonical source for portable workflows and composite
+actions. VPS provisioning, runners, users, permissions, backup policy and
+operational runbooks remain in `optimizr-infra-ops`. The staged migration and
+confirmed drift inventory are documented in
+[`docs/ACTIONS_CONSOLIDATION.md`](docs/ACTIONS_CONSOLIDATION.md).
+
+## Deployment evidence
+
+The generic [`write-deploy-manifest`](.github/actions/write-deploy-manifest/action.yml)
+composite writes atomic, private and sanitized deployment evidence below the
+consumer's deploy path. It does not change deployment behavior until a consumer
+or reusable explicitly adopts it. See
+[`docs/DEPLOY_MANIFEST.md`](docs/DEPLOY_MANIFEST.md) for the schema, failure
+semantics, retention and prohibited data.
+
 ## Validation
 
 Run the repository regression suite with:
