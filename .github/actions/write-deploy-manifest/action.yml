@@ -1,0 +1,227 @@
+name: Write deploy manifest
+description: Atomically write sanitized deployment evidence below DEPLOY_PATH
+
+inputs:
+  deploy_path:
+    description: Absolute canonical deployment path
+    required: true
+  status:
+    description: Deployment result, success or failure
+    required: true
+  repository:
+    description: Repository name; defaults to GITHUB_REPOSITORY
+    required: false
+    default: ""
+  deployed_sha:
+    description: Exact deployed commit SHA; defaults to GITHUB_SHA
+    required: false
+    default: ""
+  deployed_ref:
+    description: Deployed ref; defaults to GITHUB_REF
+    required: false
+    default: ""
+  environment:
+    description: Deployment environment
+    required: false
+    default: production
+  workflow:
+    description: Workflow name; defaults to GITHUB_WORKFLOW
+    required: false
+    default: ""
+  run_id:
+    description: Workflow run ID; defaults to GITHUB_RUN_ID
+    required: false
+    default: ""
+  services_json:
+    description: JSON array of updated service names
+    required: false
+    default: "[]"
+  images_json:
+    description: JSON array of objects containing image and digest
+    required: false
+    default: "[]"
+  healthchecks_json:
+    description: JSON array of sanitized healthcheck result objects
+    required: false
+    default: "[]"
+  migration_result:
+    description: Sanitized migration result
+    required: false
+    default: not-reported
+  rollback_of:
+    description: Optional manifest filename or deployed SHA being rolled back
+    required: false
+    default: ""
+  retention:
+    description: Number of immutable manifest files to retain
+    required: false
+    default: "50"
+
+outputs:
+  manifest_path:
+    description: Absolute path of the immutable manifest
+    value: ${{ steps.write.outputs.manifest_path }}
+  last_successful_path:
+    description: Stable pointer file for the most recent successful deployment
+    value: ${{ steps.write.outputs.last_successful_path }}
+
+runs:
+  using: composite
+  steps:
+    - id: write
+      name: Write sanitized manifest atomically
+      shell: bash
+      env:
+        INPUT_DEPLOY_PATH: ${{ inputs.deploy_path }}
+        INPUT_STATUS: ${{ inputs.status }}
+        INPUT_REPOSITORY: ${{ inputs.repository }}
+        INPUT_DEPLOYED_SHA: ${{ inputs.deployed_sha }}
+        INPUT_DEPLOYED_REF: ${{ inputs.deployed_ref }}
+        INPUT_ENVIRONMENT: ${{ inputs.environment }}
+        INPUT_WORKFLOW: ${{ inputs.workflow }}
+        INPUT_RUN_ID: ${{ inputs.run_id }}
+        INPUT_SERVICES_JSON: ${{ inputs.services_json }}
+        INPUT_IMAGES_JSON: ${{ inputs.images_json }}
+        INPUT_HEALTHCHECKS_JSON: ${{ inputs.healthchecks_json }}
+        INPUT_MIGRATION_RESULT: ${{ inputs.migration_result }}
+        INPUT_ROLLBACK_OF: ${{ inputs.rollback_of }}
+        INPUT_RETENTION: ${{ inputs.retention }}
+      run: |
+        set -euo pipefail
+        umask 077
+
+        python - <<'PY'
+        from __future__ import annotations
+
+        import datetime as dt
+        import json
+        import os
+        from pathlib import Path
+        import re
+        import shutil
+        import tempfile
+
+        deploy_path = Path(os.environ["INPUT_DEPLOY_PATH"])
+        if not deploy_path.is_absolute() or deploy_path == Path("/"):
+            raise SystemExit("deploy_path must be an absolute non-root path")
+        if deploy_path.is_symlink():
+            raise SystemExit("deploy_path must not be a symlink")
+
+        status = os.environ["INPUT_STATUS"]
+        if status not in {"success", "failure"}:
+            raise SystemExit("status must be success or failure")
+
+        retention_raw = os.environ["INPUT_RETENTION"]
+        if not retention_raw.isdigit() or not 1 <= int(retention_raw) <= 500:
+            raise SystemExit("retention must be an integer between 1 and 500")
+        retention = int(retention_raw)
+
+        def parse_json_input(name: str, expected: type):
+            value = json.loads(os.environ[name])
+            if not isinstance(value, expected):
+                raise SystemExit(f"{name} has an invalid JSON type")
+            return value
+
+        services = parse_json_input("INPUT_SERVICES_JSON", list)
+        images = parse_json_input("INPUT_IMAGES_JSON", list)
+        healthchecks = parse_json_input("INPUT_HEALTHCHECKS_JSON", list)
+
+        if not all(isinstance(service, str) and service for service in services):
+            raise SystemExit("services_json must contain non-empty strings")
+
+        allowed_image_keys = {"image", "digest"}
+        for image in images:
+            if not isinstance(image, dict) or not set(image).issubset(allowed_image_keys):
+                raise SystemExit("images_json accepts only image and digest keys")
+            if not isinstance(image.get("image"), str) or not isinstance(image.get("digest"), str):
+                raise SystemExit("image and digest must be strings")
+
+        allowed_health_keys = {"name", "status", "target"}
+        for healthcheck in healthchecks:
+            if not isinstance(healthcheck, dict) or not set(healthcheck).issubset(allowed_health_keys):
+                raise SystemExit("healthchecks_json accepts only name, status and target keys")
+            if healthcheck.get("status") not in {"passed", "failed", "skipped"}:
+                raise SystemExit("healthcheck status must be passed, failed or skipped")
+
+        scalar_values = {
+            "repository": os.environ["INPUT_REPOSITORY"] or os.environ.get("GITHUB_REPOSITORY", "unknown"),
+            "deployed_sha": os.environ["INPUT_DEPLOYED_SHA"] or os.environ.get("GITHUB_SHA", "unknown"),
+            "deployed_ref": os.environ["INPUT_DEPLOYED_REF"] or os.environ.get("GITHUB_REF", "unknown"),
+            "environment": os.environ["INPUT_ENVIRONMENT"],
+            "workflow": os.environ["INPUT_WORKFLOW"] or os.environ.get("GITHUB_WORKFLOW", "unknown"),
+            "run_id": os.environ["INPUT_RUN_ID"] or os.environ.get("GITHUB_RUN_ID", "unknown"),
+            "actor": os.environ.get("GITHUB_ACTOR", "unknown"),
+            "runner_name": os.environ.get("RUNNER_NAME", "unknown"),
+            "migration_result": os.environ["INPUT_MIGRATION_RESULT"],
+            "rollback_of": os.environ["INPUT_ROLLBACK_OF"],
+        }
+        forbidden = re.compile(r"(?i)(password|passwd|secret|token|private.?key|authorization|cookie|signed.?url|\.env)")
+        for key, value in scalar_values.items():
+            if not isinstance(value, str) or "\n" in value or "\r" in value:
+                raise SystemExit(f"{key} must be a single-line string")
+            if forbidden.search(key):
+                raise SystemExit(f"forbidden manifest field: {key}")
+
+        now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
+        timestamp = now.isoformat().replace("+00:00", "Z")
+        compact = now.strftime("%Y%m%dT%H%M%SZ")
+        safe_sha = re.sub(r"[^0-9A-Za-z._-]", "-", scalar_values["deployed_sha"][:12]) or "unknown"
+        safe_run = re.sub(r"[^0-9A-Za-z._-]", "-", scalar_values["run_id"]) or "unknown"
+
+        payload = {
+            "schema_version": "1.0",
+            "status": status,
+            "deployed_at": timestamp,
+            "repository": scalar_values["repository"],
+            "deployed_sha": scalar_values["deployed_sha"],
+            "deployed_ref": scalar_values["deployed_ref"],
+            "workflow": scalar_values["workflow"],
+            "run_id": scalar_values["run_id"],
+            "environment": scalar_values["environment"],
+            "actor": scalar_values["actor"],
+            "runner_name": scalar_values["runner_name"],
+            "services": services,
+            "images": images,
+            "healthchecks": healthchecks,
+            "migration_result": scalar_values["migration_result"],
+            "rollback_of": scalar_values["rollback_of"] or None,
+        }
+
+        manifest_dir = deploy_path / ".deploy-manifests"
+        manifest_dir.mkdir(mode=0o750, parents=True, exist_ok=True)
+        os.chmod(manifest_dir, 0o750)
+
+        manifest_path = manifest_dir / f"{compact}-{safe_sha}-{safe_run}.json"
+        fd, temporary_name = tempfile.mkstemp(prefix=".manifest-", suffix=".tmp", dir=manifest_dir)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle, indent=2, sort_keys=True)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.chmod(temporary_name, 0o600)
+            os.replace(temporary_name, manifest_path)
+        finally:
+            if os.path.exists(temporary_name):
+                os.unlink(temporary_name)
+
+        last_successful = manifest_dir / "last-successful.json"
+        if status == "success":
+            pointer_tmp = manifest_dir / ".last-successful.tmp"
+            shutil.copyfile(manifest_path, pointer_tmp)
+            os.chmod(pointer_tmp, 0o600)
+            os.replace(pointer_tmp, last_successful)
+
+        immutable = sorted(
+            (path for path in manifest_dir.glob("*.json") if path.name != "last-successful.json"),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+        for expired in immutable[retention:]:
+            expired.unlink()
+
+        output = Path(os.environ["GITHUB_OUTPUT"])
+        with output.open("a", encoding="utf-8") as handle:
+            handle.write(f"manifest_path={manifest_path}\n")
+            handle.write(f"last_successful_path={last_successful}\n")
+        PY
