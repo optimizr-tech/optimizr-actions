@@ -20,13 +20,15 @@ Blob identifiers above are evidence from the repositories at the start of this m
 
 ## Existing migration debt
 
-The repository-boundary test currently allowlists exactly four executable references to `optimizr-infra-ops`:
+The repository-boundary test currently allowlists exactly six executable references to `optimizr-infra-ops`:
 
 1. `_python-uv-test.yml` — two calls to `python-uv-test-steps`;
 2. `_vps-monorepo-deploy.yml` — one call to `wait-for-healthcheck`;
-3. `_quality-gate-pr.yml` — one call to `quality-gate-scripts`.
+3. `_quality-gate-baseline.yml` — one call to `quality-gate-scripts`;
+4. `_quality-gate-pr.yml` — one call to `quality-gate-scripts`;
+5. `_quality-gate.yml` — one call to `quality-gate-scripts`.
 
-Adding another reference fails the test. Removing a migrated reference also requires updating the allowlist, making debt reduction explicit in review.
+Comments and documentation examples are not executable dependencies and are excluded from the boundary test. Adding another executable reference fails the test. Removing a migrated reference also requires updating the allowlist, making debt reduction explicit in review.
 
 ## Migration order
 
