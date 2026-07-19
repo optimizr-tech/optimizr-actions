@@ -1,8 +1,9 @@
 name: Validate and move v1 compatibility tag
 
 # `v1` is the floating compatibility contract for backward-compatible changes.
-# Standard GitHub-hosted runners are free for this public repository. This
-# workflow never runs for pull requests, so untrusted fork code is not executed.
+# Push remains the normal path. pull_request_target:closed is the recovery path
+# for merged commits whose full message contains a native GitHub skip command
+# such as [skip ci], which suppresses push-triggered workflows.
 
 on:
   push:
@@ -11,25 +12,92 @@ on:
       - ".github/actions/**"
       - ".github/workflows/**"
       - "templates/**"
+  pull_request_target:
+    types: [closed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pull-requests: read
 
 concurrency:
-  group: move-v1-${{ github.ref }}
+  group: move-v1-main
   cancel-in-progress: true
 
 jobs:
+  scope:
+    name: Resolve candidate contract revision
+    if: >-
+      github.event_name != 'pull_request_target' ||
+      github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      publish: ${{ steps.scope.outputs.publish }}
+      target_sha: ${{ steps.scope.outputs.target_sha }}
+    steps:
+      - id: scope
+        name: Detect portable-contract changes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SHA: ${{ github.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MERGED_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          set -euo pipefail
+
+          publish=true
+          target_sha="$EVENT_SHA"
+
+          if [ "$EVENT_NAME" = "pull_request_target" ]; then
+            target_sha="$MERGED_SHA"
+            changed_files="$(
+              gh api --paginate \
+                "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+                --jq '.[].filename'
+            )"
+            if printf '%s\n' "$changed_files" \
+              | grep -Eq '^(\.github/actions/|\.github/workflows/|templates/)'; then
+              publish=true
+            else
+              publish=false
+            fi
+          fi
+
+          if [ -z "$target_sha" ]; then
+            echo "::error::could not resolve target SHA" >&2
+            exit 1
+          fi
+
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "target_sha=$target_sha" >> "$GITHUB_OUTPUT"
+          echo "Resolved candidate: publish=$publish target_sha=$target_sha"
+
   validate:
     name: Validate workflows and composite actions
+    needs: [scope]
+    if: needs.scope.outputs.publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
     steps:
-      - name: Checkout main
+      - name: Checkout validated candidate
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: ${{ needs.scope.outputs.target_sha }}
+          persist-credentials: false
+
+      - name: Run Python contract tests
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -v
+          python3 -m compileall scripts tests
 
       - name: Run actionlint
         run: |
@@ -50,22 +118,32 @@ jobs:
 
   move-v1:
     name: Move floating v1 tag
-    needs: [validate]
+    needs: [scope, validate]
+    if: needs.scope.outputs.publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: write
     steps:
-      - name: Move v1 to main HEAD
+      - name: Move v1 to validated main HEAD
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_SHA: ${{ needs.scope.outputs.target_sha }}
         run: |
           set -euo pipefail
-          SHA=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.sha')
+
+          current_main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.sha')"
+          if [ "$current_main_sha" != "$TARGET_SHA" ]; then
+            echo "::error::main advanced after validation; refusing to move v1 to stale SHA $TARGET_SHA" >&2
+            exit 1
+          fi
+
           if gh api "repos/${GITHUB_REPOSITORY}/git/refs/tags/v1" >/dev/null 2>&1; then
             gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/v1" \
-              -f sha="$SHA" -F force=true
-            echo "Moved v1 -> $SHA"
+              -f sha="$TARGET_SHA" -F force=true
+            echo "Moved v1 -> $TARGET_SHA"
           else
             gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
-              -f ref="refs/tags/v1" -f sha="$SHA"
-            echo "Created v1 -> $SHA"
+              -f ref="refs/tags/v1" -f sha="$TARGET_SHA"
+            echo "Created v1 -> $TARGET_SHA"
           fi
