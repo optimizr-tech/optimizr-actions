@@ -106,12 +106,21 @@ class WorkflowStaticPolicyTests(unittest.TestCase):
         self.assertIn("types: [closed]", content)
         self.assertIn("github.event.pull_request.merged", content)
         self.assertIn('pulls/${PR_NUMBER}/files', content)
+        self.assertIn('commits/${target_sha}', content)
+        self.assertIn("skip ci", content)
+        self.assertIn("skip actions", content)
+        self.assertIn("skip-checks", content)
         self.assertIn(".github/actions/", content)
         self.assertIn(".github/workflows/", content)
         self.assertIn("templates/", content)
         self.assertIn("target_sha", content)
         self.assertIn("persist-credentials: false", content)
         self.assertIn("main advanced after validation", content)
+
+    def test_v1_publication_triggers_do_not_cancel_each_other(self) -> None:
+        content = read(".github/workflows/move-v1.yml")
+        self.assertIn("group: move-v1-${{ github.event_name }}", content)
+        self.assertNotIn("group: move-v1-main", content)
 
     def test_v1_moves_when_canonical_release_template_changes(self) -> None:
         content = read(".github/workflows/move-v1.yml")

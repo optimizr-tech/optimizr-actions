@@ -1,9 +1,9 @@
 name: Validate and move v1 compatibility tag
 
 # `v1` is the floating compatibility contract for backward-compatible changes.
-# Push remains the normal path. pull_request_target:closed is the recovery path
-# for merged commits whose full message contains a native GitHub skip command
-# such as [skip ci], which suppresses push-triggered workflows.
+# Push remains the normal path. pull_request_target:closed is used only as the
+# recovery path when a merged commit contains a native GitHub skip instruction
+# that suppresses the push-triggered workflow.
 
 on:
   push:
@@ -22,7 +22,10 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: move-v1-main
+  # A normal merge emits both push and pull_request_target:closed. Keep the
+  # event paths independent so the lightweight recovery check cannot cancel the
+  # normal push publication run before it determines whether recovery is needed.
+  group: move-v1-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
@@ -56,16 +59,31 @@ jobs:
 
           if [ "$EVENT_NAME" = "pull_request_target" ]; then
             target_sha="$MERGED_SHA"
-            changed_files="$(
-              gh api --paginate \
-                "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
-                --jq '.[].filename'
+            commit_message="$(
+              gh api "repos/${GITHUB_REPOSITORY}/commits/${target_sha}" \
+                --jq '.commit.message'
             )"
-            if printf '%s\n' "$changed_files" \
-              | grep -Eq '^(\.github/actions/|\.github/workflows/|templates/)'; then
-              publish=true
-            else
+            normalized_message="$(printf '%s' "$commit_message" | tr '[:upper:]' '[:lower:]')"
+
+            # The recovery event must publish only when GitHub's native skip
+            # syntax suppressed the normal push workflow. Otherwise both event
+            # paths would validate the same merge and one could appear failed or
+            # cancelled even though v1 was published successfully.
+            if ! printf '%s\n' "$normalized_message" \
+              | grep -Eq '\[(skip ci|ci skip|no ci|skip actions|actions skip)\]|skip-checks:[[:space:]]*true'; then
               publish=false
+            else
+              changed_files="$(
+                gh api --paginate \
+                  "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+                  --jq '.[].filename'
+              )"
+              if printf '%s\n' "$changed_files" \
+                | grep -Eq '^(\.github/actions/|\.github/workflows/|templates/)'; then
+                publish=true
+              else
+                publish=false
+              fi
             fi
           fi
 
