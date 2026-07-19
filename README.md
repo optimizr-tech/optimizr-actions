@@ -21,6 +21,18 @@ The self-hosted VPS deploy reusable captures status and logs from failed
 one-shot Compose services, including containers that have already stopped, so
 consumer runs retain the root-cause output instead of only Compose's exit code.
 
+## Organization boundary
+
+`optimizr-actions` is the source of truth for portable reusable workflows,
+composite actions, validation contracts and deploy-evidence schemas.
+`optimizr-infra-ops` owns VPS provisioning, runner registration, operational
+users and permissions, canonical server paths, runbooks and adoption tracking.
+
+The staged migration and current drift inventory are documented in
+[`docs/ACTIONS_CONSOLIDATION.md`](docs/ACTIONS_CONSOLIDATION.md). Existing
+compatibility paths in `optimizr-infra-ops` remain until all consumers have
+migrated and rollback has been validated.
+
 ## Validation
 
 Run the repository regression suite with:

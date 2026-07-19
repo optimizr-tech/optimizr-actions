@@ -1,0 +1,123 @@
+name: Write deploy manifest
+description: Write strict, sanitized deployment evidence below a canonical deploy path
+
+inputs:
+  deploy_path:
+    description: Absolute existing deployment directory
+    required: true
+  status:
+    description: Deployment result, success or failure
+    required: true
+  repository:
+    description: Repository name; defaults to GITHUB_REPOSITORY
+    required: false
+    default: ""
+  deployed_sha:
+    description: Exact deployed commit SHA; defaults to GITHUB_SHA
+    required: false
+    default: ""
+  deployed_ref:
+    description: Deployed ref; defaults to GITHUB_REF
+    required: false
+    default: ""
+  environment:
+    description: Deployment environment
+    required: false
+    default: production
+  workflow:
+    description: Workflow name; defaults to GITHUB_WORKFLOW
+    required: false
+    default: ""
+  run_id:
+    description: Workflow run ID; defaults to GITHUB_RUN_ID
+    required: false
+    default: ""
+  services_json:
+    description: JSON array of updated service names
+    required: false
+    default: "[]"
+  images_json:
+    description: JSON array of objects with image and digest keys
+    required: false
+    default: "[]"
+  healthchecks_json:
+    description: JSON array of objects with name, status and target keys
+    required: false
+    default: "[]"
+  migration_result:
+    description: passed, failed, skipped or not-reported
+    required: false
+    default: not-reported
+  rollback_of:
+    description: Optional prior deployed SHA or manifest filename
+    required: false
+    default: ""
+  retention:
+    description: Immutable manifest files to retain, from 1 to 500
+    required: false
+    default: "50"
+
+outputs:
+  manifest_path:
+    description: Absolute path of the immutable manifest
+    value: ${{ steps.write.outputs.manifest_path }}
+  last_successful_path:
+    description: Stable path for the most recent successful manifest
+    value: ${{ steps.write.outputs.last_successful_path }}
+
+runs:
+  using: composite
+  steps:
+    - id: write
+      name: Write sanitized deploy evidence
+      shell: bash
+      env:
+        INPUT_DEPLOY_PATH: ${{ inputs.deploy_path }}
+        INPUT_STATUS: ${{ inputs.status }}
+        INPUT_REPOSITORY: ${{ inputs.repository }}
+        INPUT_DEPLOYED_SHA: ${{ inputs.deployed_sha }}
+        INPUT_DEPLOYED_REF: ${{ inputs.deployed_ref }}
+        INPUT_ENVIRONMENT: ${{ inputs.environment }}
+        INPUT_WORKFLOW: ${{ inputs.workflow }}
+        INPUT_RUN_ID: ${{ inputs.run_id }}
+        INPUT_SERVICES_JSON: ${{ inputs.services_json }}
+        INPUT_IMAGES_JSON: ${{ inputs.images_json }}
+        INPUT_HEALTHCHECKS_JSON: ${{ inputs.healthchecks_json }}
+        INPUT_MIGRATION_RESULT: ${{ inputs.migration_result }}
+        INPUT_ROLLBACK_OF: ${{ inputs.rollback_of }}
+        INPUT_RETENTION: ${{ inputs.retention }}
+      run: |
+        set -euo pipefail
+
+        args=(
+          --deploy-path "$INPUT_DEPLOY_PATH"
+          --status "$INPUT_STATUS"
+          --environment "$INPUT_ENVIRONMENT"
+          --services-json "$INPUT_SERVICES_JSON"
+          --images-json "$INPUT_IMAGES_JSON"
+          --healthchecks-json "$INPUT_HEALTHCHECKS_JSON"
+          --migration-result "$INPUT_MIGRATION_RESULT"
+          --retention "$INPUT_RETENTION"
+        )
+
+        if [ -n "$INPUT_REPOSITORY" ]; then
+          args+=(--repository "$INPUT_REPOSITORY")
+        fi
+        if [ -n "$INPUT_DEPLOYED_SHA" ]; then
+          args+=(--deployed-sha "$INPUT_DEPLOYED_SHA")
+        fi
+        if [ -n "$INPUT_DEPLOYED_REF" ]; then
+          args+=(--deployed-ref "$INPUT_DEPLOYED_REF")
+        fi
+        if [ -n "$INPUT_WORKFLOW" ]; then
+          args+=(--workflow "$INPUT_WORKFLOW")
+        fi
+        if [ -n "$INPUT_RUN_ID" ]; then
+          args+=(--run-id "$INPUT_RUN_ID")
+        fi
+        if [ -n "$INPUT_ROLLBACK_OF" ]; then
+          args+=(--rollback-of "$INPUT_ROLLBACK_OF")
+        fi
+
+        python3 "$GITHUB_ACTION_PATH/../../../scripts/deploy_manifest/write.py" \
+          "${args[@]}" >> "$GITHUB_OUTPUT"
