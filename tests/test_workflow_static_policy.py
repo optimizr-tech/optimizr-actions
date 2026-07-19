@@ -99,6 +99,20 @@ class WorkflowStaticPolicyTests(unittest.TestCase):
             content,
         )
 
+    def test_v1_publication_survives_native_skip_markers_on_merged_prs(self) -> None:
+        content = read(".github/workflows/move-v1.yml")
+
+        self.assertIn("pull_request_target:", content)
+        self.assertIn("types: [closed]", content)
+        self.assertIn("github.event.pull_request.merged", content)
+        self.assertIn('pulls/${PR_NUMBER}/files', content)
+        self.assertIn(".github/actions/", content)
+        self.assertIn(".github/workflows/", content)
+        self.assertIn("templates/", content)
+        self.assertIn("target_sha", content)
+        self.assertIn("persist-credentials: false", content)
+        self.assertIn("main advanced after validation", content)
+
     def test_v1_moves_when_canonical_release_template_changes(self) -> None:
         content = read(".github/workflows/move-v1.yml")
         self.assertIn('- "templates/**"', content)
