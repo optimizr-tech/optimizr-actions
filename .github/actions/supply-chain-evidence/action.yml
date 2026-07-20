@@ -1,0 +1,161 @@
+name: Optimizr supply-chain evidence
+description: Generate CycloneDX, SPDX, and SLSA Provenance v1 evidence for immutable image identities
+inputs:
+  image_refs:
+    description: Whitespace or newline separated local image references or IDs
+    required: true
+  trivy_version:
+    description: Controlled Trivy release
+    required: false
+    default: v0.70.0
+  evidence_dir:
+    description: Repository-relative sanitized evidence directory
+    required: false
+    default: artifacts/supply-chain
+outputs:
+  evidence_dir:
+    description: Absolute evidence directory
+    value: ${{ steps.initialize.outputs.evidence_dir }}
+  result:
+    description: passed when all requested SBOMs and attestations were produced
+    value: ${{ steps.generate.outputs.result }}
+runs:
+  using: composite
+  steps:
+    - name: Initialize bounded evidence directory
+      id: initialize
+      shell: bash
+      env:
+        INPUT_EVIDENCE_DIR: ${{ inputs.evidence_dir }}
+      run: |
+        set -euo pipefail
+        case "$INPUT_EVIDENCE_DIR" in
+          ""|/*|*".."*) echo "::error::evidence_dir must be repository relative"; exit 2 ;;
+        esac
+        mkdir -p "$GITHUB_WORKSPACE/$INPUT_EVIDENCE_DIR"
+        evidence_dir="$(realpath -e "$GITHUB_WORKSPACE/$INPUT_EVIDENCE_DIR")"
+        case "$evidence_dir" in
+          "$GITHUB_WORKSPACE"/*) ;;
+          *) echo "::error::evidence_dir resolves outside the repository"; exit 2 ;;
+        esac
+        if [ -L "$evidence_dir" ]; then
+          echo "::error::evidence_dir must not be a symbolic link"; exit 2
+        fi
+        action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        python3 "$action_root/scripts/supply_chain/evidence.py" summary \
+          --repository "$GITHUB_REPOSITORY" \
+          --head-sha "$GITHUB_SHA" \
+          --root "$evidence_dir" \
+          --result started \
+          --exit-code 0 \
+          --output "$evidence_dir/bootstrap.json"
+        echo "evidence_dir=$evidence_dir" >> "$GITHUB_OUTPUT"
+
+    - name: Install controlled Trivy
+      uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567
+      with:
+        version: ${{ inputs.trivy_version }}
+        cache: "true"
+
+    - name: Generate immutable SBOM and provenance evidence
+      id: generate
+      shell: bash
+      env:
+        IMAGE_REFS: ${{ inputs.image_refs }}
+        EVIDENCE_DIR: ${{ steps.initialize.outputs.evidence_dir }}
+      run: |
+        set -euo pipefail
+        action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        evidence_tool="$action_root/scripts/supply_chain/evidence.py"
+        temporary_image=""
+        cleanup() {
+          status=$?
+          trap - EXIT
+          rm -f "${temporary_image:-}"
+          if [ "$status" -ne 0 ]; then
+            python3 "$evidence_tool" summary \
+              --repository "$GITHUB_REPOSITORY" \
+              --head-sha "$GITHUB_SHA" \
+              --root "$EVIDENCE_DIR" \
+              --result failed \
+              --exit-code "$status" \
+              --output "$EVIDENCE_DIR/summary.json" || true
+          fi
+          exit "$status"
+        }
+        trap cleanup EXIT
+
+        mapfile -t raw_targets < <(printf '%s\n' "$IMAGE_REFS" | tr '[:space:]' '\n' | sed '/^$/d')
+        if [ "${#raw_targets[@]}" -eq 0 ]; then
+          echo "::error::at least one image reference is required"; exit 2
+        fi
+        declare -A seen=()
+        targets=()
+        for target in "${raw_targets[@]}"; do
+          if [ "${#target}" -gt 512 ] || [[ ! "$target" =~ ^[A-Za-z0-9][A-Za-z0-9._/@:+-]*$ ]]; then
+            echo "::error::invalid image reference"; exit 2
+          fi
+          if [ -z "${seen[$target]+x}" ]; then
+            seen["$target"]=1
+            targets+=("$target")
+          fi
+        done
+        if [ "${#targets[@]}" -gt 32 ]; then
+          echo "::error::too many image references; maximum is 32"; exit 2
+        fi
+
+        trivy_version="$(trivy --version | head -n 1)"
+        workflow_ref="${GITHUB_WORKFLOW_REF:-${GITHUB_REPOSITORY}/unknown@${GITHUB_REF:-unknown}}"
+        for target in "${targets[@]}"; do
+          slug="$(printf '%s' "$target" | sha256sum | cut -c1-16)"
+          target_dir="$EVIDENCE_DIR/$slug"
+          inspect_file="$target_dir/image-inspect.json"
+          cyclonedx="$target_dir/sbom.cyclonedx.json"
+          spdx="$target_dir/sbom.spdx.json"
+          provenance="$target_dir/provenance.intoto.json"
+          image_input=()
+          temporary_image=""
+          direct_docker=false
+          mkdir -p "$target_dir"
+          if docker image inspect -- "$target" > "$inspect_file" 2>/dev/null; then
+            direct_docker=true
+          elif sudo -n docker image inspect -- "$target" > "$inspect_file" 2>/dev/null; then
+            temporary_image="${RUNNER_TEMP:-/tmp}/sbom-$slug.tar"
+            sudo -n docker save -o "$temporary_image" -- "$target"
+            sudo -n chown "$(id -u):$(id -g)" "$temporary_image"
+            image_input=(--input "$temporary_image")
+          else
+            echo "::error::cannot inspect image target"; exit 2
+          fi
+          identity="$(python3 "$evidence_tool" resolve --inspect "$inspect_file")"
+          identity_kind="$(python3 "$evidence_tool" resolve-kind --inspect "$inspect_file")"
+          if [ "$direct_docker" = true ]; then
+            scan_identity="$(python3 "$evidence_tool" resolve-local --inspect "$inspect_file")"
+            image_input=("$scan_identity")
+          fi
+          trivy image --format cyclonedx --output "$cyclonedx" "${image_input[@]}"
+          trivy image --format spdx-json --output "$spdx" "${image_input[@]}"
+          python3 "$evidence_tool" write \
+            --repository "$GITHUB_REPOSITORY" \
+            --head-sha "$GITHUB_SHA" \
+            --image-ref "$target" \
+            --image-identity "$identity" \
+            --identity-kind "$identity_kind" \
+            --workflow-ref "$workflow_ref" \
+            --cyclonedx "$cyclonedx" \
+            --spdx "$spdx" \
+            --tool-version "$trivy_version" \
+            --output "$provenance"
+          rm -f "$temporary_image" "$inspect_file"
+          temporary_image=""
+        done
+
+        python3 "$evidence_tool" summary \
+          --repository "$GITHUB_REPOSITORY" \
+          --head-sha "$GITHUB_SHA" \
+          --root "$EVIDENCE_DIR" \
+          --result passed \
+          --exit-code 0 \
+          --output "$EVIDENCE_DIR/summary.json"
+        echo "result=passed" >> "$GITHUB_OUTPUT"
+        trap - EXIT
