@@ -1,0 +1,179 @@
+name: _repository-validation
+on:
+  workflow_call:
+    inputs:
+      runner_json:
+        description: JSON runner labels
+        type: string
+        required: false
+        default: '["ubuntu-latest"]'
+      script_path:
+        description: Repository-owned executable path
+        type: string
+        required: true
+      args_json:
+        description: JSON array of literal arguments
+        type: string
+        required: false
+        default: "[]"
+      candidate_sha:
+        description: Exact candidate SHA; defaults to caller SHA
+        type: string
+        required: false
+        default: ""
+      base_sha:
+        description: Optional base SHA for evidence
+        type: string
+        required: false
+        default: ""
+      image_refs_json:
+        description: Optional JSON array of local image references for immutable evidence
+        type: string
+        required: false
+        default: "[]"
+      timeout_seconds:
+        description: Command timeout
+        type: number
+        required: false
+        default: 900
+      require_trusted_ref:
+        description: Require candidate reachable from trusted_ref
+        type: boolean
+        required: false
+        default: true
+      trusted_ref:
+        description: Trusted full branch ref
+        type: string
+        required: false
+        default: refs/heads/main
+      artifact_name:
+        description: Evidence artifact name
+        type: string
+        required: false
+        default: repository-validation-evidence
+      retention_days:
+        description: Evidence retention period
+        type: number
+        required: false
+        default: 30
+  workflow_dispatch:
+    inputs:
+      environment_name:
+        description: Protected environment requiring reviewer approval
+        type: environment
+        required: true
+      runner_json:
+        description: JSON labels for the reviewed runner
+        type: string
+        required: true
+        default: '["self-hosted","Linux","security"]'
+      candidate_sha:
+        description: Exact trusted commit SHA to validate
+        type: string
+        required: true
+      script_path:
+        description: Repository-owned executable path
+        type: string
+        required: true
+      args_json:
+        description: JSON array of literal arguments
+        type: string
+        required: false
+        default: "[]"
+      timeout_seconds:
+        description: Command timeout
+        type: number
+        required: false
+        default: 900
+      trusted_ref:
+        description: Trusted full branch ref
+        type: string
+        required: false
+        default: refs/heads/main
+permissions:
+  contents: read
+jobs:
+  called-validation:
+    if: github.event_name == 'workflow_call'
+    name: Repository validation
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: 65
+    steps:
+      - name: Reject unsafe persistent-runner override
+        shell: bash
+        env:
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          REQUIRE_TRUSTED: ${{ inputs.require_trusted_ref }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if "self-hosted" in labels and os.environ["REQUIRE_TRUSTED"] != "true":
+              raise SystemExit("self-hosted repository validation must require a trusted ref")
+          PY
+      - name: Checkout exact candidate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ inputs.candidate_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Run repository contract
+        uses: optimizr-tech/optimizr-actions/.github/actions/repository-validation@v1
+        with:
+          script_path: ${{ inputs.script_path }}
+          args_json: ${{ inputs.args_json }}
+          head_sha: ${{ inputs.candidate_sha || github.sha }}
+          base_sha: ${{ inputs.base_sha }}
+          timeout_seconds: ${{ inputs.timeout_seconds }}
+          image_refs_json: ${{ inputs.image_refs_json }}
+          require_trusted_ref: ${{ inputs.require_trusted_ref }}
+          trusted_ref: ${{ inputs.trusted_ref }}
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: artifacts/repository-validation
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}
+  emergency-validation:
+    if: github.event_name == 'workflow_dispatch'
+    name: Reviewed billing-emergency validation
+    environment: ${{ inputs.environment_name }}
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: 65
+    steps:
+      - name: Require self-hosted reviewed path
+        shell: bash
+        env:
+          RUNNER_JSON: ${{ inputs.runner_json }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if "self-hosted" not in labels:
+              raise SystemExit("billing-emergency validation must use a trusted self-hosted runner")
+          PY
+      - name: Checkout exact reviewed candidate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Run reviewed repository contract
+        uses: optimizr-tech/optimizr-actions/.github/actions/repository-validation@v1
+        with:
+          script_path: ${{ inputs.script_path }}
+          args_json: ${{ inputs.args_json }}
+          head_sha: ${{ inputs.candidate_sha }}
+          timeout_seconds: ${{ inputs.timeout_seconds }}
+          require_trusted_ref: true
+          trusted_ref: ${{ inputs.trusted_ref }}
+      - name: Upload reviewed evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: repository-validation-emergency-${{ inputs.candidate_sha }}
+          path: artifacts/repository-validation
+          if-no-files-found: error
+          retention-days: 30
