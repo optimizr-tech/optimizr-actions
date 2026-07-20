@@ -1,0 +1,62 @@
+name: _release-badge-recovery
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Explicit v-prefixed semantic version; empty resolves event/latest tag
+        required: false
+        type: string
+        default: ""
+      branch:
+        description: Branch that owns the badge
+        required: false
+        type: string
+        default: main
+      badge_path:
+        description: Repository-relative release badge SVG
+        required: false
+        type: string
+        default: assets/badges/release.svg
+      runner_json:
+        description: JSON runner labels
+        required: false
+        type: string
+        default: '["self-hosted","Linux","release"]'
+    outputs:
+      version:
+        description: Resolved semantic version
+        value: ${{ jobs.recover.outputs.version }}
+permissions:
+  contents: write
+concurrency:
+  group: badge-recovery-${{ github.repository }}-${{ inputs.branch }}
+  cancel-in-progress: false
+jobs:
+  recover:
+    name: Recover release badge
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout badge branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ inputs.branch }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Resolve validated release version
+        id: version
+        uses: optimizr-tech/optimizr-actions/.github/actions/release-badge-resolver@v1
+        with:
+          requested_tag: ${{ inputs.tag }}
+          event_tag: ${{ github.event.release.tag_name }}
+          branch: ${{ inputs.branch }}
+          badge_path: ${{ inputs.badge_path }}
+      - name: Update release badge when needed
+        uses: optimizr-tech/optimizr-actions/.github/actions/update-release-badge@v1
+        with:
+          version: ${{ steps.version.outputs.version }}
+          badge_path: ${{ inputs.badge_path }}
+          branch: ${{ inputs.branch }}
+          commit: "true"

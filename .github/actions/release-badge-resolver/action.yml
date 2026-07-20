@@ -1,0 +1,38 @@
+name: Optimizr release badge version resolver
+description: Validate branch/path inputs and resolve an explicit, event, or latest semantic release tag
+inputs:
+  requested_tag:
+    required: false
+    default: ""
+  event_tag:
+    required: false
+    default: ""
+  branch:
+    required: true
+  badge_path:
+    required: true
+outputs:
+  version:
+    description: Resolved v-prefixed semantic version
+    value: ${{ steps.resolve.outputs.version }}
+runs:
+  using: composite
+  steps:
+    - name: Resolve validated release version
+      id: resolve
+      shell: bash
+      env:
+        REQUESTED_TAG: ${{ inputs.requested_tag }}
+        EVENT_TAG: ${{ inputs.event_tag }}
+        TARGET_BRANCH: ${{ inputs.branch }}
+        BADGE_PATH: ${{ inputs.badge_path }}
+      run: |
+        set -euo pipefail
+        action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        python3 "$action_root/scripts/release_badge/resolver.py" \
+          --requested "$REQUESTED_TAG" \
+          --event-tag "$EVENT_TAG" \
+          --branch "$TARGET_BRANCH" \
+          --badge-path "$BADGE_PATH" \
+          --repository "$GITHUB_WORKSPACE" \
+          --github-output "$GITHUB_OUTPUT"

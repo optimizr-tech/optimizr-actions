@@ -1,0 +1,1 @@
+"""Release badge recovery package."""
