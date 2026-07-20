@@ -1,0 +1,117 @@
+name: _post-deploy-verification
+on:
+  workflow_call:
+    inputs:
+      environment_name:
+        description: Protected deployment environment
+        required: true
+        type: string
+      runner_json:
+        description: JSON labels for a trusted network-reachable runner
+        required: false
+        type: string
+        default: '["self-hosted","Linux","security"]'
+      deployed_sha:
+        description: Exact deployed 40-character commit SHA
+        required: true
+        type: string
+      manifest_path:
+        description: Repository-relative positive verification manifest
+        required: true
+        type: string
+      negative_manifest_path:
+        description: Optional repository-relative negative-probe manifest
+        required: false
+        type: string
+        default: ""
+      artifact_name:
+        description: Positive evidence artifact name
+        required: false
+        type: string
+        default: post-deploy-verification
+      retention_days:
+        description: Evidence retention period
+        required: false
+        type: number
+        default: 30
+    secrets:
+      VERIFY_TARGET_1:
+        required: false
+      VERIFY_TARGET_2:
+        required: false
+      VERIFY_TARGET_3:
+        required: false
+      VERIFY_TARGET_4:
+        required: false
+      VERIFY_TARGET_5:
+        required: false
+permissions:
+  contents: read
+jobs:
+  verification:
+    name: Positive post-deploy verification
+    environment: ${{ inputs.environment_name }}
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: 15
+    steps:
+      - name: Require trusted self-hosted runner and exact SHA
+        shell: bash
+        env:
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          DEPLOYED_SHA: ${{ inputs.deployed_sha }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, re
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if not isinstance(labels, list) or not 1 <= len(labels) <= 10:
+              raise SystemExit("runner_json must contain 1-10 labels")
+          if "self-hosted" not in labels:
+              raise SystemExit("post-deploy verification requires a trusted self-hosted runner")
+          if not re.fullmatch(r"[0-9a-f]{40}", os.environ["DEPLOYED_SHA"]):
+              raise SystemExit("deployed_sha must be a lowercase 40-character SHA")
+          PY
+      - name: Checkout exact deployed source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ inputs.deployed_sha }}
+          persist-credentials: false
+      - name: Run positive verification
+        uses: optimizr-tech/optimizr-actions/.github/actions/post-deploy-verification@v1
+        env:
+          VERIFY_TARGET_1: ${{ secrets.VERIFY_TARGET_1 }}
+          VERIFY_TARGET_2: ${{ secrets.VERIFY_TARGET_2 }}
+          VERIFY_TARGET_3: ${{ secrets.VERIFY_TARGET_3 }}
+          VERIFY_TARGET_4: ${{ secrets.VERIFY_TARGET_4 }}
+          VERIFY_TARGET_5: ${{ secrets.VERIFY_TARGET_5 }}
+        with:
+          manifest_path: ${{ inputs.manifest_path }}
+          repository: ${{ github.repository }}
+          deployed_sha: ${{ inputs.deployed_sha }}
+      - name: Upload positive verification evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: artifacts/post-deploy
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}
+
+  negative-probes:
+    name: Negative boundary probes
+    needs: verification
+    if: always() && inputs.negative_manifest_path != '' && needs.verification.result != 'cancelled'
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_negative-probes.yml@v1
+    with:
+      environment_name: ${{ inputs.environment_name }}
+      runner_json: ${{ inputs.runner_json }}
+      deployed_sha: ${{ inputs.deployed_sha }}
+      manifest_path: ${{ inputs.negative_manifest_path }}
+      artifact_name: post-deploy-negative-probes
+      retention_days: ${{ inputs.retention_days }}
+    secrets:
+      PROBE_TARGET_1: ${{ secrets.VERIFY_TARGET_1 }}
+      PROBE_TARGET_2: ${{ secrets.VERIFY_TARGET_2 }}
+      PROBE_TARGET_3: ${{ secrets.VERIFY_TARGET_3 }}
+      PROBE_TARGET_4: ${{ secrets.VERIFY_TARGET_4 }}
+      PROBE_TARGET_5: ${{ secrets.VERIFY_TARGET_5 }}
