@@ -28,6 +28,11 @@ class SecuritySuiteContractTests(unittest.TestCase):
         self.assertNotIn("eval ", self.text)
         self.assertIn("fromJSON(inputs.runner_json)", self.text)
 
+    def test_dependency_subdirectory_is_propagated_to_confined_gate(self):
+        self.assertIn("dependency_working_directory:", self.text)
+        self.assertIn("working_directory: ${{ inputs.dependency_working_directory }}", self.text)
+        self.assertIn("_dependency-policy.yml@v1", self.text)
+
     def test_summary_always_uploads_sanitized_evidence(self):
         self.assertIn("if: always()", self.text)
         self.assertIn("artifacts/security-suite/summary.json", self.text)
