@@ -48,6 +48,10 @@ inputs:
     description: passed, failed, skipped or not-reported
     required: false
     default: not-reported
+  optional_build_result:
+    description: passed, failed, skipped or not-reported
+    required: false
+    default: not-reported
   rollback_of:
     description: Optional prior deployed SHA or manifest filename
     required: false
@@ -84,6 +88,7 @@ runs:
         INPUT_IMAGES_JSON: ${{ inputs.images_json }}
         INPUT_HEALTHCHECKS_JSON: ${{ inputs.healthchecks_json }}
         INPUT_MIGRATION_RESULT: ${{ inputs.migration_result }}
+        INPUT_OPTIONAL_BUILD_RESULT: ${{ inputs.optional_build_result }}
         INPUT_ROLLBACK_OF: ${{ inputs.rollback_of }}
         INPUT_RETENTION: ${{ inputs.retention }}
       run: |
@@ -97,6 +102,7 @@ runs:
           --images-json "$INPUT_IMAGES_JSON"
           --healthchecks-json "$INPUT_HEALTHCHECKS_JSON"
           --migration-result "$INPUT_MIGRATION_RESULT"
+          --optional-build-result "$INPUT_OPTIONAL_BUILD_RESULT"
           --retention "$INPUT_RETENTION"
         )
 
