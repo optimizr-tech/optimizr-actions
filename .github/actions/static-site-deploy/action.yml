@@ -1,0 +1,36 @@
+name: Optimizr static-site deployment
+description: Build and promote static assets through candidate and rollback volumes
+inputs:
+  manifest_path:
+    description: Repository-relative version-1 deployment manifest
+    required: true
+  deployed_sha:
+    description: Exact deployed 40-character commit SHA
+    required: true
+  docker_mode:
+    description: direct or sudo
+    required: false
+    default: sudo
+  evidence_path:
+    description: Repository-relative sanitized evidence path
+    required: false
+    default: artifacts/static-site-deploy/evidence.json
+runs:
+  using: composite
+  steps:
+    - name: Execute bounded static-site deployment
+      shell: bash
+      env:
+        MANIFEST_PATH: ${{ inputs.manifest_path }}
+        DEPLOYED_SHA: ${{ inputs.deployed_sha }}
+        DOCKER_MODE: ${{ inputs.docker_mode }}
+        EVIDENCE_PATH: ${{ inputs.evidence_path }}
+      run: |
+        set -euo pipefail
+        action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        python3 "$action_root/scripts/static_site/runner.py" \
+          --manifest-path "$MANIFEST_PATH" \
+          --workspace "$GITHUB_WORKSPACE" \
+          --deployed-sha "$DEPLOYED_SHA" \
+          --docker-mode "$DOCKER_MODE" \
+          --evidence-path "$EVIDENCE_PATH"
