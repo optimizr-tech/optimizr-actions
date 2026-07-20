@@ -1,18 +1,100 @@
 {
+  "schema_version": 2,
   "name": "fiscal",
   "python": "3.14",
+  "entrypoint": "scripts/ci/fiscal-local-validation.py",
+  "entrypoint_interpreter": "python",
   "lockfile": "uv.lock",
-  "required_services": ["postgres", "rabbitmq", "minio", "keycloak"],
-  "forbidden_services": ["redis"],
-  "required_checks": [
-    "uv lock --check",
-    "uv sync --locked --all-extras",
-    "uv run ruff check src tests",
-    "uv run ruff format --check src tests",
-    "uv run mypy src",
-    "uv run alembic upgrade head",
-    "uv run python scripts/check_migration_rls.py",
-    "uv run pytest"
+  "required_tools": [
+    "python",
+    "git",
+    "docker"
   ],
-  "required_conformance": ["separate database identities", "RLS fail closed", "real service integration", "recovery", "security"]
+  "required_services": [
+    "postgres",
+    "rabbitmq",
+    "minio",
+    "keycloak"
+  ],
+  "service_constraints": {
+    "postgres": {
+      "version_prefix": "18",
+      "digest_required": true
+    },
+    "rabbitmq": {
+      "version_prefix": "4.3",
+      "digest_required": true
+    },
+    "minio": {
+      "version_prefix": "RELEASE.",
+      "digest_required": true
+    },
+    "keycloak": {
+      "version_prefix": "26",
+      "digest_required": true
+    }
+  },
+  "forbidden_services": [
+    "redis"
+  ],
+  "required_checks": [
+    {
+      "id": "uv-lock",
+      "description": "uv lock --check"
+    },
+    {
+      "id": "uv-sync",
+      "description": "uv sync --locked --all-extras"
+    },
+    {
+      "id": "ruff-check",
+      "description": "Ruff lint"
+    },
+    {
+      "id": "ruff-format",
+      "description": "Ruff formatting"
+    },
+    {
+      "id": "mypy",
+      "description": "strict mypy"
+    },
+    {
+      "id": "alembic-upgrade",
+      "description": "Alembic upgrade to head"
+    },
+    {
+      "id": "migration-rls",
+      "description": "migration and RLS policy validation"
+    },
+    {
+      "id": "pytest",
+      "description": "unit and real integration pytest suites"
+    }
+  ],
+  "required_conformance": [
+    {
+      "id": "separate-database-identities",
+      "description": "runtime and migration identities remain separated"
+    },
+    {
+      "id": "rls-fail-closed",
+      "description": "tenant isolation fails closed under PostgreSQL RLS"
+    },
+    {
+      "id": "real-service-integration",
+      "description": "tests use real PostgreSQL, RabbitMQ, MinIO and Keycloak"
+    },
+    {
+      "id": "minio-object-lock",
+      "description": "MinIO Object Lock and versioning are exercised"
+    },
+    {
+      "id": "recovery",
+      "description": "recovery paths are exercised"
+    },
+    {
+      "id": "security",
+      "description": "security controls and negative paths are exercised"
+    }
+  ]
 }
