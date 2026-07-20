@@ -1,0 +1,151 @@
+name: Optimizr dependency policy
+description: Validate Python/Node lockfiles and enforce Trivy vulnerability and license policy
+inputs:
+  policy_file:
+    description: Optional repository-relative dependency policy JSON
+    required: false
+    default: ""
+  trivy_version:
+    description: Controlled Trivy version
+    required: false
+    default: v0.70.0
+  db_max_age_hours:
+    description: Maximum accepted vulnerability database age
+    required: false
+    default: "30"
+  evidence_dir:
+    description: Sanitized evidence directory
+    required: false
+    default: artifacts/dependency-policy
+outputs:
+  evidence_dir:
+    description: Evidence directory
+    value: ${{ inputs.evidence_dir }}
+runs:
+  using: composite
+  steps:
+    - name: Install controlled Trivy
+      uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567
+      with:
+        version: ${{ inputs.trivy_version }}
+        cache: "true"
+    - name: Validate lockfile synchronization
+      shell: bash
+      env:
+        EVIDENCE_DIR: ${{ inputs.evidence_dir }}
+      run: |
+        set -euo pipefail
+        cd "$GITHUB_WORKSPACE"
+        mkdir -p "$EVIDENCE_DIR"
+        printf '%s\n' '{"schema_version":1,"result":"started"}' > "$EVIDENCE_DIR/bootstrap.json"
+        action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        policy_tool="$action_root/scripts/dependency_policy/policy.py"
+        mapfile -t ecosystems < <(python3 "$policy_tool" detect --root "$GITHUB_WORKSPACE" | sort -u)
+        venv_dir="${RUNNER_TEMP:-/tmp}/optimizr-dependency-policy/venv"
+        for ecosystem in "${ecosystems[@]}"; do
+          case "$ecosystem" in
+            python-uv)
+              rm -rf "$venv_dir"
+              python3 -m venv "$venv_dir"
+              "$venv_dir/bin/python" -m pip install --disable-pip-version-check 'uv==0.8.3'
+              "$venv_dir/bin/uv" lock --check
+              ;;
+            python-poetry)
+              rm -rf "$venv_dir"
+              python3 -m venv "$venv_dir"
+              "$venv_dir/bin/python" -m pip install --disable-pip-version-check 'poetry==2.1.4'
+              "$venv_dir/bin/poetry" check --lock
+              ;;
+            python-requirements)
+              python3 "$policy_tool" validate-requirements --root "$GITHUB_WORKSPACE"
+              ;;
+            node-pnpm)
+              corepack enable
+              corepack prepare 'pnpm@10.13.1' --activate
+              pnpm install --lockfile-only --ignore-scripts --frozen-lockfile
+              git diff --exit-code -- pnpm-lock.yaml
+              ;;
+            node-npm)
+              python3 "$policy_tool" validate-npm-lock --root "$GITHUB_WORKSPACE"
+              npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+              git diff --exit-code -- package-lock.json
+              ;;
+            node-yarn)
+              corepack enable
+              corepack prepare 'yarn@4.9.2' --activate
+              yarn install --immutable --mode=skip-builds
+              git diff --exit-code -- yarn.lock
+              ;;
+            *) echo "::error::unsupported ecosystem: $ecosystem"; exit 2 ;;
+          esac
+        done
+    - name: Generate dependency vulnerability and license report
+      shell: bash
+      env:
+        EVIDENCE_DIR: ${{ inputs.evidence_dir }}
+        DB_MAX_AGE_HOURS: ${{ inputs.db_max_age_hours }}
+      run: |
+        set -euo pipefail
+        action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        evidence_tool="$action_root/scripts/security_gate/evidence.py"
+        repository="${GITHUB_REPOSITORY:-local/unknown}"
+        cache_namespace="$(printf '%s' "$repository" | sha256sum | cut -c1-24)"
+        cache_root="${XDG_CACHE_HOME:-${HOME:-/tmp}/.cache}/optimizr-dependency-policy/${cache_namespace}"
+        cache_dir="$cache_root/trivy"
+        for path in "$cache_root" "$cache_dir"; do
+          if [ -L "$path" ]; then echo "::error::dependency cache path must not be a symbolic link"; exit 2; fi
+        done
+        mkdir -p "$cache_dir" "$EVIDENCE_DIR"
+        if [ "$(stat -c '%u' "$cache_root")" != "$(id -u)" ]; then
+          echo "::error::dependency cache is not owned by the runner user"; exit 2
+        fi
+        chmod 700 "$cache_root" "$cache_dir"
+        command -v flock >/dev/null 2>&1 || { echo "::error::flock is required"; exit 2; }
+        exec 9>"$cache_root/gate.lock"
+        flock -x 9
+        trivy --cache-dir "$cache_dir" image --download-db-only
+        python3 "$evidence_tool" validate-db \
+          --metadata "$cache_dir/db/metadata.json" \
+          --max-age-hours "$DB_MAX_AGE_HOURS" \
+          --output "$EVIDENCE_DIR/trivy-db.json"
+        trivy_version="$(trivy --version | head -n 1)"
+        printf '%s\n' "$trivy_version" > "$EVIDENCE_DIR/trivy-version.txt"
+        trivy filesystem \
+          --cache-dir "$cache_dir" \
+          --skip-db-update \
+          --scanners vuln,license \
+          --license-full \
+          --format json \
+          --exit-code 0 \
+          --output "$EVIDENCE_DIR/trivy-dependencies.json" \
+          "$GITHUB_WORKSPACE"
+    - name: Enforce reviewed dependency policy
+      shell: bash
+      env:
+        POLICY_FILE: ${{ inputs.policy_file }}
+        EVIDENCE_DIR: ${{ inputs.evidence_dir }}
+      run: |
+        set -euo pipefail
+        action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        policy="$POLICY_FILE"
+        if [ -z "$policy" ]; then
+          policy="$action_root/policies/dependency-policy.default.json"
+        elif [[ "$policy" = /* || "$policy" = *".."* ]]; then
+          echo "::error::policy_file must be repository relative"; exit 2
+        else
+          policy="$(realpath -e "$GITHUB_WORKSPACE/$policy")"
+          case "$policy" in
+            "$GITHUB_WORKSPACE"/*) ;;
+            *) echo "::error::policy_file resolves outside the repository"; exit 2 ;;
+          esac
+        fi
+        trivy_version="$(head -n 1 "$EVIDENCE_DIR/trivy-version.txt")"
+        python3 "$action_root/scripts/dependency_policy/policy.py" evaluate \
+          --root "$GITHUB_WORKSPACE" \
+          --report "$EVIDENCE_DIR/trivy-dependencies.json" \
+          --policy "$policy" \
+          --database "$EVIDENCE_DIR/trivy-db.json" \
+          --trivy-version "$trivy_version" \
+          --output "$EVIDENCE_DIR/evidence.json" \
+          --repository "$GITHUB_REPOSITORY" \
+          --head-sha "$GITHUB_SHA"
