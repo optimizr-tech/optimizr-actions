@@ -1,0 +1,54 @@
+name: Local validation contract
+description: Run a repository-owned validation preset and write secret-free evidence
+inputs:
+  preset:
+    description: Preset path relative to the caller workspace
+    required: true
+  evidence:
+    description: Evidence path relative to the caller workspace
+    required: true
+  command_args_json:
+    description: Optional JSON array of non-secret arguments for the preset-owned entrypoint
+    required: false
+    default: "[]"
+  allow_dirty:
+    description: Allow a dirty worktree for local development only
+    required: false
+    default: "false"
+outputs:
+  evidence_path:
+    description: Absolute evidence path in the caller workspace
+    value: ${{ steps.validate.outputs.evidence_path }}
+runs:
+  using: composite
+  steps:
+    - id: validate
+      name: Run canonical local validation runner
+      shell: bash
+      env:
+        INPUT_PRESET: ${{ inputs.preset }}
+        INPUT_EVIDENCE: ${{ inputs.evidence }}
+        INPUT_COMMAND_ARGS_JSON: ${{ inputs.command_args_json }}
+        INPUT_ALLOW_DIRTY: ${{ inputs.allow_dirty }}
+      run: |
+        set -euo pipefail
+        args=(
+          --workspace "$GITHUB_WORKSPACE"
+          --preset "$INPUT_PRESET"
+          --evidence "$INPUT_EVIDENCE"
+          --command-args-json "$INPUT_COMMAND_ARGS_JSON"
+        )
+        if [ "$INPUT_ALLOW_DIRTY" = true ]; then
+          args+=(--allow-dirty)
+        elif [ "$INPUT_ALLOW_DIRTY" != false ]; then
+          echo "::error::allow_dirty must be true or false" >&2
+          exit 2
+        fi
+        action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        python3 "$action_root/scripts/local_validation/run.py" "${args[@]}"
+        evidence_path="$(realpath -e "$GITHUB_WORKSPACE/$INPUT_EVIDENCE")"
+        case "$evidence_path" in
+          "$GITHUB_WORKSPACE"/*) ;;
+          *) echo "::error::evidence resolved outside caller workspace" >&2; exit 2 ;;
+        esac
+        echo "evidence_path=$evidence_path" >> "$GITHUB_OUTPUT"
