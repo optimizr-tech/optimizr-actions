@@ -1,0 +1,64 @@
+name: Organization Actions adoption audit
+on:
+  schedule:
+    - cron: "17 10 * * 1"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: organization-actions-adoption-audit
+  cancel-in-progress: true
+jobs:
+  public-report:
+    name: Public redacted adoption report
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ORG_AUDIT_REPOSITORIES: ${{ secrets.ORG_AUDIT_REPOSITORIES }}
+      ORG_AUDIT_TOKEN: ${{ secrets.ORG_AUDIT_TOKEN }}
+    steps:
+      - name: Checkout audit implementation
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Audit selected repositories through the contents API
+        run: |
+          python3 scripts/org_audit/audit.py \
+            --repositories-env ORG_AUDIT_REPOSITORIES \
+            --token-env ORG_AUDIT_TOKEN \
+            --output-dir public-report \
+            --public
+      - name: Upload redacted public report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: organization-adoption-public-report
+          path: public-report
+          if-no-files-found: error
+          retention-days: 30
+
+  private-issue-report:
+    name: Update private central audit issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ORG_AUDIT_REPOSITORIES: ${{ secrets.ORG_AUDIT_REPOSITORIES }}
+      ORG_AUDIT_TOKEN: ${{ secrets.ORG_AUDIT_TOKEN }}
+      ORG_AUDIT_ISSUE_REF: ${{ secrets.ORG_AUDIT_ISSUE_REF }}
+      ORG_AUDIT_ISSUE_TOKEN: ${{ secrets.ORG_AUDIT_ISSUE_TOKEN }}
+    steps:
+      - name: Checkout audit implementation
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Update private issue when configured
+        if: env.ORG_AUDIT_ISSUE_REF != ''
+        run: |
+          private_dir="$RUNNER_TEMP/optimizr-private-audit"
+          python3 scripts/org_audit/audit.py \
+            --repositories-env ORG_AUDIT_REPOSITORIES \
+            --token-env ORG_AUDIT_TOKEN \
+            --output-dir "$private_dir" \
+            --issue-ref-env ORG_AUDIT_ISSUE_REF \
+            --issue-token-env ORG_AUDIT_ISSUE_TOKEN
+          rm -rf "$private_dir"
