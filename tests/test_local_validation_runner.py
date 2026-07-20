@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 import stat
 import sys
@@ -97,6 +96,8 @@ class LocalValidationRunnerTests(unittest.TestCase):
             "python": "3.14.2",
             "git": "git version 2.50",
             "docker": "Docker version 28",
+            "docker-compose": "Docker Compose version v2.39.1",
+            "uv": "uv 0.8.3",
         }[tool]
 
     def test_success_runs_repository_entrypoint_and_redacts_argv(self) -> None:
@@ -117,6 +118,8 @@ class LocalValidationRunnerTests(unittest.TestCase):
         self.assertEqual(payload, stored)
         self.assertEqual([], payload["unresolved_gaps"])
         self.assertEqual(valid_digest("a"), payload["services"]["postgres"]["digest"])
+        self.assertEqual("uv 0.8.3", payload["tools"]["uv"])
+        self.assertIn("Docker Compose version", payload["tools"]["docker-compose"])
         self.assertIn("argv_sha256", payload["command"])
         self.assertNotIn("argv", payload["command"])
         self.assertNotIn("environment", payload)
