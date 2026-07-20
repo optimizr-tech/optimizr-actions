@@ -1,12 +1,14 @@
 # Dependency and license policy gate
 
-The reusable dependency gate validates the selected Python or Node lockfile before scanning the repository with controlled Trivy vulnerability and license scanners.
+The reusable dependency gate validates the selected Python or Node lockfile before scanning a confined project directory with controlled Trivy vulnerability and license scanners.
 
 Supported contracts:
 
 - `pyproject.toml` with exactly one of `uv.lock` or `poetry.lock`;
 - `package.json` with one matching `pnpm-lock.yaml`, `package-lock.json`, or `yarn.lock`;
 - `packageManager` selects the expected Node lockfile when present.
+
+The project may live at the repository root or in a repository-relative `working_directory`. The action resolves the directory with `realpath`, rejects traversal and symlinks, runs package-manager validation from that directory, and keeps evidence under the repository artifact path.
 
 The native package manager performs an immutable/frozen lock check. A missing tool, network failure, stale lockfile, missing advisory data, malformed policy, denied license, or unexcepted High/Critical advisory fails closed.
 
@@ -16,6 +18,7 @@ jobs:
     uses: optimizr-tech/optimizr-actions/.github/workflows/_dependency-policy.yml@v1
     with:
       runner_json: '["self-hosted","Linux","security"]'
+      working_directory: frontend/apps/admin
       policy_file: .github/dependency-policy.json
 ```
 
