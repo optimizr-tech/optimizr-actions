@@ -1,0 +1,127 @@
+name: Optimizr SAST gate
+description: Run controlled Semgrep with allowlisted local rules and expiring exact baselines
+inputs:
+  profile:
+    description: python, typescript, or all
+    required: false
+    default: all
+  baseline_file:
+    description: Optional repository-relative baseline JSON
+    required: false
+    default: ""
+  evidence_dir:
+    description: Repository-relative sanitized evidence directory
+    required: false
+    default: artifacts/sast-gate
+outputs:
+  evidence_dir:
+    description: Absolute evidence directory
+    value: ${{ steps.initialize.outputs.evidence_dir }}
+  result:
+    description: passed or failed
+    value: ${{ steps.scan.outputs.result }}
+runs:
+  using: composite
+  steps:
+    - name: Initialize bounded evidence directory
+      id: initialize
+      shell: bash
+      env:
+        INPUT_EVIDENCE_DIR: ${{ inputs.evidence_dir }}
+        PROFILE: ${{ inputs.profile }}
+      run: |
+        set -euo pipefail
+        case "$INPUT_EVIDENCE_DIR" in
+          ""|/*|*".."*) echo "::error::evidence_dir must be repository relative"; exit 2 ;;
+        esac
+        mkdir -p "$GITHUB_WORKSPACE/$INPUT_EVIDENCE_DIR"
+        evidence_dir="$(realpath -e "$GITHUB_WORKSPACE/$INPUT_EVIDENCE_DIR")"
+        case "$evidence_dir" in
+          "$GITHUB_WORKSPACE"/*) ;;
+          *) echo "::error::evidence_dir resolves outside the repository"; exit 2 ;;
+        esac
+        if [ -L "$evidence_dir" ]; then
+          echo "::error::evidence_dir must not be a symbolic link"; exit 2
+        fi
+        action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        python3 "$action_root/scripts/sast_gate/runner.py" bootstrap \
+          --evidence-dir "$evidence_dir" \
+          --repository "$GITHUB_REPOSITORY" \
+          --head-sha "$GITHUB_SHA" \
+          --profile "$PROFILE" \
+          --semgrep-version 1.170.0
+        echo "evidence_dir=$evidence_dir" >> "$GITHUB_OUTPUT"
+
+    - name: Install controlled Semgrep
+      id: install
+      shell: bash
+      run: |
+        set -euo pipefail
+        venv_root="$(mktemp -d "${RUNNER_TEMP:-/tmp}/optimizr-sast-gate.XXXXXX")"
+        python3 -m venv "$venv_root/venv"
+        PIP_NO_INPUT=1 "$venv_root/venv/bin/python" -m pip install \
+          --disable-pip-version-check \
+          --only-binary=:all: \
+          'semgrep==1.170.0'
+        semgrep="$venv_root/venv/bin/semgrep"
+        test -x "$semgrep"
+        test "$("$semgrep" --version | head -n 1)" = "1.170.0"
+        echo "venv_root=$venv_root" >> "$GITHUB_OUTPUT"
+        echo "semgrep=$semgrep" >> "$GITHUB_OUTPUT"
+
+    - name: Run controlled local SAST profile
+      id: scan
+      shell: bash
+      env:
+        PROFILE: ${{ inputs.profile }}
+        BASELINE_FILE: ${{ inputs.baseline_file }}
+        EVIDENCE_DIR: ${{ steps.initialize.outputs.evidence_dir }}
+        SEMGREP: ${{ steps.install.outputs.semgrep }}
+        SEMGREP_METRICS: "off"
+      run: |
+        set -euo pipefail
+        action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        baseline=""
+        if [ -n "$BASELINE_FILE" ]; then
+          if [[ "$BASELINE_FILE" = /* || "$BASELINE_FILE" = *".."* ]]; then
+            echo "::error::baseline_file must be repository relative"; exit 2
+          fi
+          baseline="$(realpath -e "$GITHUB_WORKSPACE/$BASELINE_FILE")"
+          case "$baseline" in
+            "$GITHUB_WORKSPACE"/*) ;;
+            *) echo "::error::baseline_file resolves outside the repository"; exit 2 ;;
+          esac
+          if [ -L "$baseline" ] || [ ! -f "$baseline" ]; then
+            echo "::error::baseline_file must be a regular non-symlink file"; exit 2
+          fi
+        fi
+        set +e
+        python3 "$action_root/scripts/sast_gate/runner.py" scan \
+          --root "$GITHUB_WORKSPACE" \
+          --rules-dir "$action_root/rules/sast" \
+          --profile "$PROFILE" \
+          --baseline "$baseline" \
+          --evidence-dir "$EVIDENCE_DIR" \
+          --semgrep "$SEMGREP" \
+          --semgrep-version 1.170.0 \
+          --repository "$GITHUB_REPOSITORY" \
+          --head-sha "$GITHUB_SHA"
+        status=$?
+        set -e
+        if [ "$status" -eq 0 ]; then
+          echo "result=passed" >> "$GITHUB_OUTPUT"
+        else
+          echo "result=failed" >> "$GITHUB_OUTPUT"
+        fi
+        exit "$status"
+
+    - name: Remove temporary Semgrep environment
+      if: always()
+      shell: bash
+      env:
+        VENV_ROOT: ${{ steps.install.outputs.venv_root }}
+      run: |
+        set -euo pipefail
+        if [ -n "$VENV_ROOT" ]; then
+          rm -rf -- "$VENV_ROOT"
+        fi

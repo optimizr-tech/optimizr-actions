@@ -1,0 +1,45 @@
+rules:
+  - id: optimizr.python.command.os-system
+    languages: [python]
+    severity: ERROR
+    message: Avoid os.system with data that may be externally controlled.
+    metadata:
+      category: command-injection
+      technology: [python]
+    pattern: os.system(...)
+  - id: optimizr.python.command.subprocess-shell
+    languages: [python]
+    severity: ERROR
+    message: subprocess with shell=True can enable command injection.
+    metadata:
+      category: command-injection
+      technology: [python]
+    patterns:
+      - pattern: subprocess.$FUNC(..., shell=True, ...)
+  - id: optimizr.python.dynamic.eval-exec
+    languages: [python]
+    severity: ERROR
+    message: Avoid dynamic eval or exec on runtime data.
+    metadata:
+      category: code-injection
+      technology: [python]
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: exec(...)
+  - id: optimizr.python.web.possible-ssrf
+    languages: [python]
+    severity: ERROR
+    message: User-controlled request input reaches an outbound HTTP client.
+    metadata:
+      category: ssrf
+      technology: [flask, fastapi, requests, httpx]
+    mode: taint
+    pattern-sources:
+      - pattern-either:
+          - pattern: flask.request.$FIELD
+          - pattern: $REQUEST.query_params.get(...)
+          - pattern: $REQUEST.path_params.get(...)
+    pattern-sinks:
+      - pattern-either:
+          - pattern: requests.$METHOD($URL, ...)
+          - pattern: httpx.$METHOD($URL, ...)
