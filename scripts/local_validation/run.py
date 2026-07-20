@@ -21,6 +21,7 @@ _ID_RE = re.compile(r"^[a-z][a-z0-9-]{0,79}$")
 _SERVICE_RE = re.compile(r"^[a-z][a-z0-9._-]{0,79}$")
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _ALLOWED_INTERPRETERS = {"python", "bash"}
+_ALLOWED_TOOLS = {"python", "git", "docker", "docker-compose", "uv"}
 _ALLOWED_RESULTS = {"passed", "failed", "skipped"}
 _SECRET_PATTERNS = (
     re.compile(r"(?i)(password|passwd|secret|token|authorization|cookie|private[_ .-]?key)\s*[:=]"),
@@ -116,9 +117,12 @@ def normalize_preset(raw: Any) -> dict[str, Any]:
     if (
         not isinstance(required_tools, list)
         or not required_tools
-        or any(tool not in {"python", "git", "docker"} for tool in required_tools)
+        or any(tool not in _ALLOWED_TOOLS for tool in required_tools)
     ):
-        raise ValidationError("required_tools must be a non-empty subset of python, git and docker")
+        raise ValidationError(
+            "required_tools must be a non-empty subset of python, git, docker, "
+            "docker-compose and uv"
+        )
     required_tools = list(dict.fromkeys(required_tools))
 
     required_services = raw.get("required_services")
@@ -253,9 +257,10 @@ def evaluate_metadata(preset: Mapping[str, Any], metadata: Mapping[str, Any]) ->
 def _tool_version(executable: str) -> str:
     if executable == "python":
         return platform.python_version()
+    argv = ["docker", "compose", "version"] if executable == "docker-compose" else [executable, "--version"]
     try:
         result = subprocess.run(
-            [executable, "--version"],
+            argv,
             capture_output=True,
             text=True,
             check=False,
