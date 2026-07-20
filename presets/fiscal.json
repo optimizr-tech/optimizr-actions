@@ -8,7 +8,9 @@
   "required_tools": [
     "python",
     "git",
-    "docker"
+    "docker",
+    "docker-compose",
+    "uv"
   ],
   "required_services": [
     "postgres",
