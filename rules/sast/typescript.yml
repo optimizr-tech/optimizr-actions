@@ -1,0 +1,40 @@
+rules:
+  - id: optimizr.typescript.command.child-process-exec
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: Avoid child_process exec APIs with runtime data.
+    metadata:
+      category: command-injection
+      technology: [node]
+    pattern-either:
+      - pattern: child_process.exec(...)
+      - pattern: child_process.execSync(...)
+      - pattern: $CP.exec(...)
+      - pattern: $CP.execSync(...)
+  - id: optimizr.typescript.dynamic.eval-function
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: Avoid eval and dynamic Function construction.
+    metadata:
+      category: code-injection
+      technology: [javascript]
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+  - id: optimizr.typescript.web.possible-ssrf
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: Request-controlled data reaches an outbound HTTP client.
+    metadata:
+      category: ssrf
+      technology: [express, fetch, axios]
+    mode: taint
+    pattern-sources:
+      - pattern-either:
+          - pattern: $REQ.query.$FIELD
+          - pattern: $REQ.params.$FIELD
+          - pattern: $REQ.body.$FIELD
+    pattern-sinks:
+      - pattern-either:
+          - pattern: fetch($URL, ...)
+          - pattern: axios.$METHOD($URL, ...)

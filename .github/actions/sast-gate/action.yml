@@ -1,0 +1,61 @@
+name: Optimizr SAST gate
+description: Run immutable Semgrep with allowlisted local rules and expiring exact baselines
+inputs:
+  profile:
+    description: python, typescript, or all
+    required: false
+    default: all
+  baseline_file:
+    description: Optional repository-relative baseline JSON
+    required: false
+    default: ""
+  evidence_dir:
+    description: Sanitized evidence directory
+    required: false
+    default: artifacts/sast-gate
+outputs:
+  evidence_dir:
+    description: Evidence directory
+    value: ${{ inputs.evidence_dir }}
+runs:
+  using: composite
+  steps:
+    - name: Install controlled Semgrep
+      shell: bash
+      run: |
+        set -euo pipefail
+        python3 -m pip install --disable-pip-version-check --user 'semgrep==1.170.0'
+        export PATH="$HOME/.local/bin:$PATH"
+        test "$(semgrep --version | head -n 1)" = "1.170.0"
+    - name: Run controlled local SAST profile
+      shell: bash
+      env:
+        PROFILE: ${{ inputs.profile }}
+        BASELINE_FILE: ${{ inputs.baseline_file }}
+        EVIDENCE_DIR: ${{ inputs.evidence_dir }}
+        SEMGREP_METRICS: --metrics=off
+      run: |
+        set -euo pipefail
+        export PATH="$HOME/.local/bin:$PATH"
+        action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        baseline=""
+        if [ -n "$BASELINE_FILE" ]; then
+          if [[ "$BASELINE_FILE" = /* || "$BASELINE_FILE" = *".."* ]]; then
+            echo "::error::baseline_file must be repository relative"; exit 2
+          fi
+          baseline="$(realpath -e "$GITHUB_WORKSPACE/$BASELINE_FILE")"
+          case "$baseline" in
+            "$GITHUB_WORKSPACE"/*) ;;
+            *) echo "::error::baseline_file resolves outside the repository"; exit 2 ;;
+          esac
+        fi
+        python3 "$action_root/scripts/sast_gate/runner.py" \
+          --root "$GITHUB_WORKSPACE" \
+          --rules-dir "$action_root/rules/sast" \
+          --profile "$PROFILE" \
+          --baseline "$baseline" \
+          --evidence-dir "$EVIDENCE_DIR" \
+          --semgrep semgrep \
+          --semgrep-version 1.170.0 \
+          --repository "$GITHUB_REPOSITORY" \
+          --head-sha "$GITHUB_SHA"
