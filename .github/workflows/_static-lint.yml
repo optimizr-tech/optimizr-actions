@@ -1,0 +1,55 @@
+name: _static-lint
+on:
+  workflow_call:
+    inputs:
+      runner_json:
+        description: JSON runner labels
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      shellcheck_severity:
+        description: error, warning, info, or style
+        required: false
+        type: string
+        default: warning
+      exclusions:
+        description: Newline-separated repository-relative exclusion globs
+        required: false
+        type: string
+        default: ""
+      artifact_name:
+        description: Evidence artifact name
+        required: false
+        type: string
+        default: static-lint-evidence
+      retention_days:
+        description: Evidence retention period
+        required: false
+        type: number
+        default: 30
+permissions:
+  contents: read
+jobs:
+  static-lint:
+    name: Shell and Actions validation
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Run portable static lint
+        uses: optimizr-tech/optimizr-actions/.github/actions/static-lint@v1
+        with:
+          shellcheck_severity: ${{ inputs.shellcheck_severity }}
+          exclusions: ${{ inputs.exclusions }}
+      - name: Upload lint evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: artifacts/static-lint
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}
