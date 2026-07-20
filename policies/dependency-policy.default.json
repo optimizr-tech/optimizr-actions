@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "block_severities": ["HIGH", "CRITICAL"],
+  "denied_licenses": ["AGPL-3.0-only", "SSPL-1.0"],
+  "exceptions": []
+}
