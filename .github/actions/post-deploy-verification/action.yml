@@ -1,0 +1,35 @@
+name: Optimizr post-deploy verification
+description: Run bounded container and HTTP readiness checks for an exact deployed SHA
+inputs:
+  manifest_path:
+    description: Repository-relative version-1 verification manifest
+    required: true
+  repository:
+    description: owner/name recorded in evidence
+    required: true
+  deployed_sha:
+    description: Exact deployed 40-character commit SHA
+    required: true
+  evidence_path:
+    description: Repository-relative sanitized evidence path
+    required: false
+    default: artifacts/post-deploy/evidence.json
+runs:
+  using: composite
+  steps:
+    - name: Execute declarative verification
+      shell: bash
+      env:
+        MANIFEST_PATH: ${{ inputs.manifest_path }}
+        REPOSITORY: ${{ inputs.repository }}
+        DEPLOYED_SHA: ${{ inputs.deployed_sha }}
+        EVIDENCE_PATH: ${{ inputs.evidence_path }}
+      run: |
+        set -euo pipefail
+        action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        python3 "$action_root/scripts/post_deploy/runner.py" \
+          --manifest-path "$MANIFEST_PATH" \
+          --repository "$REPOSITORY" \
+          --deployed-sha "$DEPLOYED_SHA" \
+          --evidence-path "$EVIDENCE_PATH" \
+          --workspace "$GITHUB_WORKSPACE"
