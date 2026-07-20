@@ -24,9 +24,11 @@ class PullRequestValidationWorkflowTests(unittest.TestCase):
     def test_validation_executes_repository_and_action_contract_checks(self) -> None:
         content = WORKFLOW.read_text(encoding="utf-8")
 
-        self.assertIn("python3 -m unittest discover -v", content)
-        self.assertIn("python3 -m compileall scripts tests", content)
+        self.assertIn("python3 -m unittest discover", content)
+        self.assertIn("python3 -m compileall", content)
+        self.assertIn("scripts tests", content)
         self.assertIn("git diff --check", content)
+        self.assertIn("tail -n 160", content)
         self.assertIn(
             "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
             content,
