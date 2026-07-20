@@ -1,0 +1,50 @@
+name: Optimizr negative security probes
+description: Run bounded declarative denial and exposure probes after protected deployment
+inputs:
+  manifest_path:
+    description: Repository-relative JSON probe manifest
+    required: true
+  evidence_path:
+    description: Sanitized evidence JSON path
+    required: false
+    default: artifacts/negative-probes/evidence.json
+  repository:
+    description: Repository identity recorded in evidence
+    required: false
+    default: ""
+  head_sha:
+    description: Exact deployed commit SHA recorded in evidence
+    required: false
+    default: ""
+outputs:
+  evidence_path:
+    description: Evidence JSON path
+    value: ${{ inputs.evidence_path }}
+runs:
+  using: composite
+  steps:
+    - name: Validate and execute negative probes
+      shell: bash
+      env:
+        MANIFEST_PATH: ${{ inputs.manifest_path }}
+        EVIDENCE_PATH: ${{ inputs.evidence_path }}
+        REPOSITORY_INPUT: ${{ inputs.repository }}
+        HEAD_SHA_INPUT: ${{ inputs.head_sha }}
+      run: |
+        set -euo pipefail
+        if [[ "$MANIFEST_PATH" = /* || "$MANIFEST_PATH" = *".."* ]]; then
+          echo "::error::manifest_path must be repository relative"; exit 2
+        fi
+        manifest="$(realpath -e "$GITHUB_WORKSPACE/$MANIFEST_PATH")"
+        case "$manifest" in
+          "$GITHUB_WORKSPACE"/*) ;;
+          *) echo "::error::manifest_path resolves outside the repository"; exit 2 ;;
+        esac
+        repository="${REPOSITORY_INPUT:-$GITHUB_REPOSITORY}"
+        head_sha="${HEAD_SHA_INPUT:-$GITHUB_SHA}"
+        action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        python3 "$action_root/scripts/negative_probes/runner.py" \
+          --manifest "$manifest" \
+          --evidence "$EVIDENCE_PATH" \
+          --repository "$repository" \
+          --head-sha "$head_sha"
