@@ -1,0 +1,41 @@
+name: Optimizr atomic environment-file writer
+description: Write a Compose-compatible environment file from an audited repository schema
+inputs:
+  schema_path:
+    description: Repository-relative version-1 JSON schema
+    required: true
+  destination:
+    description: Destination file inside allowed_root
+    required: true
+  allowed_root:
+    description: Existing directory that confines the destination
+    required: true
+  mode:
+    description: File mode (0400, 0440, 0600, 0640, or 0660)
+    required: false
+    default: "0600"
+  evidence_path:
+    description: Repository-relative sanitized evidence JSON path
+    required: false
+    default: artifacts/env-writer/evidence.json
+runs:
+  using: composite
+  steps:
+    - name: Write audited environment file
+      shell: bash
+      env:
+        SCHEMA_PATH: ${{ inputs.schema_path }}
+        DESTINATION: ${{ inputs.destination }}
+        ALLOWED_ROOT: ${{ inputs.allowed_root }}
+        FILE_MODE: ${{ inputs.mode }}
+        EVIDENCE_PATH: ${{ inputs.evidence_path }}
+      run: |
+        set -euo pipefail
+        action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        python3 "$action_root/scripts/env_writer/runner.py" \
+          --schema-path "$SCHEMA_PATH" \
+          --destination "$DESTINATION" \
+          --allowed-root "$ALLOWED_ROOT" \
+          --mode "$FILE_MODE" \
+          --evidence-path "$EVIDENCE_PATH" \
+          --workspace "$GITHUB_WORKSPACE"
