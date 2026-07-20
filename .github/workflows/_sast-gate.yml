@@ -1,0 +1,55 @@
+name: _sast-gate
+on:
+  workflow_call:
+    inputs:
+      runner_json:
+        description: JSON runner labels
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      profile:
+        description: python, typescript, or all
+        required: false
+        type: string
+        default: all
+      baseline_file:
+        description: Optional repository-relative baseline JSON
+        required: false
+        type: string
+        default: ""
+      artifact_name:
+        description: Evidence artifact name
+        required: false
+        type: string
+        default: sast-gate-evidence
+      retention_days:
+        description: Evidence retention period
+        required: false
+        type: number
+        default: 30
+permissions:
+  contents: read
+jobs:
+  sast:
+    name: Controlled SAST
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Run local SAST profiles
+        uses: optimizr-tech/optimizr-actions/.github/actions/sast-gate@v1
+        with:
+          profile: ${{ inputs.profile }}
+          baseline_file: ${{ inputs.baseline_file }}
+      - name: Upload SAST evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: artifacts/sast-gate
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}
