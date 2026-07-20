@@ -1,0 +1,83 @@
+name: Optimizr supply-chain evidence
+description: Generate CycloneDX, SPDX, and SLSA-compatible provenance for immutable image identities
+inputs:
+  image_refs:
+    description: Whitespace or newline separated local image references or IDs
+    required: true
+  trivy_version:
+    description: Controlled Trivy release
+    required: false
+    default: v0.70.0
+  evidence_dir:
+    description: Sanitized evidence directory
+    required: false
+    default: artifacts/supply-chain
+outputs:
+  evidence_dir:
+    description: Evidence directory
+    value: ${{ inputs.evidence_dir }}
+runs:
+  using: composite
+  steps:
+    - name: Install controlled Trivy
+      uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567
+      with:
+        version: ${{ inputs.trivy_version }}
+        cache: "true"
+    - name: Generate immutable SBOM and provenance evidence
+      shell: bash
+      env:
+        IMAGE_REFS: ${{ inputs.image_refs }}
+        EVIDENCE_DIR: ${{ inputs.evidence_dir }}
+      run: |
+        set -euo pipefail
+        action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        evidence_tool="$action_root/scripts/supply_chain/evidence.py"
+        mkdir -p "$EVIDENCE_DIR"
+        mapfile -t targets < <(printf '%s\n' "$IMAGE_REFS" | tr '[:space:]' '\n' | sed '/^$/d')
+        if [ "${#targets[@]}" -eq 0 ]; then
+          echo "::error::at least one image reference is required"; exit 2
+        fi
+        trivy_version="$(trivy --version | head -n 1)"
+        workflow_ref="${GITHUB_WORKFLOW_REF:-${GITHUB_REPOSITORY}/unknown@${GITHUB_REF:-unknown}}"
+        for target in "${targets[@]}"; do
+          slug="$(printf '%s' "$target" | sha256sum | cut -c1-16)"
+          target_dir="$EVIDENCE_DIR/$slug"
+          inspect_file="$target_dir/image-inspect.json"
+          cyclonedx="$target_dir/sbom.cyclonedx.json"
+          spdx="$target_dir/sbom.spdx.json"
+          provenance="$target_dir/provenance.intoto.json"
+          image_input=()
+          temporary_image=""
+          direct_docker=false
+          mkdir -p "$target_dir"
+          if docker image inspect "$target" > "$inspect_file" 2>/dev/null; then
+            direct_docker=true
+          elif sudo -n docker image inspect "$target" > "$inspect_file" 2>/dev/null; then
+            temporary_image="${RUNNER_TEMP:-/tmp}/sbom-$slug.tar"
+            sudo -n docker save "$target" -o "$temporary_image"
+            sudo -n chown "$(id -u):$(id -g)" "$temporary_image"
+            image_input=(--input "$temporary_image")
+          else
+            echo "::error::cannot inspect image target"; exit 2
+          fi
+          identity="$(python3 "$evidence_tool" resolve --inspect "$inspect_file")"
+          if [ "$direct_docker" = true ]; then
+            scan_identity="$(python3 "$evidence_tool" resolve-local --inspect "$inspect_file")"
+            image_input=("$scan_identity")
+          fi
+          trivy image --format cyclonedx --output "$cyclonedx" "${image_input[@]}"
+          trivy image --format spdx-json --output "$spdx" "${image_input[@]}"
+          python3 "$evidence_tool" write \
+            --repository "$GITHUB_REPOSITORY" \
+            --head-sha "$GITHUB_SHA" \
+            --image-ref "$target" \
+            --image-identity "$identity" \
+            --workflow-ref "$workflow_ref" \
+            --cyclonedx "$cyclonedx" \
+            --spdx "$spdx" \
+            --tool-version "$trivy_version" \
+            --output "$provenance"
+          rm -f "$temporary_image"
+          rm -f "$inspect_file"
+        done
