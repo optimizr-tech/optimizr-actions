@@ -1,0 +1,83 @@
+name: _static-site-deploy
+on:
+  workflow_call:
+    inputs:
+      environment_name:
+        description: Protected deployment environment
+        required: true
+        type: string
+      runner_json:
+        description: JSON labels for the trusted static-site runner
+        required: true
+        type: string
+      deployed_sha:
+        description: Exact deployed 40-character commit SHA
+        required: true
+        type: string
+      manifest_path:
+        description: Repository-relative deployment manifest
+        required: true
+        type: string
+      docker_mode:
+        description: direct or sudo
+        required: false
+        type: string
+        default: sudo
+      retention_days:
+        description: Evidence retention period
+        required: false
+        type: number
+        default: 30
+permissions:
+  contents: read
+jobs:
+  deploy:
+    name: Deploy static site
+    environment: ${{ inputs.environment_name }}
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: 30
+    steps:
+      - name: Require trusted self-hosted runner and exact SHA
+        shell: bash
+        env:
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          DEPLOYED_SHA: ${{ inputs.deployed_sha }}
+          DOCKER_MODE: ${{ inputs.docker_mode }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, re
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if not isinstance(labels, list) or not 1 <= len(labels) <= 10:
+              raise SystemExit("runner_json must contain 1-10 labels")
+          if "self-hosted" not in labels:
+              raise SystemExit("static-site deployment requires a trusted self-hosted runner")
+          if not re.fullmatch(r"[0-9a-f]{40}", os.environ["DEPLOYED_SHA"]):
+              raise SystemExit("deployed_sha must be a lowercase 40-character SHA")
+          if os.environ["DOCKER_MODE"] not in {"direct", "sudo"}:
+              raise SystemExit("docker_mode must be direct or sudo")
+          PY
+      - name: Checkout exact deployment source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ inputs.deployed_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Build and promote static assets
+        uses: optimizr-tech/optimizr-actions/.github/actions/static-site-deploy@v1
+        with:
+          manifest_path: ${{ inputs.manifest_path }}
+          deployed_sha: ${{ inputs.deployed_sha }}
+          docker_mode: ${{ inputs.docker_mode }}
+      - name: Upload deployment evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: static-site-deployment
+          path: artifacts/static-site-deploy
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}
+      - name: Clean runner workspace
+        if: always()
+        shell: bash
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete 2>/dev/null || true
