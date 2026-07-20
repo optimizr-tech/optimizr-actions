@@ -1,0 +1,55 @@
+name: _dependency-policy
+on:
+  workflow_call:
+    inputs:
+      runner_json:
+        description: JSON runner labels
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      policy_file:
+        description: Optional repository-relative policy JSON
+        required: false
+        type: string
+        default: ""
+      trivy_version:
+        description: Controlled Trivy release
+        required: false
+        type: string
+        default: v0.70.0
+      artifact_name:
+        description: Evidence artifact name
+        required: false
+        type: string
+        default: dependency-policy-evidence
+      retention_days:
+        description: Evidence retention period
+        required: false
+        type: number
+        default: 30
+permissions:
+  contents: read
+jobs:
+  dependency-policy:
+    name: Dependency and license policy
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Enforce dependency policy
+        uses: optimizr-tech/optimizr-actions/.github/actions/dependency-policy@v1
+        with:
+          policy_file: ${{ inputs.policy_file }}
+          trivy_version: ${{ inputs.trivy_version }}
+      - name: Upload dependency evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: artifacts/dependency-policy
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}
