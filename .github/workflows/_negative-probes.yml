@@ -1,0 +1,113 @@
+name: _negative-probes
+on:
+  workflow_call:
+    inputs:
+      environment_name:
+        description: Protected deployment environment
+        required: true
+        type: string
+      runner_json:
+        description: JSON labels for a trusted network-reachable runner
+        required: false
+        type: string
+        default: '["self-hosted","Linux","security"]'
+      deployed_sha:
+        description: Exact deployed 40-character commit SHA
+        required: true
+        type: string
+      manifest_path:
+        description: Repository-relative JSON probe manifest
+        required: true
+        type: string
+      artifact_name:
+        description: Evidence artifact name
+        required: false
+        type: string
+        default: negative-probe-evidence
+      retention_days:
+        description: Evidence retention period
+        required: false
+        type: number
+        default: 30
+    secrets:
+      PROBE_TARGET_1:
+        required: false
+      PROBE_TARGET_2:
+        required: false
+      PROBE_TARGET_3:
+        required: false
+      PROBE_TARGET_4:
+        required: false
+      PROBE_TARGET_5:
+        required: false
+  workflow_dispatch:
+    inputs:
+      environment_name:
+        description: Protected deployment environment
+        required: true
+        type: environment
+      runner_json:
+        description: JSON labels for a trusted network-reachable runner
+        required: true
+        type: string
+        default: '["self-hosted","Linux","security"]'
+      deployed_sha:
+        description: Exact deployed 40-character commit SHA
+        required: true
+        type: string
+      manifest_path:
+        description: Repository-relative JSON probe manifest
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  negative-probes:
+    name: Post-deploy negative security probes
+    environment: ${{ inputs.environment_name }}
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: 15
+    steps:
+      - name: Require trusted self-hosted runner
+        shell: bash
+        env:
+          RUNNER_JSON: ${{ inputs.runner_json }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if "self-hosted" not in labels:
+              raise SystemExit("post-deploy probes require a trusted self-hosted runner")
+          PY
+      - name: Validate deployed commit identity
+        shell: bash
+        env:
+          DEPLOYED_SHA: ${{ inputs.deployed_sha }}
+        run: |
+          [[ "$DEPLOYED_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::deployed_sha must be a lowercase 40-character commit SHA"; exit 2; }
+      - name: Checkout exact deployed source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ inputs.deployed_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Run bounded negative probes
+        uses: optimizr-tech/optimizr-actions/.github/actions/negative-probes@v1
+        env:
+          PROBE_TARGET_1: ${{ secrets.PROBE_TARGET_1 }}
+          PROBE_TARGET_2: ${{ secrets.PROBE_TARGET_2 }}
+          PROBE_TARGET_3: ${{ secrets.PROBE_TARGET_3 }}
+          PROBE_TARGET_4: ${{ secrets.PROBE_TARGET_4 }}
+          PROBE_TARGET_5: ${{ secrets.PROBE_TARGET_5 }}
+        with:
+          manifest_path: ${{ inputs.manifest_path }}
+          repository: ${{ github.repository }}
+          head_sha: ${{ inputs.deployed_sha }}
+      - name: Upload negative-probe evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ${{ inputs.artifact_name || 'negative-probe-evidence' }}
+          path: artifacts/negative-probes
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days || 30 }}
