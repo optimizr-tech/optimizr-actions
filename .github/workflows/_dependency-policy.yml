@@ -7,6 +7,11 @@ on:
         required: false
         type: string
         default: '["ubuntu-latest"]'
+      working_directory:
+        description: Repository-relative project directory containing the package manifest and lockfile
+        required: false
+        type: string
+        default: "."
       policy_file:
         description: Optional repository-relative policy JSON
         required: false
@@ -43,6 +48,7 @@ jobs:
       - name: Enforce dependency policy
         uses: optimizr-tech/optimizr-actions/.github/actions/dependency-policy@v1
         with:
+          working_directory: ${{ inputs.working_directory }}
           policy_file: ${{ inputs.policy_file }}
           trivy_version: ${{ inputs.trivy_version }}
       - name: Upload dependency evidence
