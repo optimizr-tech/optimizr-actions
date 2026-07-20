@@ -1,0 +1,102 @@
+name: Optimizr repository validation
+description: Execute a repository-owned executable with argv-safe, commit-bound evidence
+inputs:
+  script_path:
+    description: Relative executable path inside the checked-out repository
+    required: true
+  args_json:
+    description: JSON array of literal command arguments
+    required: false
+    default: "[]"
+  evidence_path:
+    description: Sanitized evidence JSON path
+    required: false
+    default: artifacts/repository-validation/evidence.json
+  repository:
+    description: Optional repository identity override recorded in evidence
+    required: false
+    default: ""
+  head_sha:
+    description: Optional exact candidate commit SHA override
+    required: false
+    default: ""
+  base_sha:
+    description: Optional base commit SHA
+    required: false
+    default: ""
+  image_refs_json:
+    description: Optional JSON array of local image references whose immutable IDs are recorded
+    required: false
+    default: "[]"
+  timeout_seconds:
+    description: Validation timeout from 1 to 3600 seconds
+    required: false
+    default: "900"
+  require_trusted_ref:
+    description: Require candidate to be reachable from trusted_ref
+    required: false
+    default: "true"
+  trusted_ref:
+    description: Full branch ref trusted by persistent runners
+    required: false
+    default: refs/heads/main
+outputs:
+  evidence_path:
+    description: Evidence JSON produced by the command runner
+    value: ${{ steps.run.outputs.evidence_path }}
+  result:
+    description: passed or failed
+    value: ${{ steps.run.outputs.result }}
+runs:
+  using: composite
+  steps:
+    - name: Validate candidate trust boundary
+      if: inputs.require_trusted_ref == 'true'
+      shell: bash
+      env:
+        WORKSPACE: ${{ github.workspace }}
+        HEAD_SHA: ${{ inputs.head_sha }}
+        TRUSTED_REF: ${{ inputs.trusted_ref }}
+      run: |
+        set -euo pipefail
+        candidate_sha="${HEAD_SHA:-$GITHUB_SHA}"
+        python3 "$GITHUB_ACTION_PATH/../../../scripts/repository_validation/runner.py" check-trust \
+          --workspace "$WORKSPACE" \
+          --candidate-sha "$candidate_sha" \
+          --trusted-ref "$TRUSTED_REF"
+    - name: Execute repository validation
+      id: run
+      shell: bash
+      env:
+        WORKSPACE: ${{ github.workspace }}
+        SCRIPT_PATH: ${{ inputs.script_path }}
+        ARGS_JSON: ${{ inputs.args_json }}
+        EVIDENCE_PATH: ${{ inputs.evidence_path }}
+        REPOSITORY_INPUT: ${{ inputs.repository }}
+        HEAD_SHA_INPUT: ${{ inputs.head_sha }}
+        BASE_SHA: ${{ inputs.base_sha }}
+        TIMEOUT_SECONDS: ${{ inputs.timeout_seconds }}
+        IMAGE_REFS_JSON: ${{ inputs.image_refs_json }}
+      run: |
+        repository="${REPOSITORY_INPUT:-$GITHUB_REPOSITORY}"
+        head_sha="${HEAD_SHA_INPUT:-$GITHUB_SHA}"
+        set +e
+        python3 "$GITHUB_ACTION_PATH/../../../scripts/repository_validation/runner.py" run \
+          --workspace "$WORKSPACE" \
+          --script-path "$SCRIPT_PATH" \
+          --args-json "$ARGS_JSON" \
+          --evidence "$EVIDENCE_PATH" \
+          --repository "$repository" \
+          --head-sha "$head_sha" \
+          --base-sha "$BASE_SHA" \
+          --timeout-seconds "$TIMEOUT_SECONDS" \
+          --image-refs-json "$IMAGE_REFS_JSON"
+        status=$?
+        set -e
+        echo "evidence_path=$EVIDENCE_PATH" >> "$GITHUB_OUTPUT"
+        if [ "$status" -eq 0 ]; then
+          echo "result=passed" >> "$GITHUB_OUTPUT"
+        else
+          echo "result=failed" >> "$GITHUB_OUTPUT"
+        fi
+        exit "$status"

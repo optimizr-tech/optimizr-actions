@@ -1,0 +1,61 @@
+name: Billing-emergency repository validation
+on:
+  workflow_dispatch:
+    inputs:
+      environment_name:
+        description: Protected environment requiring reviewer approval
+        type: environment
+        required: true
+      runner_json:
+        description: JSON labels for the trusted self-hosted runner
+        type: string
+        required: true
+        default: '["self-hosted","Linux","security"]'
+      candidate_sha:
+        description: Exact trusted commit SHA to validate
+        type: string
+        required: true
+      script_path:
+        description: Repository-owned executable path
+        type: string
+        required: true
+      args_json:
+        description: JSON array of literal arguments
+        type: string
+        required: false
+        default: "[]"
+      timeout_seconds:
+        description: Command timeout
+        type: number
+        required: false
+        default: 900
+      trusted_ref:
+        description: Trusted full branch ref
+        type: string
+        required: false
+        default: refs/heads/main
+permissions:
+  contents: read
+jobs:
+  approval:
+    name: Review billing-emergency validation
+    environment: ${{ inputs.environment_name }}
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    steps:
+      - name: Record reviewed candidate
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          echo "Approved validation for commit ${CANDIDATE_SHA}"
+  validation:
+    needs: approval
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_repository-validation.yml@v1
+    with:
+      runner_json: ${{ inputs.runner_json }}
+      candidate_sha: ${{ inputs.candidate_sha }}
+      script_path: ${{ inputs.script_path }}
+      args_json: ${{ inputs.args_json }}
+      timeout_seconds: ${{ inputs.timeout_seconds }}
+      require_trusted_ref: true
+      trusted_ref: ${{ inputs.trusted_ref }}
