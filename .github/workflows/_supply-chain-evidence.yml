@@ -1,0 +1,53 @@
+name: _supply-chain-evidence
+on:
+  workflow_call:
+    inputs:
+      runner_json:
+        description: JSON runner labels
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      image_refs:
+        description: Whitespace or newline separated local image references or IDs
+        required: true
+        type: string
+      trivy_version:
+        description: Controlled Trivy release
+        required: false
+        type: string
+        default: v0.70.0
+      artifact_name:
+        description: Evidence artifact name
+        required: false
+        type: string
+        default: supply-chain-evidence
+      retention_days:
+        description: Evidence retention period
+        required: false
+        type: number
+        default: 90
+permissions:
+  contents: read
+jobs:
+  supply-chain:
+    name: Image SBOM and provenance
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Generate image evidence
+        uses: optimizr-tech/optimizr-actions/.github/actions/supply-chain-evidence@v1
+        with:
+          image_refs: ${{ inputs.image_refs }}
+          trivy_version: ${{ inputs.trivy_version }}
+      - name: Upload supply-chain evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: artifacts/supply-chain
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}
