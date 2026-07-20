@@ -1,42 +1,24 @@
 # Deploy manifest contract
 
-The `write-deploy-manifest` composite action records sanitized deployment evidence independently of a `.git` checkout on the target host.
+The deploy-manifest tools record sanitized deployment evidence independently of a `.git` checkout on the target host.
 
 ## Location and permissions
 
-For a deployment path such as:
-
-```text
-/opt/optimizr/optimizr-cdn
-```
-
-the action writes to:
+For a deployment path such as `/opt/optimizr/optimizr-cdn`, manifests are stored under:
 
 ```text
 /opt/optimizr/optimizr-cdn/.deploy-manifests/
 ```
 
-The directory is forced to `0750`. Every JSON file is written with `0600` using a temporary file, `fsync` and atomic replacement.
+The directory is forced to `0750`. Every JSON file is written with `0600` using a temporary file, `fsync` and atomic replacement. The deployment directory must already exist, must be absolute, must not be `/`, and neither it nor an existing path component may be a symlink.
 
-The deployment directory must already exist, must be absolute, must not be `/`, and neither it nor an existing path component may be a symlink.
-
-## Files
-
-Immutable attempts use this naming pattern:
+Immutable attempts use:
 
 ```text
 YYYYMMDDTHHMMSSZ-<first-12-sha-chars>-<run-id>.json
 ```
 
-A successful attempt also atomically replaces:
-
-```text
-last-successful.json
-```
-
-A failed attempt is preserved as evidence but never replaces `last-successful.json`.
-
-Retention applies only to timestamped manifests. The default is 50 and the allowed range is 1 through 500.
+A successful attempt also atomically replaces `last-successful.json`. A failed attempt is retained but never replaces that pointer. Retention applies only to timestamped manifests; the default is 50 and the allowed range is 1–500.
 
 ## Schema 1.0
 
@@ -48,11 +30,7 @@ Retention applies only to timestamped manifests. The default is 50 and the allow
   "deployed_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "environment": "production",
   "healthchecks": [
-    {
-      "name": "api",
-      "status": "passed",
-      "target": "optimizr-cdn-api"
-    }
+    {"name": "primary-container", "status": "passed", "target": "optimizr-cdn-api"}
   ],
   "images": [
     {
@@ -61,39 +39,27 @@ Retention applies only to timestamped manifests. The default is 50 and the allow
     }
   ],
   "migration_result": "skipped",
+  "optional_build_result": "not-reported",
   "repository": "optimizr-tech/optimizr-cdn",
   "rollback_of": null,
   "run_id": "12345",
   "runner_name": "cdn-runner",
   "schema_version": "1.0",
-  "services": [
-    "api"
-  ],
+  "services": ["api"],
   "status": "success",
   "workflow": "Deploy"
 }
 ```
 
-Allowed deployment statuses are `success` and `failure`. Allowed healthcheck statuses are `passed`, `failed` and `skipped`. Allowed migration results are `passed`, `failed`, `skipped` and `not-reported`.
+Allowed deployment statuses are `success` and `failure`. Healthcheck statuses are `passed`, `failed` and `skipped`. Migration and optional-build results are `passed`, `failed`, `skipped` and `not-reported`.
 
 Image digests must be `unknown` or a lowercase `sha256:<64 hex characters>` value.
 
 ## Prohibited data
 
-Do not pass:
+Never record environment values, `.env` contents, passwords, tokens, cookies, authorization headers, private-key material, signed URLs, customer/tenant data, arbitrary JSON keys or command output. The writer rejects multiline values, secret-assignment patterns, private-key markers, signed-URL signatures, `.env` paths, unknown object keys and oversized values.
 
-- environment values or `.env` contents;
-- passwords, tokens, cookies or authorization headers;
-- private keys or certificates containing private material;
-- signed URLs or query signatures;
-- customer or tenant data;
-- arbitrary JSON keys.
-
-The writer rejects multiline values, secret-assignment patterns, private-key markers, signed-URL signature parameters, `.env` paths, unknown object keys and values longer than 512 characters.
-
-## Composite usage
-
-Pin the action to the reviewed immutable commit SHA during adoption:
+## Standalone writer
 
 ```yaml
 - name: Record deployment evidence
@@ -107,18 +73,36 @@ Pin the action to the reviewed immutable commit SHA during adoption:
     healthchecks_json: >-
       [{"name":"api","status":"passed","target":"optimizr-cdn-api"}]
     migration_result: skipped
+    optional_build_result: not-reported
 ```
 
-The self-hosted runner requires `python3`. The action does not install Python, inspect the process environment, run Docker commands, perform healthchecks or infer service topology. The deploy workflow remains responsible for collecting sanitized values.
+## VPS reusable integration
 
-## Rollbacks
+Both `_vps-self-hosted-deploy.yml` and `_vps-monorepo-deploy.yml` expose backward-compatible optional inputs:
 
-For a rollback deployment, set `rollback_of` to a prior deployed SHA or immutable manifest filename. A rollback creates another normal manifest; it does not alter historical files.
+```yaml
+with:
+  deploy_manifest_enabled: true
+  deploy_manifest_retention: 50
+  deploy_manifest_migration_result: passed
+```
 
-## Adoption order
+When disabled—the default—existing callers execute exactly as before.
 
-1. Review and merge the standalone writer.
-2. Publish it only after repository tests and actionlint pass.
-3. Integrate it into reusable deploy workflows in a separate PR using optional inputs.
-4. Migrate CDN through a dedicated caller PR without changing stateful service lifecycle.
-5. Validate the resulting manifest during the next explicitly approved production deployment.
+When enabled, an `if: always()` final stage checks out `job.workflow_repository` at `job.workflow_sha` and invokes the local `record-deploy-manifest` action from that exact revision. This prevents a workflow called at an immutable SHA from silently loading manifest code from a newer floating `v1` revision.
+
+The recorder uses fixed Docker argv to collect only:
+
+- Compose service names;
+- configured image names and immutable local image IDs;
+- primary container health result;
+- caller-declared migration result;
+- explicit optional-build result in monorepo deploys.
+
+A failed build, rollout, migration or health stage leaves the job failed and produces a failure manifest without replacing `last-successful.json`. A successful manifest is written only after rollout, verification, evidence upload and cleanup have completed.
+
+The monorepo reusable no longer calls the compatibility `wait-for-healthcheck` action from `optimizr-infra-ops`; it retains the same health wait before post-deploy commands.
+
+## Rollback
+
+Consumers can disable manifest recording without changing any existing deployment input. To roll back the implementation itself, pin the preceding compatible `optimizr-actions` SHA. Historical manifests remain immutable and can be retained or removed according to the consumer's operating policy.
