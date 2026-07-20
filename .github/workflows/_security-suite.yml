@@ -1,0 +1,225 @@
+name: _security-suite
+on:
+  workflow_call:
+    inputs:
+      profile:
+        description: python, node, compose, infra, or monorepo
+        required: false
+        type: string
+        default: infra
+      runner_json:
+        description: JSON runner labels for all suite jobs
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      dependency_working_directory:
+        description: Repository-relative project directory used by dependency/license policy
+        required: false
+        type: string
+        default: "."
+      sast_baseline_file:
+        description: Optional repository-relative SAST baseline JSON
+        required: false
+        type: string
+        default: ""
+      dependency_policy_file:
+        description: Optional repository-relative dependency policy JSON
+        required: false
+        type: string
+        default: ""
+      image_refs:
+        description: Optional whitespace-separated local image references for SBOM/provenance
+        required: false
+        type: string
+        default: ""
+      shellcheck_severity:
+        description: error, warning, info, or style
+        required: false
+        type: string
+        default: warning
+      static_lint_exclusions:
+        description: Newline-separated repository-relative static-lint exclusions
+        required: false
+        type: string
+        default: ""
+      trivy_version:
+        description: Governed Trivy release
+        required: false
+        type: string
+        default: v0.70.0
+      retention_days:
+        description: Evidence retention period
+        required: false
+        type: number
+        default: 30
+permissions:
+  contents: read
+jobs:
+  profile:
+    name: Resolve security profile
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: 5
+    outputs:
+      sast_profile: ${{ steps.profile.outputs.sast_profile }}
+      run_dependency: ${{ steps.profile.outputs.run_dependency }}
+      run_sast: ${{ steps.profile.outputs.run_sast }}
+      run_supply_chain: ${{ steps.profile.outputs.run_supply_chain }}
+    steps:
+      - name: Resolve allowlisted profile
+        id: profile
+        shell: bash
+        env:
+          PROFILE: ${{ inputs.profile }}
+        run: |
+          set -euo pipefail
+          case "$PROFILE" in
+            python)
+              echo "sast_profile=python" >> "$GITHUB_OUTPUT"
+              echo "run_dependency=true" >> "$GITHUB_OUTPUT"
+              echo "run_sast=true" >> "$GITHUB_OUTPUT"
+              echo "run_supply_chain=false" >> "$GITHUB_OUTPUT"
+              ;;
+            node)
+              echo "sast_profile=typescript" >> "$GITHUB_OUTPUT"
+              echo "run_dependency=true" >> "$GITHUB_OUTPUT"
+              echo "run_sast=true" >> "$GITHUB_OUTPUT"
+              echo "run_supply_chain=false" >> "$GITHUB_OUTPUT"
+              ;;
+            compose|infra)
+              echo "sast_profile=all" >> "$GITHUB_OUTPUT"
+              echo "run_dependency=false" >> "$GITHUB_OUTPUT"
+              echo "run_sast=false" >> "$GITHUB_OUTPUT"
+              echo "run_supply_chain=true" >> "$GITHUB_OUTPUT"
+              ;;
+            monorepo)
+              echo "sast_profile=all" >> "$GITHUB_OUTPUT"
+              echo "run_dependency=true" >> "$GITHUB_OUTPUT"
+              echo "run_sast=true" >> "$GITHUB_OUTPUT"
+              echo "run_supply_chain=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::profile must be python, node, compose, infra, or monorepo"
+              exit 2
+              ;;
+          esac
+
+  static-lint:
+    name: Static lint
+    needs: profile
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_static-lint.yml@v1
+    with:
+      runner_json: ${{ inputs.runner_json }}
+      shellcheck_severity: ${{ inputs.shellcheck_severity }}
+      exclusions: ${{ inputs.static_lint_exclusions }}
+      artifact_name: security-suite-static-lint
+      retention_days: ${{ inputs.retention_days }}
+
+  filesystem-security:
+    name: Filesystem security
+    needs: profile
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_security-gate.yml@v1
+    with:
+      runner_json: ${{ inputs.runner_json }}
+      scan_type: fs
+      scan_ref: "."
+      severity: HIGH,CRITICAL
+      ignore_unfixed: false
+      trivy_version: ${{ inputs.trivy_version }}
+      artifact_name: security-suite-filesystem
+      retention_days: ${{ inputs.retention_days }}
+
+  dependency-policy:
+    name: Dependency and license policy
+    needs: profile
+    if: needs.profile.outputs.run_dependency == 'true'
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_dependency-policy.yml@v1
+    with:
+      runner_json: ${{ inputs.runner_json }}
+      working_directory: ${{ inputs.dependency_working_directory }}
+      policy_file: ${{ inputs.dependency_policy_file }}
+      trivy_version: ${{ inputs.trivy_version }}
+      artifact_name: security-suite-dependencies
+      retention_days: ${{ inputs.retention_days }}
+
+  sast:
+    name: Controlled SAST
+    needs: profile
+    if: needs.profile.outputs.run_sast == 'true'
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_sast-gate.yml@v1
+    with:
+      runner_json: ${{ inputs.runner_json }}
+      profile: ${{ needs.profile.outputs.sast_profile }}
+      baseline_file: ${{ inputs.sast_baseline_file }}
+      artifact_name: security-suite-sast
+      retention_days: ${{ inputs.retention_days }}
+
+  supply-chain:
+    name: Image SBOM and provenance
+    needs: profile
+    if: needs.profile.outputs.run_supply_chain == 'true' && inputs.image_refs != ''
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_supply-chain-evidence.yml@v1
+    with:
+      runner_json: ${{ inputs.runner_json }}
+      image_refs: ${{ inputs.image_refs }}
+      trivy_version: ${{ inputs.trivy_version }}
+      artifact_name: security-suite-supply-chain
+      retention_days: ${{ inputs.retention_days }}
+
+  summary:
+    name: Security suite summary
+    needs: [profile, static-lint, filesystem-security, dependency-policy, sast, supply-chain]
+    if: always()
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: 5
+    steps:
+      - name: Write sanitized suite result
+        shell: bash
+        env:
+          PROFILE: ${{ inputs.profile }}
+          PROFILE_RESULT: ${{ needs.profile.result }}
+          STATIC_RESULT: ${{ needs.static-lint.result }}
+          FILESYSTEM_RESULT: ${{ needs.filesystem-security.result }}
+          DEPENDENCY_RESULT: ${{ needs.dependency-policy.result }}
+          SAST_RESULT: ${{ needs.sast.result }}
+          SUPPLY_CHAIN_RESULT: ${{ needs.supply-chain.result }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/security-suite
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          allowed_results = {"success", "failure", "cancelled", "skipped"}
+          jobs = {
+              "profile": os.environ["PROFILE_RESULT"],
+              "static_lint": os.environ["STATIC_RESULT"],
+              "filesystem_security": os.environ["FILESYSTEM_RESULT"],
+              "dependency_policy": os.environ["DEPENDENCY_RESULT"],
+              "sast": os.environ["SAST_RESULT"],
+              "supply_chain": os.environ["SUPPLY_CHAIN_RESULT"],
+          }
+          if any(value not in allowed_results for value in jobs.values()):
+              raise SystemExit("unexpected job result")
+          failed = [name for name, result in jobs.items() if result in {"failure", "cancelled"}]
+          payload = {
+              "schema_version": 1,
+              "profile": os.environ["PROFILE"],
+              "jobs": jobs,
+              "result": "failed" if failed else "passed",
+          }
+          Path("artifacts/security-suite/summary.json").write_text(
+              json.dumps(payload, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          if failed:
+              raise SystemExit("security suite failed: " + ", ".join(failed))
+          PY
+      - name: Upload suite summary
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: security-suite-summary
+          path: artifacts/security-suite
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}
