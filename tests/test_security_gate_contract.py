@@ -67,7 +67,13 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertLess(filesystem, sync)
         self.assertLess(build, image)
         self.assertLess(image, deploy)
-        self.assertIn("docker compose -f \"$COMPOSE_FILE\" images --quiet", content)
+        self.assertIn('docker compose -f "$COMPOSE_FILE" config --images', content)
+        self.assertIn("docker image inspect", content)
+        self.assertNotIn('docker compose -f "$COMPOSE_FILE" images --quiet', content)
+        self.assertIn(
+            "Configured Compose image is unavailable for required security scan",
+            content,
+        )
         self.assertIn("No Compose images available for required security scan", content)
         self.assertIn("Upload security evidence", content)
 

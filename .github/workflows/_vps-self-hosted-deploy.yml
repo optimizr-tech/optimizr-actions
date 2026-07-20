@@ -228,15 +228,37 @@ jobs:
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          mapfile -t image_refs < <(
-            sudo docker compose -f "$COMPOSE_FILE" images --quiet \
+
+          # `docker compose images` reports images attached to existing containers,
+          # which may still reference the previous production revision before
+          # rollout. Resolve the declarative Compose model instead, then bind each
+          # configured tag to the immutable local ID produced by the build above.
+          mapfile -t configured_images < <(
+            sudo docker compose -f "$COMPOSE_FILE" config --images \
               | sed '/^$/d' \
               | sort -u
           )
-          if [ "${#image_refs[@]}" -eq 0 ]; then
+          if [ "${#configured_images[@]}" -eq 0 ]; then
             echo "::error::No Compose images available for required security scan" >&2
             exit 1
           fi
+
+          image_ids=()
+          for image_ref in "${configured_images[@]}"; do
+            image_id="$(
+              sudo docker image inspect --format '{{.Id}}' "$image_ref" 2>/dev/null || true
+            )"
+            if [ -z "$image_id" ]; then
+              echo "::error::Configured Compose image is unavailable for required security scan: $image_ref" >&2
+              exit 1
+            fi
+            echo "Security image: $image_ref -> $image_id"
+            image_ids+=("$image_id")
+          done
+
+          mapfile -t image_refs < <(
+            printf '%s\n' "${image_ids[@]}" | sort -u
+          )
           {
             echo "refs<<OPTIMIZR_IMAGES"
             printf '%s\n' "${image_refs[@]}"
