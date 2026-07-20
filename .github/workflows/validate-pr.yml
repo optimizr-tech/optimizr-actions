@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout candidate
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           fetch-depth: 0
 
@@ -41,8 +41,13 @@ jobs:
       - name: Run full Python contract suite
         run: |
           set -euo pipefail
-          python3 -m unittest discover -v
-          python3 -m compileall scripts tests
+          test_log="$RUNNER_TEMP/optimizr-unittest.log"
+          if ! python3 -m unittest discover >"$test_log" 2>&1; then
+            tail -n 160 "$test_log" >&2
+            exit 1
+          fi
+          tail -n 8 "$test_log"
+          python3 -m compileall -q scripts tests
 
       - name: Check candidate diff
         env:
