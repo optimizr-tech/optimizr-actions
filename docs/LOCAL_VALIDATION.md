@@ -39,7 +39,7 @@ The adapter validates this document against the selected preset. Required servic
 
 `presets/fiscal.json` requires:
 
-- Python 3.14, Git and Docker;
+- Python 3.14, Git, Docker, Docker Compose and uv;
 - `uv.lock`;
 - real PostgreSQL 18, RabbitMQ 4.3, MinIO release images and Keycloak 26;
 - no Redis service;
@@ -72,7 +72,7 @@ The version-2 evidence stores:
 
 - preset and entrypoint SHA-256 hashes;
 - head/base commit identity and clean-worktree state;
-- Python/Git/Docker versions;
+- Python, Git, Docker, Docker Compose and uv versions;
 - lockfile path and SHA-256;
 - entrypoint path, argv hash, exit code and duration;
 - validated service versions/digests;
