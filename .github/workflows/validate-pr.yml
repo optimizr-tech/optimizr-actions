@@ -21,7 +21,9 @@ jobs:
       - name: Checkout candidate
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
-          fetch-depth: 0
+          fetch-depth: 1
+          persist-credentials: false
+          show-progress: false
 
       - name: Show Python version
         run: python3 --version
