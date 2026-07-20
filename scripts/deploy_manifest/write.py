@@ -12,7 +12,6 @@ import re
 import tempfile
 from typing import Any, Sequence
 
-
 _SCHEMA_VERSION = "1.0"
 _MAX_SCALAR_LENGTH = 512
 _SERVICE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -31,6 +30,7 @@ _IMAGE_KEYS = frozenset({"image", "digest"})
 _HEALTHCHECK_KEYS = frozenset({"name", "status", "target"})
 _HEALTHCHECK_STATUSES = frozenset({"passed", "failed", "skipped"})
 _MIGRATION_RESULTS = frozenset({"passed", "failed", "skipped", "not-reported"})
+_OPTIONAL_BUILD_RESULTS = frozenset({"passed", "failed", "skipped", "not-reported"})
 _DEPLOY_STATUSES = frozenset({"success", "failure"})
 
 
@@ -52,6 +52,7 @@ class ManifestConfig:
     images: Sequence[dict[str, str]]
     healthchecks: Sequence[dict[str, str]]
     migration_result: str = "not-reported"
+    optional_build_result: str = "not-reported"
     rollback_of: str | None = None
     retention: int = 50
     now: dt.datetime | None = None
@@ -191,6 +192,8 @@ def write_manifest(config: ManifestConfig) -> ManifestResult:
     )
     if config.migration_result not in _MIGRATION_RESULTS:
         raise ValueError("migration_result is not an allowed value")
+    if config.optional_build_result not in _OPTIONAL_BUILD_RESULTS:
+        raise ValueError("optional_build_result is not an allowed value")
 
     services = _validate_services(config.services)
     images = _validate_images(config.images)
@@ -219,6 +222,7 @@ def write_manifest(config: ManifestConfig) -> ManifestResult:
         "images": images,
         "healthchecks": healthchecks,
         "migration_result": config.migration_result,
+        "optional_build_result": config.optional_build_result,
         "rollback_of": rollback_of,
     }
     content = _manifest_bytes(payload)
@@ -287,7 +291,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--services-json", default="[]")
     parser.add_argument("--images-json", default="[]")
     parser.add_argument("--healthchecks-json", default="[]")
-    parser.add_argument("--migration-result", choices=sorted(_MIGRATION_RESULTS), default="not-reported")
+    parser.add_argument(
+        "--migration-result",
+        choices=sorted(_MIGRATION_RESULTS),
+        default="not-reported",
+    )
+    parser.add_argument(
+        "--optional-build-result",
+        choices=sorted(_OPTIONAL_BUILD_RESULTS),
+        default="not-reported",
+    )
     parser.add_argument("--rollback-of")
     parser.add_argument("--retention", type=int, default=50)
     args = parser.parse_args(argv)
@@ -307,6 +320,7 @@ def main(argv: list[str] | None = None) -> int:
         images=_parse_json_list("images_json", args.images_json),
         healthchecks=_parse_json_list("healthchecks_json", args.healthchecks_json),
         migration_result=args.migration_result,
+        optional_build_result=args.optional_build_result,
         rollback_of=args.rollback_of,
         retention=args.retention,
     )
