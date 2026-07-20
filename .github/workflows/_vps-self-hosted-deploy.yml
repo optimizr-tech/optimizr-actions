@@ -68,6 +68,36 @@ on:
         required: false
         type: string
         default: "168h"
+      security_require_image_scan:
+        description: "Exigir scan das imagens Compose após build e antes do rollout"
+        required: false
+        type: boolean
+        default: true
+      security_severity:
+        description: "Severidades bloqueantes do Trivy"
+        required: false
+        type: string
+        default: "HIGH,CRITICAL"
+      security_ignore_unfixed:
+        description: "Ignorar vulnerabilidades sem correção disponível (política explícita)"
+        required: false
+        type: boolean
+        default: false
+      security_exceptions_file:
+        description: "Arquivo JSON de exceções revisadas e com expiração"
+        required: false
+        type: string
+        default: ""
+      security_trivy_version:
+        description: "Versão controlada do Trivy"
+        required: false
+        type: string
+        default: "v0.70.0"
+      security_db_max_age_hours:
+        description: "Idade máxima aceita para o banco de vulnerabilidades"
+        required: false
+        type: number
+        default: 30
 
 jobs:
   deploy:
@@ -75,7 +105,7 @@ jobs:
       - self-hosted
       - Linux
       - ${{ inputs.runner_label }}
-    timeout-minutes: 15
+    timeout-minutes: 30
     environment:
       name: production
 
@@ -90,6 +120,19 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Security gate (filesystem)
+        uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@v1
+        with:
+          scan_type: fs
+          scan_ref: "."
+          severity: ${{ inputs.security_severity }}
+          ignore_unfixed: ${{ inputs.security_ignore_unfixed }}
+          exceptions_file: ${{ inputs.security_exceptions_file }}
+          trivy_version: ${{ inputs.security_trivy_version }}
+          db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
+          evidence_dir: artifacts/security-gate
 
       - name: Backup and sync files
         run: |
@@ -179,6 +222,40 @@ jobs:
             sudo docker compose -f "$COMPOSE_FILE" build
           fi
 
+      - name: Discover Compose images for security gate
+        id: security-images
+        if: inputs.security_require_image_scan
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          mapfile -t image_refs < <(
+            sudo docker compose -f "$COMPOSE_FILE" images --quiet \
+              | sed '/^$/d' \
+              | sort -u
+          )
+          if [ "${#image_refs[@]}" -eq 0 ]; then
+            echo "::error::No Compose images available for required security scan" >&2
+            exit 1
+          fi
+          {
+            echo "refs<<OPTIMIZR_IMAGES"
+            printf '%s\n' "${image_refs[@]}"
+            echo "OPTIMIZR_IMAGES"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Security gate (images)
+        if: inputs.security_require_image_scan
+        uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@v1
+        with:
+          scan_type: image
+          image_refs: ${{ steps.security-images.outputs.refs }}
+          severity: ${{ inputs.security_severity }}
+          ignore_unfixed: ${{ inputs.security_ignore_unfixed }}
+          exceptions_file: ${{ inputs.security_exceptions_file }}
+          trivy_version: ${{ inputs.security_trivy_version }}
+          db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
+          evidence_dir: artifacts/security-gate
+
       - name: Pre-deploy validation (nginx -t)
         if: inputs.pre_deploy_validation
         # Para repos nginx: roda `nginx -t` num container efêmero atado à
@@ -248,14 +325,18 @@ jobs:
           done
           echo "✅ $CONTAINER_NAME is healthy"
 
+      - name: Upload security evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: security-gate-${{ inputs.service_name }}-${{ github.run_id }}
+          path: artifacts/security-gate
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Cleanup runner + docker leftovers
         if: always() && inputs.run_prune
         # Higiene de disco — PRODUCTION_DEPLOY_HYGIENE.md seção "Higiene de Runner".
-        # Nota: lógica espelha .github/actions/docker-prune-safe. Composite NÃO é
-        # invocado aqui pra evitar SHA-coupling entre reusable workflow e composite
-        # action no mesmo repo (tag bump teria que atualizar ambos atomicamente).
-        # Bumps mantêm os dois em sincronia manualmente; image_age_threshold é o
-        # input compartilhado.
         env:
           IMAGE_AGE: ${{ inputs.image_age_threshold }}
         run: |

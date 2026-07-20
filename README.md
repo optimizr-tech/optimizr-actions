@@ -47,6 +47,19 @@ The portable local validation contract and Fiscal preset are documented in
 The canonical semantic-release configuration emits an organization-compliant
 `:bookmark_tabs: chore(release): <version> [skip ci]` commit subject.
 
+## Security gates
+
+The portable [`security-gate`](.github/actions/security-gate/action.yml) action
+and [`_security-gate.yml`](.github/workflows/_security-gate.yml) reusable run the
+same blocking Trivy policy on GitHub-hosted or trusted self-hosted runners. The
+VPS deploy reusables require filesystem validation before synchronization and
+built-image validation before rollout, so `[skip-tests]` cannot become a deploy
+without security validation.
+
+Inputs, exception policy, evidence, runner requirements, billing-outage
+operation, migration, and rollback are documented in
+[`docs/SECURITY_GATE.md`](docs/SECURITY_GATE.md).
+
 ## Security
 
 Report vulnerabilities privately as described in
