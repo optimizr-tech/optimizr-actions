@@ -12,6 +12,11 @@ on:
         required: false
         type: string
         default: '["ubuntu-latest"]'
+      dependency_working_directory:
+        description: Repository-relative project directory used by dependency/license policy
+        required: false
+        type: string
+        default: "."
       sast_baseline_file:
         description: Optional repository-relative SAST baseline JSON
         required: false
@@ -130,6 +135,7 @@ jobs:
     uses: optimizr-tech/optimizr-actions/.github/workflows/_dependency-policy.yml@v1
     with:
       runner_json: ${{ inputs.runner_json }}
+      working_directory: ${{ inputs.dependency_working_directory }}
       policy_file: ${{ inputs.dependency_policy_file }}
       trivy_version: ${{ inputs.trivy_version }}
       artifact_name: security-suite-dependencies
