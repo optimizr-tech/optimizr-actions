@@ -1,0 +1,20 @@
+name: Optimizr Node project test
+description: Execute bounded npm/pnpm project validation without shell interpolation
+inputs:
+  project_json:
+    description: Normalized project object produced by the reusable workflow
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Execute project phases
+      shell: bash
+      env:
+        PROJECT_JSON: ${{ inputs.project_json }}
+      run: |
+        set -euo pipefail
+        action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        python3 "$action_root/scripts/node_project/runner.py" \
+          --project-json "$PROJECT_JSON" \
+          --workspace "$GITHUB_WORKSPACE" \
+          --evidence-root "$GITHUB_WORKSPACE/artifacts/node-project"
