@@ -1,6 +1,10 @@
 name: Optimizr dependency policy
 description: Validate Python/Node lockfiles and enforce Trivy vulnerability and license policy
 inputs:
+  working_directory:
+    description: Repository-relative project directory containing the package manifest and lockfile
+    required: false
+    default: "."
   policy_file:
     description: Optional repository-relative dependency policy JSON
     required: false
@@ -10,7 +14,7 @@ inputs:
     required: false
     default: v0.70.0
   evidence_dir:
-    description: Sanitized evidence directory
+    description: Sanitized repository-relative evidence directory
     required: false
     default: artifacts/dependency-policy
 outputs:
@@ -20,6 +24,26 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Resolve confined dependency root
+      id: root
+      shell: bash
+      env:
+        WORKING_DIRECTORY: ${{ inputs.working_directory }}
+      run: |
+        set -euo pipefail
+        case "$WORKING_DIRECTORY" in
+          ""|/*|*".."*) echo "::error::working_directory must be repository relative"; exit 2 ;;
+        esac
+        candidate="$GITHUB_WORKSPACE/$WORKING_DIRECTORY"
+        root="$(realpath -e "$candidate")"
+        case "$root" in
+          "$GITHUB_WORKSPACE"|"$GITHUB_WORKSPACE"/*) ;;
+          *) echo "::error::working_directory resolves outside the repository"; exit 2 ;;
+        esac
+        if [ ! -d "$root" ] || [ -L "$candidate" ]; then
+          echo "::error::working_directory must be a non-symlink directory"; exit 2
+        fi
+        echo "root=$root" >> "$GITHUB_OUTPUT"
     - name: Install controlled Trivy
       uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567
       with:
@@ -29,11 +53,13 @@ runs:
       shell: bash
       env:
         EVIDENCE_DIR: ${{ inputs.evidence_dir }}
+        DEPENDENCY_ROOT: ${{ steps.root.outputs.root }}
       run: |
         set -euo pipefail
         action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
         policy_tool="$action_root/scripts/dependency_policy/policy.py"
-        mapfile -t ecosystems < <(python3 "$policy_tool" detect --root "$GITHUB_WORKSPACE")
+        mapfile -t ecosystems < <(python3 "$policy_tool" detect --root "$DEPENDENCY_ROOT")
+        cd "$DEPENDENCY_ROOT"
         for ecosystem in "${ecosystems[@]}"; do
           case "$ecosystem" in
             python-uv)
@@ -53,7 +79,7 @@ runs:
               git diff --exit-code -- pnpm-lock.yaml
               ;;
             node-npm)
-              python3 "$policy_tool" validate-npm-lock --root "$GITHUB_WORKSPACE"
+              python3 "$policy_tool" validate-npm-lock --root "$DEPENDENCY_ROOT"
               npm install --package-lock-only --ignore-scripts --no-audit --no-fund
               git diff --exit-code -- package-lock.json
               ;;
@@ -66,11 +92,12 @@ runs:
             *) echo "::error::unsupported ecosystem: $ecosystem"; exit 2 ;;
           esac
         done
-        mkdir -p "$EVIDENCE_DIR"
+        mkdir -p "$GITHUB_WORKSPACE/$EVIDENCE_DIR"
     - name: Generate dependency vulnerability and license report
       shell: bash
       env:
         EVIDENCE_DIR: ${{ inputs.evidence_dir }}
+        DEPENDENCY_ROOT: ${{ steps.root.outputs.root }}
       run: |
         set -euo pipefail
         trivy filesystem \
@@ -78,13 +105,14 @@ runs:
           --license-full \
           --format json \
           --exit-code 0 \
-          --output "$EVIDENCE_DIR/trivy-dependencies.json" \
-          "$GITHUB_WORKSPACE"
+          --output "$GITHUB_WORKSPACE/$EVIDENCE_DIR/trivy-dependencies.json" \
+          "$DEPENDENCY_ROOT"
     - name: Enforce reviewed dependency policy
       shell: bash
       env:
         POLICY_FILE: ${{ inputs.policy_file }}
         EVIDENCE_DIR: ${{ inputs.evidence_dir }}
+        DEPENDENCY_ROOT: ${{ steps.root.outputs.root }}
       run: |
         set -euo pipefail
         action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
@@ -101,9 +129,9 @@ runs:
           esac
         fi
         python3 "$action_root/scripts/dependency_policy/policy.py" evaluate \
-          --root "$GITHUB_WORKSPACE" \
-          --report "$EVIDENCE_DIR/trivy-dependencies.json" \
+          --root "$DEPENDENCY_ROOT" \
+          --report "$GITHUB_WORKSPACE/$EVIDENCE_DIR/trivy-dependencies.json" \
           --policy "$policy" \
-          --output "$EVIDENCE_DIR/evidence.json" \
+          --output "$GITHUB_WORKSPACE/$EVIDENCE_DIR/evidence.json" \
           --repository "$GITHUB_REPOSITORY" \
           --head-sha "$GITHUB_SHA"
