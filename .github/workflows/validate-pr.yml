@@ -41,15 +41,27 @@ jobs:
         run: python3 -m unittest tests.test_pr_validation_workflow -v
 
       - name: Run full Python contract suite
+        id: full-suite
+        continue-on-error: true
         run: |
           set -euo pipefail
           test_log="$RUNNER_TEMP/optimizr-unittest.log"
-          if ! python3 -m unittest discover >"$test_log" 2>&1; then
-            tail -n 160 "$test_log" >&2
-            exit 1
-          fi
+          python3 -m unittest discover >"$test_log" 2>&1
           tail -n 8 "$test_log"
           python3 -m compileall -q scripts tests
+
+      - name: Upload failed suite diagnostics
+        if: steps.full-suite.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: validation-failure-${{ github.run_id }}
+          path: ${{ runner.temp }}/optimizr-unittest.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Enforce full suite result
+        if: steps.full-suite.outcome == 'failure'
+        run: exit 1
 
       - name: Check candidate diff
         env:
