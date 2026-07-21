@@ -65,11 +65,14 @@ jobs:
 
       - name: Check candidate diff
         env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          git fetch --no-tags origin "$BASE_REF"
-          git diff --check "origin/${BASE_REF}...HEAD"
+          if [ -z "$BASE_SHA" ]; then
+            BASE_SHA="$(git rev-parse HEAD^)"
+          fi
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          git diff --check "$BASE_SHA" HEAD
 
       - name: Run actionlint
         run: |
