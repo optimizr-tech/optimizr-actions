@@ -12,11 +12,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Checkout candidate
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-        with:
-          persist-credentials: false
-          show-progress: false
+      - name: Fetch exact candidate
+        env:
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git init -q "$GITHUB_WORKSPACE"
+          git -C "$GITHUB_WORKSPACE" remote add origin https://github.com/optimizr-tech/optimizr-actions.git
+          git -C "$GITHUB_WORKSPACE" fetch -q --depth=1 origin "$CANDIDATE_SHA"
+          git -C "$GITHUB_WORKSPACE" checkout -q FETCH_HEAD
 
       - name: Run isolated actionlint
         run: |
