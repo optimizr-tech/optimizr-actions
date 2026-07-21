@@ -28,7 +28,13 @@ class PullRequestValidationWorkflowTests(unittest.TestCase):
         self.assertIn("python3 -m compileall", content)
         self.assertIn("scripts tests", content)
         self.assertIn("git diff --check", content)
-        self.assertIn("tail -n 160", content)
+        self.assertIn("continue-on-error: true", content)
+        self.assertIn("Upload failed suite diagnostics", content)
+        self.assertIn("steps.full-suite.outcome == 'failure'", content)
+        self.assertIn(
+            "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            content,
+        )
         self.assertIn(
             "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
             content,
