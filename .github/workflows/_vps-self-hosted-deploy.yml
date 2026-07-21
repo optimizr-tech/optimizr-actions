@@ -1,7 +1,4 @@
-# Reusable: deploy a self-hosted runner no VPS.
-# Consome via: uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@<SHA>
-# Veja docs/CI_STANDARDS.md + docs/CI_RUNBOOK.md.
-
+# Reusable deployment for one Compose stack on a trusted VPS runner.
 name: _vps-self-hosted-deploy
 
 concurrency:
@@ -12,103 +9,114 @@ on:
   workflow_call:
     inputs:
       service_name:
-        description: "Nome do repo (usado como deploy path: /opt/optimizr/<service_name>)"
+        description: Repository/deploy directory name under /opt/optimizr
         required: true
         type: string
       container_name:
-        description: "Nome do container Docker para healthcheck"
+        description: Primary Docker container used for health verification
         required: true
         type: string
       runner_label:
-        description: "Label do self-hosted runner (sem 'self-hosted, Linux' — só o curto)"
+        description: Short trusted self-hosted runner label
         required: true
         type: string
       compose_file:
-        description: "Compose file path (relativo a $DEPLOY_PATH)"
+        description: Compose file relative to the deployment directory
         required: false
         type: string
         default: docker-compose.yml
       pre_deploy_validation:
-        description: "Rodar 'docker compose run nginx -t' antes do up (apenas para nginx)"
+        description: Run nginx -t before rollout
         required: false
         type: boolean
         default: false
       build_image:
-        description: "Rodar docker compose build antes do up"
+        description: Build Compose images before rollout
         required: false
         type: boolean
         default: true
       build_no_cache:
-        description: "Passar --no-cache no build (efetivo apenas se build_image=true)"
+        description: Build without cache when build_image is enabled
         required: false
         type: boolean
         default: true
       health_timeout:
-        description: "Segundos esperando container ficar healthy"
+        description: Seconds to wait for the primary container to become healthy
         required: false
         type: number
         default: 120
       ensure_networks:
-        description: "Networks Docker a garantir (espaço-separado)"
+        description: Whitespace-separated Docker networks to ensure
         required: false
         type: string
-        default: "optimizr_infra"
+        default: optimizr_infra
       ensure_volumes:
-        description: "Volumes Docker a garantir (espaço-separado)"
+        description: Whitespace-separated Docker volumes to ensure
         required: false
         type: string
         default: ""
       run_prune:
-        description: "Rodar docker prune ao fim (skip se repo não builda imagem)"
+        description: Run Docker and runner cleanup after deployment
         required: false
         type: boolean
         default: true
       image_age_threshold:
-        description: "Idade mínima pra image prune untagged (Docker filter, ex 168h). Mantém em sincronia com .github/actions/docker-prune-safe."
+        description: Docker age filter used by image prune
         required: false
         type: string
-        default: "168h"
+        default: 168h
       security_require_image_scan:
-        description: "Exigir scan das imagens Compose após build e antes do rollout"
+        description: Require scanning built Compose images before rollout
         required: false
         type: boolean
         default: true
       security_severity:
-        description: "Severidades bloqueantes do Trivy"
+        description: Blocking Trivy severities
         required: false
         type: string
-        default: "HIGH,CRITICAL"
+        default: HIGH,CRITICAL
       security_ignore_unfixed:
-        description: "Ignorar vulnerabilidades sem correção disponível (política explícita)"
+        description: Ignore vulnerabilities without an available fix
         required: false
         type: boolean
         default: false
       security_exceptions_file:
-        description: "Arquivo JSON de exceções revisadas e com expiração"
+        description: Reviewed expiring security exceptions JSON
         required: false
         type: string
         default: ""
       security_trivy_version:
-        description: "Versão controlada do Trivy"
+        description: Controlled Trivy release
         required: false
         type: string
-        default: "v0.70.0"
+        default: v0.70.0
       security_db_max_age_hours:
-        description: "Idade máxima aceita para o banco de vulnerabilidades"
+        description: Maximum accepted vulnerability database age
         required: false
         type: number
         default: 30
+      deploy_manifest_enabled:
+        description: Record sanitized immutable success/failure manifests
+        required: false
+        type: boolean
+        default: false
+      deploy_manifest_retention:
+        description: Immutable deploy manifests retained on the VPS
+        required: false
+        type: number
+        default: 50
+      deploy_manifest_migration_result:
+        description: passed, failed, skipped or not-reported
+        required: false
+        type: string
+        default: not-reported
 
 jobs:
   deploy:
-    runs-on:
-      - self-hosted
-      - Linux
-      - ${{ inputs.runner_label }}
+    runs-on: [self-hosted, Linux, ${{ inputs.runner_label }}]
     timeout-minutes: 30
     environment:
       name: production
-
     env:
       DEPLOY_PATH: /opt/optimizr/${{ inputs.service_name }}
       CONTAINER_NAME: ${{ inputs.container_name }}
@@ -117,7 +125,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -126,7 +134,7 @@ jobs:
         uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@v1
         with:
           scan_type: fs
-          scan_ref: "."
+          scan_ref: .
           severity: ${{ inputs.security_severity }}
           ignore_unfixed: ${{ inputs.security_ignore_unfixed }}
           exceptions_file: ${{ inputs.security_exceptions_file }}
@@ -134,135 +142,100 @@ jobs:
           db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
           evidence_dir: artifacts/security-gate
 
-      - name: Backup and sync files
+      - name: Backup and synchronize files
+        shell: bash
         run: |
           set -euo pipefail
-
-          # Backups intentionally exclude runtime credentials. The deployment
-          # directory contains .env and may also contain TLS/private-key material.
           BACKUP_ROOT="/opt/optimizr/backups/${{ inputs.service_name }}/deploys"
           sudo mkdir -p "$DEPLOY_PATH" "$BACKUP_ROOT"
           sudo chown -R "$(id -un):$(id -gn)" "$DEPLOY_PATH" "$BACKUP_ROOT"
           sudo chmod 750 "$BACKUP_ROOT"
 
           if [ -d "$DEPLOY_PATH" ] && [ "$(ls -A "$DEPLOY_PATH" 2>/dev/null)" ]; then
-            BACKUP_DATE=$(date -u +%Y%m%dT%H%M%SZ)
-            BACKUP_FILE="${BACKUP_ROOT}/${BACKUP_DATE}.tar.gz"
+            backup_file="${BACKUP_ROOT}/$(date -u +%Y%m%dT%H%M%SZ).tar.gz"
             if (
               umask 077
               tar \
-                --exclude='.env' \
-                --exclude='*/.env' \
-                --exclude='.env.*' \
-                --exclude='*/.env.*' \
-                --exclude='*.pem' \
-                --exclude='*.key' \
-                --exclude='*.p12' \
-                --exclude='*.pfx' \
-                -czf "$BACKUP_FILE" \
-                -C "$DEPLOY_PATH" . 2>/dev/null
+                --exclude='.env' --exclude='*/.env' \
+                --exclude='.env.*' --exclude='*/.env.*' \
+                --exclude='*.pem' --exclude='*.key' \
+                --exclude='*.p12' --exclude='*.pfx' \
+                -czf "$backup_file" -C "$DEPLOY_PATH" . 2>/dev/null
             ); then
-              chmod 600 "$BACKUP_FILE"
-              echo "✅ Secret-free configuration backed up to $BACKUP_FILE"
+              chmod 600 "$backup_file"
+              echo "Secret-free configuration backup created"
             else
-              rm -f "$BACKUP_FILE"
-              echo "⚠️  Backup failed, continuing"
+              rm -f "$backup_file"
+              echo "::warning::Configuration backup failed; deployment continues"
             fi
           fi
 
-          # `rsync --delete` faz o destino refletir o source exatamente — cobre
-          # arquivos novos, removidos e dotfiles (rm -rf */* não pega dotfiles).
-          # .deployignore na raiz do consumer controla o que vai pra VPS
-          # (PRODUCTION_DEPLOY_HYGIENE.md).
-          # `.env` excluido pra preservar arquivo escrito pelo caller (pattern
-          # canonico: caller tem job `prepare-env` que injeta secrets via
-          # printf+chmod 600 antes deste reusable rodar — ver
-          # CI_STANDARDS.md secao "Secret injection").
+          rsync_args=(
+            -a --delete
+            --exclude=.git
+            --exclude=.github
+            --exclude=.env
+            --exclude='*.tar.gz'
+            --exclude=backup/
+          )
           if [ -f "$GITHUB_WORKSPACE/.deployignore" ]; then
-            rsync -a --delete \
-              --exclude='.git' \
-              --exclude='.github' \
-              --exclude='.env' \
-              --exclude='*.tar.gz' \
-              --exclude='backup/' \
-              --exclude-from="$GITHUB_WORKSPACE/.deployignore" \
-              "$GITHUB_WORKSPACE/" "$DEPLOY_PATH/"
-          else
-            rsync -a --delete \
-              --exclude='.git' \
-              --exclude='.github' \
-              --exclude='.env' \
-              --exclude='*.tar.gz' \
-              --exclude='backup/' \
-              "$GITHUB_WORKSPACE/" "$DEPLOY_PATH/"
+            rsync_args+=(--exclude-from="$GITHUB_WORKSPACE/.deployignore")
           fi
-
+          rsync "${rsync_args[@]}" "$GITHUB_WORKSPACE/" "$DEPLOY_PATH/"
           find "$DEPLOY_PATH" -name '*.sh' -exec chmod +x {} \;
-          echo "✅ Files synced to $DEPLOY_PATH"
 
       - name: Ensure networks and volumes exist
         if: inputs.ensure_networks != '' || inputs.ensure_volumes != ''
+        shell: bash
         run: |
           set -euo pipefail
-          for net in ${{ inputs.ensure_networks }}; do
-            sudo docker network inspect "$net" >/dev/null 2>&1 || sudo docker network create "$net"
+          for network in ${{ inputs.ensure_networks }}; do
+            sudo docker network inspect "$network" >/dev/null 2>&1 || sudo docker network create "$network"
           done
-          for vol in ${{ inputs.ensure_volumes }}; do
-            sudo docker volume inspect "$vol" >/dev/null 2>&1 || sudo docker volume create "$vol"
+          for volume in ${{ inputs.ensure_volumes }}; do
+            sudo docker volume inspect "$volume" >/dev/null 2>&1 || sudo docker volume create "$volume"
           done
 
-      - name: Build image
+      - name: Build images
         if: inputs.build_image
+        shell: bash
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          if [ "${{ inputs.build_no_cache }}" = "true" ]; then
+          if [ "${{ inputs.build_no_cache }}" = true ]; then
             sudo docker compose -f "$COMPOSE_FILE" build --no-cache
           else
             sudo docker compose -f "$COMPOSE_FILE" build
           fi
 
-      - name: Discover Compose images for security gate
+      - name: Discover declarative Compose images
         id: security-images
         if: inputs.security_require_image_scan
+        shell: bash
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
-
-          # `docker compose images` reports images attached to existing containers,
-          # which may still reference the previous production revision before
-          # rollout. Resolve the declarative Compose model instead, then bind each
-          # configured tag to the immutable local ID produced by the build above.
           mapfile -t configured_images < <(
-            sudo docker compose -f "$COMPOSE_FILE" config --images \
-              | sed '/^$/d' \
-              | sort -u
+            sudo docker compose -f "$COMPOSE_FILE" config --images | sed '/^$/d' | sort -u
           )
-          if [ "${#configured_images[@]}" -eq 0 ]; then
+          [ "${#configured_images[@]}" -gt 0 ] || {
             echo "::error::No Compose images available for required security scan" >&2
             exit 1
-          fi
-
+          }
           image_ids=()
           for image_ref in "${configured_images[@]}"; do
-            image_id="$(
-              sudo docker image inspect --format '{{.Id}}' "$image_ref" 2>/dev/null || true
-            )"
-            if [ -z "$image_id" ]; then
-              echo "::error::Configured Compose image is unavailable for required security scan: $image_ref" >&2
+            image_id="$(sudo docker image inspect --format '{{.Id}}' "$image_ref" 2>/dev/null || true)"
+            [ -n "$image_id" ] || {
+              echo "::error::Configured image unavailable after build: $image_ref" >&2
               exit 1
-            fi
-            echo "Security image: $image_ref -> $image_id"
+            }
             image_ids+=("$image_id")
           done
-
-          mapfile -t image_refs < <(
-            printf '%s\n' "${image_ids[@]}" | sort -u
-          )
+          mapfile -t image_ids < <(printf '%s\n' "${image_ids[@]}" | sort -u)
           {
-            echo "refs<<OPTIMIZR_IMAGES"
-            printf '%s\n' "${image_refs[@]}"
-            echo "OPTIMIZR_IMAGES"
+            echo 'refs<<OPTIMIZR_IMAGES'
+            printf '%s\n' "${image_ids[@]}"
+            echo OPTIMIZR_IMAGES
           } >> "$GITHUB_OUTPUT"
 
       - name: Security gate (images)
@@ -280,38 +253,23 @@ jobs:
 
       - name: Pre-deploy validation (nginx -t)
         if: inputs.pre_deploy_validation
-        # Para repos nginx: roda `nginx -t` num container efêmero atado à
-        # rede real ANTES de tocar o container de produção. Falha aqui mantém
-        # o container atual servindo.
+        shell: bash
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          echo "🧪 Pre-deploy validation: nginx -t..."
-          sudo docker compose -f "$COMPOSE_FILE" run --rm --no-deps --entrypoint "" nginx nginx -t
-          echo "✅ Pre-deploy validation passed"
+          sudo docker compose -f "$COMPOSE_FILE" run --rm --no-deps --entrypoint '' nginx nginx -t
 
-      - name: Deploy
+      - name: Roll out and verify primary container
+        shell: bash
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
-
-          # `docker compose up` can fail before the healthcheck loop starts
-          # (for example when a one-shot init service exits non-zero). Capture
-          # the failing service logs here while the containers still exist;
-          # otherwise callers only see Compose's generic exit code.
           set +e
           sudo docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
           compose_status=$?
           set -e
           if [ "$compose_status" -ne 0 ]; then
-            echo "❌ docker compose up failed (exit $compose_status)" >&2
-            echo "::group::Compose service status" >&2
             sudo docker compose -f "$COMPOSE_FILE" ps -a >&2 || true
-            echo "::endgroup::" >&2
-
-            # Keep this reusable workflow service-agnostic. Inspect only
-            # exited containers and print logs solely for non-zero exits,
-            # avoiding unrelated application logs and service-name coupling.
             mapfile -t exited_services < <(
               sudo docker compose -f "$COMPOSE_FILE" ps -a --status exited --services 2>/dev/null
             )
@@ -319,72 +277,77 @@ jobs:
               container_id="$(sudo docker compose -f "$COMPOSE_FILE" ps -a -q "$service" 2>/dev/null || true)"
               [ -n "$container_id" ] || continue
               service_exit="$(sudo docker inspect -f '{{.State.ExitCode}}' "$container_id" 2>/dev/null || echo unknown)"
-              [ "$service_exit" != "0" ] || continue
-              echo "::group::Logs for failed service: $service (exit $service_exit)" >&2
+              [ "$service_exit" != 0 ] || continue
               sudo docker compose -f "$COMPOSE_FILE" logs --no-color --tail=200 "$service" >&2 || true
-              echo "::endgroup::" >&2
             done
             exit "$compose_status"
           fi
 
-          echo "Waiting for $CONTAINER_NAME to become healthy..."
-          counter=0
-          until [ "$(sudo docker inspect -f '{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null)" = "healthy" ]; do
-            if [ "$counter" -ge "$HEALTH_TIMEOUT" ]; then
-              echo "❌ Timed out waiting for $CONTAINER_NAME to become healthy" >&2
-              sudo docker compose -f "$COMPOSE_FILE" logs --tail=50 >&2
-              exit 1
-            fi
+          elapsed=0
+          while [ "$elapsed" -lt "$HEALTH_TIMEOUT" ]; do
             status="$(sudo docker inspect -f '{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo 'not found')"
-            if [ "$status" = "not found" ] || [ "$status" = "" ]; then
-              echo "❌ Container not found" >&2
-              sudo docker compose -f "$COMPOSE_FILE" logs --tail=50 >&2
+            if [ "$status" = healthy ]; then
+              echo "$CONTAINER_NAME is healthy"
+              exit 0
+            fi
+            if [ "$status" = 'not found' ] || [ -z "$status" ]; then
+              sudo docker compose -f "$COMPOSE_FILE" logs --tail=50 >&2 || true
               exit 1
             fi
             sleep 5
-            counter=$((counter + 5))
-            echo "  ...${counter}s (status: $status)"
+            elapsed=$((elapsed + 5))
           done
-          echo "✅ $CONTAINER_NAME is healthy"
+          sudo docker compose -f "$COMPOSE_FILE" logs --tail=50 >&2 || true
+          exit 1
 
       - name: Upload security evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: security-gate-${{ inputs.service_name }}-${{ github.run_id }}
           path: artifacts/security-gate
           if-no-files-found: error
           retention-days: 30
 
-      - name: Cleanup runner + docker leftovers
+      - name: Cleanup runner and Docker leftovers
         if: always() && inputs.run_prune
-        # Higiene de disco — PRODUCTION_DEPLOY_HYGIENE.md seção "Higiene de Runner".
+        shell: bash
         env:
           IMAGE_AGE: ${{ inputs.image_age_threshold }}
         run: |
           set -euo pipefail
-          echo "::group::Disk before cleanup"
-          df -h / || true
-          sudo docker system df || true
-          echo "::endgroup::"
-
           sudo docker container prune -f
           sudo docker image prune -f
           sudo docker image prune -af --filter "until=${IMAGE_AGE}"
           sudo docker builder prune -f
-
           if [ -n "${RUNNER_WORKSPACE:-}" ]; then
             runner_root="$(dirname "$RUNNER_WORKSPACE")"
             sudo find "$runner_root/_temp" -mindepth 1 -maxdepth 1 -mmin +60 -exec rm -rf {} + 2>/dev/null || true
           fi
 
-          echo "::group::Disk after cleanup"
-          df -h / || true
-          sudo docker system df || true
-          echo "::endgroup::"
-
-      - name: Clean Runner Workspace
+      - name: Clean runner workspace
         if: always() && !inputs.run_prune
-        # `find -mindepth 1 -delete` cobre dotfiles (rm -rf */* não cobre)
-        # e quoting protege de espaços no path.
+        shell: bash
         run: sudo find "$GITHUB_WORKSPACE" -mindepth 1 -delete
+
+      - name: Checkout coherent deploy-manifest recorder
+        if: always() && inputs.deploy_manifest_enabled
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .optimizr-actions-manifest
+          persist-credentials: false
+
+      - name: Record sanitized deployment manifest
+        if: always() && inputs.deploy_manifest_enabled
+        uses: ./.optimizr-actions-manifest/.github/actions/record-deploy-manifest
+        with:
+          deploy_path: ${{ env.DEPLOY_PATH }}
+          compose_file: ${{ inputs.compose_file }}
+          container_name: ${{ inputs.container_name }}
+          docker_mode: sudo
+          status: ${{ job.status == 'success' && 'success' || 'failure' }}
+          migration_result: ${{ inputs.deploy_manifest_migration_result }}
+          optional_build_result: not-reported
+          retention: ${{ inputs.deploy_manifest_retention }}

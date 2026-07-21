@@ -8,119 +8,131 @@ on:
   workflow_call:
     inputs:
       service_name:
-        description: "Nome do repo (/opt/optimizr/<service_name>)"
+        description: Repository/deploy directory name under /opt/optimizr
         required: true
         type: string
       container_name:
-        description: "Container Docker para healthcheck pos-deploy"
+        description: Primary Docker container used for health verification
         required: true
         type: string
       runner_label:
-        description: "Label curto do self-hosted runner"
+        description: Short trusted self-hosted runner label
         required: true
         type: string
       compose_file:
-        description: "Compose file relativo a DEPLOY_PATH"
+        description: Compose file relative to the deployment directory
         required: false
         type: string
         default: docker-compose.yml
       pre_deploy_commands:
-        description: "Shell multiline apos rsync"
+        description: Existing consumer-owned shell commands after synchronization
         required: false
         type: string
         default: ""
       services_build:
-        description: "Servicos obrigatorios para build"
+        description: Whitespace-separated required services to build
         required: false
         type: string
         default: ""
       services_build_optional:
-        description: "Servicos opcionais para build"
+        description: Whitespace-separated optional services to build
         required: false
         type: string
         default: ""
       services_up:
-        description: "Servicos para docker compose up"
+        description: Whitespace-separated services to roll out
         required: false
         type: string
         default: ""
       compose_up_flags:
-        description: "Flags extras para compose up"
+        description: Existing caller-owned extra Compose up flags
         required: false
         type: string
         default: ""
       post_deploy_commands:
-        description: "Shell multiline apos healthcheck"
+        description: Existing consumer-owned shell commands after health verification
         required: false
         type: string
         default: ""
       health_timeout:
-        description: "Segundos esperando container healthy"
+        description: Seconds to wait for the primary container to become healthy
         required: false
         type: number
         default: 120
       ensure_networks:
-        description: "Networks Docker a garantir"
+        description: Whitespace-separated Docker networks to ensure
         required: false
         type: string
-        default: "optimizr_infra"
+        default: optimizr_infra
       ensure_volumes:
-        description: "Volumes Docker a garantir"
+        description: Whitespace-separated Docker volumes to ensure
         required: false
         type: string
         default: ""
       run_prune:
-        description: "Rodar docker prune ao fim"
+        description: Run Docker and runner cleanup after deployment
         required: false
         type: boolean
         default: true
       image_age_threshold:
-        description: "Idade minima para image prune"
+        description: Docker age filter used by image prune
         required: false
         type: string
-        default: "168h"
+        default: 168h
       timeout_minutes:
-        description: "Timeout maximo do job"
+        description: Maximum deployment job duration
         required: false
         type: number
         default: 20
       security_require_image_scan:
-        description: "Exigir scan das imagens Compose após build e antes do rollout"
+        description: Require scanning built Compose images before rollout
         required: false
         type: boolean
         default: true
       security_severity:
-        description: "Severidades bloqueantes do Trivy"
+        description: Blocking Trivy severities
         required: false
         type: string
-        default: "HIGH,CRITICAL"
+        default: HIGH,CRITICAL
       security_ignore_unfixed:
-        description: "Ignorar vulnerabilidades sem correção disponível (política explícita)"
+        description: Ignore vulnerabilities without an available fix
         required: false
         type: boolean
         default: false
       security_exceptions_file:
-        description: "Arquivo JSON de exceções revisadas e com expiração"
+        description: Reviewed expiring security exceptions JSON
         required: false
         type: string
         default: ""
       security_trivy_version:
-        description: "Versão controlada do Trivy"
+        description: Controlled Trivy release
         required: false
         type: string
-        default: "v0.70.0"
+        default: v0.70.0
       security_db_max_age_hours:
-        description: "Idade máxima aceita para o banco de vulnerabilidades"
+        description: Maximum accepted vulnerability database age
         required: false
         type: number
         default: 30
+      deploy_manifest_enabled:
+        description: Record sanitized immutable success/failure manifests
+        required: false
+        type: boolean
+        default: false
+      deploy_manifest_retention:
+        description: Immutable deploy manifests retained on the VPS
+        required: false
+        type: number
+        default: 50
+      deploy_manifest_migration_result:
+        description: passed, failed, skipped or not-reported
+        required: false
+        type: string
+        default: not-reported
 
 jobs:
   deploy:
-    runs-on:
-      - self-hosted
-      - Linux
-      - ${{ inputs.runner_label }}
+    runs-on: [self-hosted, Linux, ${{ inputs.runner_label }}]
     timeout-minutes: ${{ inputs.timeout_minutes }}
     environment:
       name: production
@@ -141,7 +153,7 @@ jobs:
         uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@v1
         with:
           scan_type: fs
-          scan_ref: "."
+          scan_ref: .
           severity: ${{ inputs.security_severity }}
           ignore_unfixed: ${{ inputs.security_ignore_unfixed }}
           exceptions_file: ${{ inputs.security_exceptions_file }}
@@ -149,7 +161,8 @@ jobs:
           db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
           evidence_dir: artifacts/security-gate
 
-      - name: Backup and sync files
+      - name: Backup and synchronize files
+        shell: bash
         run: |
           set -euo pipefail
           BACKUP_ROOT="/opt/optimizr/backups/${{ inputs.service_name }}/deploys"
@@ -158,29 +171,24 @@ jobs:
           sudo chmod 750 "$BACKUP_ROOT"
 
           if [ -d "$DEPLOY_PATH" ] && [ "$(ls -A "$DEPLOY_PATH" 2>/dev/null)" ]; then
-            BACKUP_DATE=$(date -u +%Y%m%dT%H%M%SZ)
+            backup_file="${BACKUP_ROOT}/$(date -u +%Y%m%dT%H%M%SZ).tar.gz"
             if (
               umask 077
               tar \
-                --exclude='.env' \
-                --exclude='*/.env' \
-                --exclude='.env.*' \
-                --exclude='*/.env.*' \
-                --exclude='*.pem' \
-                --exclude='*.key' \
-                --exclude='*.p12' \
-                --exclude='*.pfx' \
-                -czf "${BACKUP_ROOT}/${BACKUP_DATE}.tar.gz" \
-                -C "$DEPLOY_PATH" . 2>/dev/null
+                --exclude='.env' --exclude='*/.env' \
+                --exclude='.env.*' --exclude='*/.env.*' \
+                --exclude='*.pem' --exclude='*.key' \
+                --exclude='*.p12' --exclude='*.pfx' \
+                -czf "$backup_file" -C "$DEPLOY_PATH" . 2>/dev/null
             ); then
-              sudo chmod 600 "${BACKUP_ROOT}/${BACKUP_DATE}.tar.gz"
-              echo "Secret-free backup created: ${BACKUP_ROOT}/${BACKUP_DATE}.tar.gz"
+              chmod 600 "$backup_file"
             else
-              echo "::warning::Backup failed; continuing deploy"
+              rm -f "$backup_file"
+              echo "::warning::Configuration backup failed; deployment continues"
             fi
           fi
 
-          RSYNC_ARGS=(
+          rsync_args=(
             -a --delete
             --exclude=.git
             --exclude=.github
@@ -189,24 +197,26 @@ jobs:
             --exclude=backup/
           )
           if [ -f "$GITHUB_WORKSPACE/.deployignore" ]; then
-            RSYNC_ARGS+=(--exclude-from="$GITHUB_WORKSPACE/.deployignore")
+            rsync_args+=(--exclude-from="$GITHUB_WORKSPACE/.deployignore")
           fi
-          rsync "${RSYNC_ARGS[@]}" "$GITHUB_WORKSPACE/" "$DEPLOY_PATH/"
+          rsync "${rsync_args[@]}" "$GITHUB_WORKSPACE/" "$DEPLOY_PATH/"
           find "$DEPLOY_PATH" -name '*.sh' -exec chmod +x {} \;
 
       - name: Ensure networks and volumes exist
         if: inputs.ensure_networks != '' || inputs.ensure_volumes != ''
+        shell: bash
         run: |
           set -euo pipefail
-          for net in ${{ inputs.ensure_networks }}; do
-            sudo docker network inspect "$net" >/dev/null 2>&1 || sudo docker network create "$net"
+          for network in ${{ inputs.ensure_networks }}; do
+            sudo docker network inspect "$network" >/dev/null 2>&1 || sudo docker network create "$network"
           done
-          for vol in ${{ inputs.ensure_volumes }}; do
-            sudo docker volume inspect "$vol" >/dev/null 2>&1 || sudo docker volume create "$vol"
+          for volume in ${{ inputs.ensure_volumes }}; do
+            sudo docker volume inspect "$volume" >/dev/null 2>&1 || sudo docker volume create "$volume"
           done
 
       - name: Pre-deploy commands
         if: inputs.pre_deploy_commands != ''
+        shell: bash
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
@@ -214,58 +224,62 @@ jobs:
 
       - name: Build required services
         if: inputs.services_build != ''
+        shell: bash
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          for svc in ${{ inputs.services_build }}; do
-            sudo docker compose -f "$COMPOSE_FILE" build --no-cache "$svc"
+          for service in ${{ inputs.services_build }}; do
+            sudo docker compose -f "$COMPOSE_FILE" build --no-cache "$service"
           done
 
       - name: Build optional services
+        id: optional-builds
         if: inputs.services_build_optional != ''
+        shell: bash
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          for svc in ${{ inputs.services_build_optional }}; do
-            if ! sudo docker compose -f "$COMPOSE_FILE" build --no-cache "$svc"; then
-              echo "::warning title=${svc} build failed::Keeping previous image"
+          failed=0
+          for service in ${{ inputs.services_build_optional }}; do
+            if ! sudo docker compose -f "$COMPOSE_FILE" build --no-cache "$service"; then
+              echo "::warning title=${service} build failed::Keeping previous image"
+              failed=1
             fi
           done
+          if [ "$failed" -eq 0 ]; then
+            echo 'result=passed' >> "$GITHUB_OUTPUT"
+          else
+            echo 'result=failed' >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Discover Compose images for security gate
+      - name: Discover declarative Compose images
         id: security-images
         if: inputs.security_require_image_scan
-        env:
-          SECURITY_IMAGE_SERVICES: ${{ inputs.services_build }} ${{ inputs.services_build_optional }}
-          SECURITY_UP_SERVICES: ${{ inputs.services_up }}
+        shell: bash
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          services="$SECURITY_IMAGE_SERVICES"
-          if [ -z "${services// }" ]; then
-            services="$SECURITY_UP_SERVICES"
-          fi
-          image_refs=()
-          if [ -n "${services// }" ]; then
-            for service in $services; do
-              while IFS= read -r image_ref; do
-                [ -n "$image_ref" ] && image_refs+=("$image_ref")
-              done < <(sudo docker compose -f "$COMPOSE_FILE" images --quiet "$service")
-            done
-          else
-            while IFS= read -r image_ref; do
-              [ -n "$image_ref" ] && image_refs+=("$image_ref")
-            done < <(sudo docker compose -f "$COMPOSE_FILE" images --quiet)
-          fi
-          mapfile -t image_refs < <(printf '%s\n' "${image_refs[@]}" | sed '/^$/d' | sort -u)
-          if [ "${#image_refs[@]}" -eq 0 ]; then
+          mapfile -t configured_images < <(
+            sudo docker compose -f "$COMPOSE_FILE" config --images | sed '/^$/d' | sort -u
+          )
+          [ "${#configured_images[@]}" -gt 0 ] || {
             echo "::error::No Compose images available for required security scan" >&2
             exit 1
-          fi
+          }
+          image_ids=()
+          for image_ref in "${configured_images[@]}"; do
+            image_id="$(sudo docker image inspect --format '{{.Id}}' "$image_ref" 2>/dev/null || true)"
+            [ -n "$image_id" ] || {
+              echo "::error::Configured image unavailable after build: $image_ref" >&2
+              exit 1
+            }
+            image_ids+=("$image_id")
+          done
+          mapfile -t image_ids < <(printf '%s\n' "${image_ids[@]}" | sort -u)
           {
-            echo "refs<<OPTIMIZR_IMAGES"
-            printf '%s\n' "${image_refs[@]}"
-            echo "OPTIMIZR_IMAGES"
+            echo 'refs<<OPTIMIZR_IMAGES'
+            printf '%s\n' "${image_ids[@]}"
+            echo OPTIMIZR_IMAGES
           } >> "$GITHUB_OUTPUT"
 
       - name: Security gate (images)
@@ -283,31 +297,48 @@ jobs:
 
       - name: Roll out services
         if: inputs.services_up != ''
+        shell: bash
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
           sudo docker compose -f "$COMPOSE_FILE" up -d ${{ inputs.compose_up_flags }} ${{ inputs.services_up }}
 
       - name: Wait for healthcheck
-        uses: optimizr-tech/optimizr-infra-ops/.github/actions/wait-for-healthcheck@v1
-        with:
-          container_name: ${{ inputs.container_name }}
-          timeout: ${{ inputs.health_timeout }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          elapsed=0
+          while [ "$elapsed" -lt "$HEALTH_TIMEOUT" ]; do
+            status="$(sudo docker inspect -f '{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo 'not found')"
+            if [ "$status" = healthy ]; then
+              echo "$CONTAINER_NAME is healthy"
+              exit 0
+            fi
+            if [ "$status" = 'not found' ] || [ -z "$status" ]; then
+              sudo docker logs --tail=50 "$CONTAINER_NAME" >&2 || true
+              exit 1
+            fi
+            sleep 5
+            elapsed=$((elapsed + 5))
+          done
+          sudo docker logs --tail=50 "$CONTAINER_NAME" >&2 || true
+          exit 1
 
       - name: Post-deploy commands
         if: inputs.post_deploy_commands != ''
+        shell: bash
         run: |
           set -euo pipefail
           ${{ inputs.post_deploy_commands }}
 
       - name: Verify deployment
+        shell: bash
         run: |
           set -euo pipefail
           for _ in 1 2 3; do
-            running=$(sudo docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null || echo false)
-            health=$(sudo docker inspect -f '{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo none)
+            running="$(sudo docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null || echo false)"
+            health="$(sudo docker inspect -f '{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo none)"
             if [ "$running" = true ] && [ "$health" = healthy ]; then
-              echo "$CONTAINER_NAME is running and healthy"
               exit 0
             fi
             sleep 2
@@ -317,7 +348,7 @@ jobs:
 
       - name: Upload security evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: security-gate-${{ inputs.service_name }}-${{ github.run_id }}
           path: artifacts/security-gate
@@ -326,6 +357,7 @@ jobs:
 
       - name: Cleanup runner and Docker leftovers
         if: always() && inputs.run_prune
+        shell: bash
         env:
           IMAGE_AGE: ${{ inputs.image_age_threshold }}
         run: |
@@ -341,4 +373,28 @@ jobs:
 
       - name: Clean runner workspace
         if: always() && !inputs.run_prune
+        shell: bash
         run: sudo find "$GITHUB_WORKSPACE" -mindepth 1 -delete
+
+      - name: Checkout coherent deploy-manifest recorder
+        if: always() && inputs.deploy_manifest_enabled
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .optimizr-actions-manifest
+          persist-credentials: false
+
+      - name: Record sanitized deployment manifest
+        if: always() && inputs.deploy_manifest_enabled
+        uses: ./.optimizr-actions-manifest/.github/actions/record-deploy-manifest
+        with:
+          deploy_path: ${{ env.DEPLOY_PATH }}
+          compose_file: ${{ inputs.compose_file }}
+          container_name: ${{ inputs.container_name }}
+          services: ${{ inputs.services_up }}
+          docker_mode: sudo
+          status: ${{ job.status == 'success' && 'success' || 'failure' }}
+          migration_result: ${{ inputs.deploy_manifest_migration_result }}
+          optional_build_result: ${{ steps.optional-builds.outputs.result != '' && steps.optional-builds.outputs.result || 'skipped' }}
+          retention: ${{ inputs.deploy_manifest_retention }}

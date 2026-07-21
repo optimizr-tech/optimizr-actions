@@ -137,10 +137,11 @@ class WorkflowStaticPolicyTests(unittest.TestCase):
             content,
         )
 
-    def test_deploy_workflows_do_not_use_unquoted_numeric_or_unused_loop_variables(self) -> None:
+    def test_deploy_health_loops_quote_timeout_and_avoid_unused_variables(self) -> None:
         self_hosted = read(".github/workflows/_vps-self-hosted-deploy.yml")
         monorepo = read(".github/workflows/_vps-monorepo-deploy.yml")
-        self.assertIn('if [ "$counter" -ge "$HEALTH_TIMEOUT" ]; then', self_hosted)
+        self.assertIn('while [ "$elapsed" -lt "$HEALTH_TIMEOUT" ]; do', self_hosted)
+        self.assertIn('while [ "$elapsed" -lt "$HEALTH_TIMEOUT" ]; do', monorepo)
         self.assertNotIn("for attempt in 1 2 3; do", monorepo)
 
 
