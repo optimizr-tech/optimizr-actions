@@ -203,7 +203,36 @@ runs:
           trivy "$command_name" "${common_args[@]}" \
             --format table --exit-code 0 --output "$table_report" \
             "${target_args[@]}"
-          cat "$table_report"
+          # GitHub runner stdout can briefly become non-blocking under heavy logs.
+          # Stream the complete report while retrying EAGAIN without duplicating data.
+          if ! python3 - "$table_report" <<'PY'
+        import errno
+        import os
+        import sys
+        import time
+        
+        report_path = sys.argv[1]
+        retryable = {errno.EAGAIN, errno.EWOULDBLOCK}
+        deadline = time.monotonic() + 60
+        
+        with open(report_path, "rb", buffering=0) as report:
+            while chunk := report.read(64 * 1024):
+                pending = memoryview(chunk)
+                while pending:
+                    try:
+                        written = os.write(sys.stdout.fileno(), pending)
+                    except OSError as exc:
+                        if exc.errno not in retryable or time.monotonic() >= deadline:
+                            sys.exit(1)
+                        time.sleep(0.1)
+                        continue
+                    if written == 0:
+                        sys.exit(1)
+                    pending = pending[written:]
+        PY
+          then
+            echo "::warning::Unable to stream complete Trivy table report; full report remains in the security-gate artifact." >&2 || true
+          fi
           trivy "$command_name" "${common_args[@]}" \
             --format sarif --exit-code 0 --output "$sarif_report" \
             "${target_args[@]}"
