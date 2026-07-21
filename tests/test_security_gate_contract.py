@@ -14,7 +14,7 @@ def read(path: str) -> str:
 
 
 class SecurityGateContractTests(unittest.TestCase):
-    def test_composite_action_is_controlled_and_fail_closed(self) -> None:
+    def test_composite_action_reports_all_and_blocks_only_actionable_findings(self) -> None:
         content = read(".github/actions/security-gate/action.yml")
 
         self.assertIn(
@@ -22,16 +22,21 @@ class SecurityGateContractTests(unittest.TestCase):
             content,
         )
         self.assertIn('default: "v0.70.0"', content)
+        self.assertIn('default: "true"', content)
         self.assertIn("--download-db-only", content)
         self.assertIn("optimizr-security-gate", content)
         self.assertIn("flock -x 9", content)
         self.assertIn("chmod 700", content)
         self.assertIn("validate-db", content)
         self.assertIn("render-exceptions", content)
-        self.assertIn("--format table", content)
-        self.assertIn("--format json", content)
-        self.assertIn("--format sarif", content)
-        self.assertIn("--exit-code 1", content)
+        self.assertIn("scripts/security_gate/report.py", content)
+        self.assertIn("report_args=(", content)
+        self.assertIn('blocking_args=("${report_args[@]}" --ignore-unfixed)', content)
+        self.assertIn('--format json --exit-code 0 --output "$json_report"', content)
+        self.assertIn('--format json --exit-code 1 --output "$blocking_json_report"', content)
+        self.assertIn('--report "blocking_json=$blocking_json_report"', content)
+        self.assertIn('--report "summary=$finding_summary"', content)
+        self.assertIn("vulnerabilities without an available fix remain visible", content)
         self.assertNotIn("ALLOW_MISSING_TRIVY", content)
         self.assertNotIn("continue-on-error: true", content)
 

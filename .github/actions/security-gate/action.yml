@@ -1,5 +1,5 @@
 name: Optimizr security gate
-description: Run blocking Trivy scans with fresh database validation and commit-bound evidence
+description: Report all Trivy findings and block only actionable security failures
 
 inputs:
   scan_type:
@@ -19,9 +19,9 @@ inputs:
     required: false
     default: "HIGH,CRITICAL"
   ignore_unfixed:
-    description: "Explicitly report only vulnerabilities with available fixes"
+    description: "Deprecated compatibility input; vulnerabilities without fixes are always signal-only"
     required: false
-    default: "false"
+    default: "true"
   exceptions_file:
     description: "Optional Optimizr JSON exception policy"
     required: false
@@ -73,6 +73,7 @@ runs:
 
         action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
         evidence_tool="$action_root/scripts/security_gate/evidence.py"
+        report_tool="$action_root/scripts/security_gate/report.py"
         repository="${GITHUB_REPOSITORY:-local/unknown}"
         cache_namespace="$(printf '%s' "$repository" | sha256sum | cut -c1-24)"
         cache_root="${XDG_CACHE_HOME:-${HOME:-/tmp}/.cache}/optimizr-security-gate/${cache_namespace}"
@@ -112,6 +113,9 @@ runs:
             exit 2
             ;;
         esac
+        if [ "$INPUT_IGNORE_UNFIXED" = false ]; then
+          echo "::notice title=Security policy updated::ignore_unfixed=false is deprecated; vulnerabilities without an available fix remain visible but do not block deployment."
+        fi
         if ! [[ "$INPUT_DB_MAX_AGE_HOURS" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
           echo "::error::db_max_age_hours must be numeric" >&2
           exit 2
@@ -126,7 +130,7 @@ runs:
         echo "::endgroup::"
 
         targets=()
-        if [ "$INPUT_SCAN_TYPE" = "fs" ]; then
+        if [ "$INPUT_SCAN_TYPE" = fs ]; then
           targets+=("$INPUT_SCAN_REF")
         elif [ -n "$INPUT_IMAGE_REFS" ]; then
           while IFS= read -r target; do
@@ -151,7 +155,9 @@ runs:
           exception_summary="${prefix}-exceptions.json"
           table_report="${prefix}.txt"
           json_report="${prefix}.json"
+          blocking_json_report="${prefix}-blocking.json"
           sarif_report="${prefix}.sarif"
+          finding_summary="${prefix}-summary.json"
           evidence_report="${prefix}-evidence.json"
           scan_target="$target"
           temporary_image=""
@@ -167,10 +173,10 @@ runs:
           fi
           python3 "$evidence_tool" "${exception_args[@]}"
 
-          command_name="filesystem"
+          command_name=filesystem
           target_args=("$scan_target")
-          if [ "$INPUT_SCAN_TYPE" = "image" ]; then
-            command_name="image"
+          if [ "$INPUT_SCAN_TYPE" = image ]; then
+            command_name=image
             # Persistent deploy runners commonly grant Docker through passwordless
             # sudo instead of the runner group. Save once and scan the immutable tar
             # without running Trivy itself as root.
@@ -184,23 +190,18 @@ runs:
             fi
           fi
 
-          common_args=(
+          report_args=(
             --cache-dir "$cache_dir"
             --severity "$INPUT_SEVERITY"
             --ignorefile "$ignore_file"
             --show-suppressed
+            --scanners vuln,misconfig,secret
           )
-          if [ "$INPUT_IGNORE_UNFIXED" = "true" ]; then
-            common_args+=(--ignore-unfixed)
-          fi
-          if [ "$INPUT_SCAN_TYPE" = "fs" ]; then
-            common_args+=(--scanners vuln,misconfig,secret)
-          else
-            common_args+=(--scanners vuln,misconfig,secret)
-          fi
+          blocking_args=("${report_args[@]}" --ignore-unfixed)
 
           echo "::group::Trivy $INPUT_SCAN_TYPE scan: $target"
-          trivy "$command_name" "${common_args[@]}" \
+          # Complete reports retain fixed and unfixed findings for observability.
+          trivy "$command_name" "${report_args[@]}" \
             --format table --exit-code 0 --output "$table_report" \
             "${target_args[@]}"
           # GitHub runner stdout can briefly become non-blocking under heavy logs.
@@ -210,11 +211,11 @@ runs:
         import os
         import sys
         import time
-        
+
         report_path = sys.argv[1]
         retryable = {errno.EAGAIN, errno.EWOULDBLOCK}
         deadline = time.monotonic() + 60
-        
+
         with open(report_path, "rb", buffering=0) as report:
             while chunk := report.read(64 * 1024):
                 pending = memoryview(chunk)
@@ -233,20 +234,35 @@ runs:
           then
             echo "::warning::Unable to stream complete Trivy table report; full report remains in the security-gate artifact." >&2 || true
           fi
-          trivy "$command_name" "${common_args[@]}" \
+          trivy "$command_name" "${report_args[@]}" \
             --format sarif --exit-code 0 --output "$sarif_report" \
             "${target_args[@]}"
+          trivy "$command_name" "${report_args[@]}" \
+            --format json --exit-code 0 --output "$json_report" \
+            "${target_args[@]}"
 
+          summary_args=(
+            --report "$json_report"
+            --output "$finding_summary"
+          )
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            summary_args+=(--github-summary "$GITHUB_STEP_SUMMARY")
+          fi
+          python3 "$report_tool" "${summary_args[@]}"
+
+          # The enforcement report filters only vulnerabilities for which the
+          # distribution or package source has not published a fixed version.
+          # Misconfigurations and secrets remain blocking.
           set +e
-          trivy "$command_name" "${common_args[@]}" \
-            --format json --exit-code 1 --output "$json_report" \
+          trivy "$command_name" "${blocking_args[@]}" \
+            --format json --exit-code 1 --output "$blocking_json_report" \
             "${target_args[@]}"
           scan_status=$?
           set -e
           echo "::endgroup::"
 
           identity=""
-          if [ "$INPUT_SCAN_TYPE" = "image" ]; then
+          if [ "$INPUT_SCAN_TYPE" = image ]; then
             identity="$(python3 "$evidence_tool" resolve-image --report "$json_report" 2>/dev/null || true)"
             if [ -z "$identity" ]; then
               identity="$(docker image inspect --format '{{.Id}}' "$target" 2>/dev/null || true)"
@@ -260,9 +276,9 @@ runs:
             fi
           fi
 
-          result="passed"
+          result=passed
           if [ "$scan_status" -ne 0 ]; then
-            result="failed"
+            result=failed
             aggregate_status=1
           fi
           evidence_args=(
@@ -279,12 +295,12 @@ runs:
             --exception-summary "$exception_summary"
             --report "table=$table_report"
             --report "json=$json_report"
+            --report "blocking_json=$blocking_json_report"
             --report "sarif=$sarif_report"
+            --report "summary=$finding_summary"
             --result "$result"
+            --ignore-unfixed
           )
-          if [ "$INPUT_IGNORE_UNFIXED" = "true" ]; then
-            evidence_args+=(--ignore-unfixed)
-          fi
           python3 "$evidence_tool" "${evidence_args[@]}"
           rm -f "$temporary_image"
         done
