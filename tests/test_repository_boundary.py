@@ -26,10 +26,6 @@ LEGACY_INFRA_OPS_REFERENCES = Counter(
             ".github/workflows/_quality-gate.yml",
             "optimizr-tech/optimizr-infra-ops/.github/actions/quality-gate-scripts@v1",
         ): 1,
-        (
-            ".github/workflows/_vps-monorepo-deploy.yml",
-            "optimizr-tech/optimizr-infra-ops/.github/actions/wait-for-healthcheck@v1",
-        ): 1,
     }
 )
 NEEDLE = "uses: optimizr-tech/optimizr-infra-ops/"
