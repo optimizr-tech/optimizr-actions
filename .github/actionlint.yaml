@@ -1,0 +1,11 @@
+# actionlint v1.7.12 does not yet model the GitHub-supported job.workflow_*
+# identity properties used by reusable workflows to check out their own source.
+# Keep these exceptions path-scoped and remove them after upstream support lands:
+# https://github.com/rhysd/actionlint/pull/661
+paths:
+  .github/workflows/_vps-self-hosted-deploy.yml:
+    ignore:
+      - 'property "workflow_(repository|sha)" is not defined in object type .+'
+  .github/workflows/_vps-monorepo-deploy.yml:
+    ignore:
+      - 'property "workflow_(repository|sha)" is not defined in object type .+'

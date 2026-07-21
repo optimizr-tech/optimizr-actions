@@ -132,7 +132,10 @@ on:
 
 jobs:
   deploy:
-    runs-on: [self-hosted, Linux, ${{ inputs.runner_label }}]
+    runs-on:
+      - self-hosted
+      - Linux
+      - ${{ inputs.runner_label }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
     environment:
       name: production
