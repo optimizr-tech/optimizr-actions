@@ -23,7 +23,7 @@ jobs:
           persist-credentials: false
       - name: Audit selected repositories through the contents API
         run: |
-          python3 scripts/org_audit/audit.py \
+          python3 scripts/org_audit/combined.py \
             --repositories-env ORG_AUDIT_REPOSITORIES \
             --token-env ORG_AUDIT_TOKEN \
             --output-dir public-report \
@@ -55,7 +55,7 @@ jobs:
         if: env.ORG_AUDIT_ISSUE_REF != ''
         run: |
           private_dir="$RUNNER_TEMP/optimizr-private-audit"
-          python3 scripts/org_audit/audit.py \
+          python3 scripts/org_audit/combined.py \
             --repositories-env ORG_AUDIT_REPOSITORIES \
             --token-env ORG_AUDIT_TOKEN \
             --output-dir "$private_dir" \
