@@ -65,8 +65,15 @@ class SecurityBaselineTests(unittest.TestCase):
             "Severity": "HIGH",
         }
 
-    def _baseline_finding(self, vulnerability_id: str, fixed_version: str = "1.2.4") -> dict[str, str]:
+    def _baseline_finding(
+        self,
+        vulnerability_id: str,
+        *,
+        scope: str = "sha256:" + "a" * 64,
+        fixed_version: str = "1.2.4",
+    ) -> dict[str, str]:
         return {
+            "scope": scope,
             "target": "debian",
             "id": vulnerability_id,
             "package": "libexample",
@@ -75,12 +82,13 @@ class SecurityBaselineTests(unittest.TestCase):
         }
 
     def test_reviewed_finding_is_removed_from_enforcement_report(self) -> None:
+        scope = "sha256:" + "a" * 64
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             report = self._report(directory, [self._finding("CVE-2026-0001")])
             baseline = self._baseline(
                 directory,
-                [self._baseline_finding("CVE-2026-0001")],
+                [self._baseline_finding("CVE-2026-0001", scope=scope)],
                 "2026-08-22",
             )
             output = directory / "enforced.json"
@@ -90,6 +98,7 @@ class SecurityBaselineTests(unittest.TestCase):
                 baseline,
                 output,
                 summary,
+                scope=scope,
                 today=date(2026, 7, 22),
             )
             payload = json.loads(output.read_text(encoding="utf-8"))
@@ -98,6 +107,7 @@ class SecurityBaselineTests(unittest.TestCase):
         self.assertEqual(payload["Results"][0]["Vulnerabilities"], [])
 
     def test_new_finding_remains_blocking(self) -> None:
+        scope = "sha256:" + "a" * 64
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             report = self._report(
@@ -106,7 +116,7 @@ class SecurityBaselineTests(unittest.TestCase):
             )
             baseline = self._baseline(
                 directory,
-                [self._baseline_finding("CVE-2026-0001")],
+                [self._baseline_finding("CVE-2026-0001", scope=scope)],
                 "2026-08-22",
             )
             output = directory / "enforced.json"
@@ -116,18 +126,45 @@ class SecurityBaselineTests(unittest.TestCase):
                 baseline,
                 output,
                 summary,
+                scope=scope,
                 today=date(2026, 7, 22),
             )
         self.assertEqual(result["matched"], 1)
         self.assertEqual(result["remaining"], 1)
 
-    def test_expired_baseline_is_rejected(self) -> None:
+    def test_findings_for_other_image_scopes_are_ignored(self) -> None:
+        scope = "sha256:" + "a" * 64
+        other_scope = "sha256:" + "b" * 64
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             report = self._report(directory, [self._finding("CVE-2026-0001")])
             baseline = self._baseline(
                 directory,
-                [self._baseline_finding("CVE-2026-0001")],
+                [
+                    self._baseline_finding("CVE-2026-0001", scope=scope),
+                    self._baseline_finding("CVE-2026-9999", scope=other_scope),
+                ],
+                "2026-08-22",
+            )
+            result = baseline_module.apply_baseline(
+                report,
+                baseline,
+                directory / "enforced.json",
+                directory / "summary.json",
+                scope=scope,
+                today=date(2026, 7, 22),
+            )
+        self.assertEqual(result["approved"], 1)
+        self.assertEqual(result["matched"], 1)
+
+    def test_expired_baseline_is_rejected(self) -> None:
+        scope = "sha256:" + "a" * 64
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            report = self._report(directory, [self._finding("CVE-2026-0001")])
+            baseline = self._baseline(
+                directory,
+                [self._baseline_finding("CVE-2026-0001", scope=scope)],
                 "2026-07-21",
             )
             with self.assertRaisesRegex(ValueError, "expired"):
@@ -136,6 +173,7 @@ class SecurityBaselineTests(unittest.TestCase):
                     baseline,
                     directory / "enforced.json",
                     directory / "summary.json",
+                    scope=scope,
                     today=date(2026, 7, 22),
                 )
 
