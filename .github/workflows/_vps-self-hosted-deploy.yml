@@ -221,6 +221,14 @@ jobs:
             sudo docker compose -f "$COMPOSE_FILE" build
           fi
 
+      - name: Pull declared runtime images
+        if: inputs.security_require_image_scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          sudo docker compose -f "$COMPOSE_FILE" pull --ignore-buildable
+
       - name: Discover declarative Compose images
         id: security-images-initial
         if: inputs.security_require_image_scan

@@ -12,7 +12,7 @@ A production rollout is permitted only after:
 4. every applied exception is owned, justified, compensated, scoped, and unexpired;
 5. evidence is written for the exact commit and immutable image identity.
 
-The reusable VPS deploy workflows enable the gate by default. They perform the filesystem scan before `rsync`, image scans after build, and only then invoke `docker compose up`.
+The reusable VPS deploy workflows enable the gate by default. They perform the filesystem scan before `rsync`, build local services, pull declared runtime images with `docker compose pull --ignore-buildable`, resolve immutable image IDs, and only then invoke the image scans and `docker compose up`.
 
 ## Standalone reusable workflow
 
@@ -61,6 +61,8 @@ The deployment job must depend on the applicable hosted or self-hosted job and m
 | `security_rebuild_retry_no_cache` | `true` | Disable the build cache during the bounded remediation retry. |
 
 The filesystem gate has no bypass input and always runs before the deploy workflow mutates the target environment. A consumer that intentionally deploys configuration without a Docker image may set `security_require_image_scan: false`; this is a visible policy exception and should be reviewed in the consumer pull request.
+
+Before the initial image scan, both VPS deploy reusables pull every Compose service that declares an external `image:` while ignoring buildable services. This guarantees that digest-pinned sidecars and operational tools are locally available for immutable-ID discovery without replacing images built from the candidate source. A missing or unavailable declared image fails closed before rollout.
 
 ## Bounded automatic remediation
 
