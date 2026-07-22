@@ -1,0 +1,115 @@
+name: Rebuild Compose images for security remediation
+description: Perform one bounded pull and rebuild using fixed Docker Compose commands
+
+inputs:
+  deploy_path:
+    description: "Absolute deployment directory below /opt/optimizr"
+    required: true
+  compose_file:
+    description: "Compose file relative to deploy_path"
+    required: false
+    default: "docker-compose.yml"
+  build_all:
+    description: "Build all Compose services"
+    required: false
+    default: "false"
+  required_services:
+    description: "Whitespace-separated required services"
+    required: false
+    default: ""
+  optional_services:
+    description: "Whitespace-separated optional services"
+    required: false
+    default: ""
+  no_cache:
+    description: "Disable build cache during the single retry"
+    required: false
+    default: "true"
+
+outputs:
+  optional_build_result:
+    description: "passed, failed, or skipped"
+    value: ${{ steps.rebuild.outputs.optional_build_result }}
+
+runs:
+  using: composite
+  steps:
+    - id: rebuild
+      name: Pull and rebuild once
+      shell: bash
+      env:
+        INPUT_DEPLOY_PATH: ${{ inputs.deploy_path }}
+        INPUT_COMPOSE_FILE: ${{ inputs.compose_file }}
+        INPUT_BUILD_ALL: ${{ inputs.build_all }}
+        INPUT_REQUIRED_SERVICES: ${{ inputs.required_services }}
+        INPUT_OPTIONAL_SERVICES: ${{ inputs.optional_services }}
+        INPUT_NO_CACHE: ${{ inputs.no_cache }}
+      run: |
+        set -euo pipefail
+
+        case "$INPUT_DEPLOY_PATH" in
+          /opt/optimizr/*) ;;
+          *)
+            echo "::error::deploy_path must remain below /opt/optimizr" >&2
+            exit 2
+            ;;
+        esac
+        [ -d "$INPUT_DEPLOY_PATH" ] && [ ! -L "$INPUT_DEPLOY_PATH" ] || {
+          echo "::error::deploy_path must be an existing non-symlink directory" >&2
+          exit 2
+        }
+        case "$INPUT_COMPOSE_FILE" in
+          ""|/*|*..*|*\\*)
+            echo "::error::compose_file must be repository relative" >&2
+            exit 2
+            ;;
+        esac
+        case "$INPUT_BUILD_ALL:$INPUT_NO_CACHE" in
+          true:true|true:false|false:true|false:false) ;;
+          *)
+            echo "::error::build_all and no_cache must be boolean strings" >&2
+            exit 2
+            ;;
+        esac
+
+        validate_services() {
+          local raw="$1"
+          local service
+          for service in $raw; do
+            if ! [[ "$service" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; then
+              echo "::error::invalid Compose service name" >&2
+              exit 2
+            fi
+          done
+        }
+        validate_services "$INPUT_REQUIRED_SERVICES"
+        validate_services "$INPUT_OPTIONAL_SERVICES"
+
+        cd "$INPUT_DEPLOY_PATH"
+        build_args=(--pull)
+        if [ "$INPUT_NO_CACHE" = true ]; then
+          build_args+=(--no-cache)
+        fi
+
+        # This action is invoked at most once by each deploy workflow; retry occurs once.
+        sudo docker compose -f "$INPUT_COMPOSE_FILE" pull --ignore-buildable
+
+        if [ "$INPUT_BUILD_ALL" = true ]; then
+          sudo docker compose -f "$INPUT_COMPOSE_FILE" build "${build_args[@]}"
+        else
+          for service in $INPUT_REQUIRED_SERVICES; do
+            sudo docker compose -f "$INPUT_COMPOSE_FILE" build "${build_args[@]}" "$service"
+          done
+        fi
+
+        optional_result=skipped
+        if [ -n "$INPUT_OPTIONAL_SERVICES" ]; then
+          optional_result=passed
+          for service in $INPUT_OPTIONAL_SERVICES; do
+            if ! sudo docker compose -f "$INPUT_COMPOSE_FILE" build "${build_args[@]}" "$service"; then
+              echo "::warning title=${service} remediation build failed::Keeping the previous image"
+              optional_result=failed
+            fi
+          done
+        fi
+        echo "optional_build_result=$optional_result" >> "$GITHUB_OUTPUT"
