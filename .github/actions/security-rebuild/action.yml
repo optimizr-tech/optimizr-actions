@@ -1,0 +1,56 @@
+name: Rebuild Compose images for security remediation
+description: Perform one bounded pull and rebuild using fixed Docker Compose commands
+
+inputs:
+  deploy_path:
+    description: "Absolute deployment directory below /opt/optimizr"
+    required: true
+  compose_file:
+    description: "Compose file relative to deploy_path"
+    required: false
+    default: "docker-compose.yml"
+  build_all:
+    description: "Build all Compose services"
+    required: false
+    default: "false"
+  required_services:
+    description: "Whitespace-separated required services"
+    required: false
+    default: ""
+  optional_services:
+    description: "Whitespace-separated optional services"
+    required: false
+    default: ""
+  no_cache:
+    description: "Disable build cache during the single retry"
+    required: false
+    default: "true"
+
+outputs:
+  optional_build_result:
+    description: "passed, failed, or skipped"
+    value: ${{ steps.rebuild.outputs.optional_build_result }}
+
+runs:
+  using: composite
+  steps:
+    - id: rebuild
+      name: Pull and rebuild once
+      shell: bash
+      env:
+        INPUT_DEPLOY_PATH: ${{ inputs.deploy_path }}
+        INPUT_COMPOSE_FILE: ${{ inputs.compose_file }}
+        INPUT_BUILD_ALL: ${{ inputs.build_all }}
+        INPUT_REQUIRED_SERVICES: ${{ inputs.required_services }}
+        INPUT_OPTIONAL_SERVICES: ${{ inputs.optional_services }}
+        INPUT_NO_CACHE: ${{ inputs.no_cache }}
+      run: |
+        set -euo pipefail
+        action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        python3 "$action_root/scripts/security_gate/rebuild.py" \
+          --deploy-path "$INPUT_DEPLOY_PATH" \
+          --compose-file "$INPUT_COMPOSE_FILE" \
+          --build-all "$INPUT_BUILD_ALL" \
+          --required-services "$INPUT_REQUIRED_SERVICES" \
+          --optional-services "$INPUT_OPTIONAL_SERVICES" \
+          --no-cache "$INPUT_NO_CACHE" >> "$GITHUB_OUTPUT"

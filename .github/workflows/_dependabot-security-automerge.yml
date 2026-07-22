@@ -1,0 +1,39 @@
+name: _dependabot-security-automerge
+
+on:
+  workflow_call:
+    inputs:
+      allow_minor:
+        description: Enable native auto-merge for semver-minor Dependabot updates
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  enable-automerge:
+    name: Enable Dependabot native auto-merge
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.base.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch verified Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@d7267f607e9d3fb96fc2fbe83e0af444713e90b7
+        with:
+          github-token: ${{ github.token }}
+
+      - name: Enable auto-merge after protected checks
+        if: >-
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          (inputs.allow_minor &&
+           steps.metadata.outputs.update-type == 'version-update:semver-minor')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"

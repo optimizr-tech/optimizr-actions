@@ -95,7 +95,7 @@ on:
         type: string
         default: HIGH,CRITICAL
       security_ignore_unfixed:
-        description: Ignore vulnerabilities without an available fix
+        description: Deprecated compatibility input for unfixed vulnerabilities
         required: false
         type: boolean
         default: false
@@ -114,6 +114,16 @@ on:
         required: false
         type: number
         default: 30
+      security_rebuild_retry_enabled:
+        description: Retry actionable image vulnerabilities with one pull and rebuild
+        required: false
+        type: boolean
+        default: true
+      security_rebuild_retry_no_cache:
+        description: Disable cache during the bounded security rebuild
+        required: false
+        type: boolean
+        default: true
       deploy_manifest_enabled:
         description: Record sanitized immutable success/failure manifests
         required: false
@@ -162,7 +172,7 @@ jobs:
           exceptions_file: ${{ inputs.security_exceptions_file }}
           trivy_version: ${{ inputs.security_trivy_version }}
           db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
-          evidence_dir: artifacts/security-gate
+          evidence_dir: artifacts/security-gate/filesystem
 
       - name: Backup and synchronize files
         shell: bash
@@ -256,7 +266,7 @@ jobs:
           fi
 
       - name: Discover declarative Compose images
-        id: security-images
+        id: security-images-initial
         if: inputs.security_require_image_scan
         shell: bash
         run: |
@@ -285,18 +295,133 @@ jobs:
             echo OPTIMIZR_IMAGES
           } >> "$GITHUB_OUTPUT"
 
-      - name: Security gate (images)
+      - name: Security gate (images, initial)
+        id: security-images-initial-gate
         if: inputs.security_require_image_scan
+        continue-on-error: true
         uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@v1
         with:
           scan_type: image
-          image_refs: ${{ steps.security-images.outputs.refs }}
+          image_refs: ${{ steps.security-images-initial.outputs.refs }}
           severity: ${{ inputs.security_severity }}
           ignore_unfixed: ${{ inputs.security_ignore_unfixed }}
           exceptions_file: ${{ inputs.security_exceptions_file }}
           trivy_version: ${{ inputs.security_trivy_version }}
           db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
-          evidence_dir: artifacts/security-gate
+          evidence_dir: artifacts/security-gate/images-initial
+
+      - name: Rebuild actionable image vulnerabilities
+        id: security-rebuild
+        if: >-
+          inputs.security_require_image_scan &&
+          inputs.security_rebuild_retry_enabled &&
+          steps.security-images-initial-gate.outcome == 'failure' &&
+          steps.security-images-initial-gate.outputs.classification == 'actionable_vulnerability'
+        continue-on-error: true
+        uses: optimizr-tech/optimizr-actions/.github/actions/security-rebuild@v1
+        with:
+          deploy_path: ${{ env.DEPLOY_PATH }}
+          compose_file: ${{ inputs.compose_file }}
+          required_services: ${{ inputs.services_build }}
+          optional_services: ${{ inputs.services_build_optional }}
+          no_cache: ${{ inputs.security_rebuild_retry_no_cache }}
+
+      - name: Discover remediated Compose images
+        id: security-images-remediated
+        if: steps.security-rebuild.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          mapfile -t configured_images < <(
+            sudo docker compose -f "$COMPOSE_FILE" config --images | sed '/^$/d' | sort -u
+          )
+          [ "${#configured_images[@]}" -gt 0 ] || {
+            echo "::error::No Compose images available after security rebuild" >&2
+            exit 1
+          }
+          image_ids=()
+          for image_ref in "${configured_images[@]}"; do
+            image_id="$(sudo docker image inspect --format '{{.Id}}' "$image_ref" 2>/dev/null || true)"
+            [ -n "$image_id" ] || {
+              echo "::error::Remediated image unavailable after build: $image_ref" >&2
+              exit 1
+            }
+            image_ids+=("$image_id")
+          done
+          mapfile -t image_ids < <(printf '%s\n' "${image_ids[@]}" | sort -u)
+          {
+            echo 'refs<<OPTIMIZR_IMAGES'
+            printf '%s\n' "${image_ids[@]}"
+            echo OPTIMIZR_IMAGES
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Security gate (images, remediated)
+        id: security-images-final-gate
+        if: steps.security-images-remediated.outcome == 'success'
+        continue-on-error: true
+        uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@v1
+        with:
+          scan_type: image
+          image_refs: ${{ steps.security-images-remediated.outputs.refs }}
+          severity: ${{ inputs.security_severity }}
+          ignore_unfixed: ${{ inputs.security_ignore_unfixed }}
+          exceptions_file: ${{ inputs.security_exceptions_file }}
+          trivy_version: ${{ inputs.security_trivy_version }}
+          db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
+          evidence_dir: artifacts/security-gate/images-remediated
+
+      - name: Enforce final image security result
+        id: security-final
+        if: inputs.security_require_image_scan && always()
+        shell: bash
+        env:
+          INITIAL_OUTCOME: ${{ steps.security-images-initial-gate.outcome }}
+          INITIAL_CLASSIFICATION: ${{ steps.security-images-initial-gate.outputs.classification }}
+          REBUILD_OUTCOME: ${{ steps.security-rebuild.outcome }}
+          FINAL_OUTCOME: ${{ steps.security-images-final-gate.outcome }}
+          FINAL_CLASSIFICATION: ${{ steps.security-images-final-gate.outputs.classification }}
+          RETRY_ENABLED: ${{ inputs.security_rebuild_retry_enabled }}
+        run: |
+          set -euo pipefail
+          initial="${INITIAL_CLASSIFICATION:-gate_error}"
+          final="$initial"
+          rebuild_attempted=false
+          rebuild_result=skipped
+
+          if [ "$INITIAL_OUTCOME" = success ]; then
+            :
+          elif [ "$initial" != actionable_vulnerability ] || [ "$RETRY_ENABLED" != true ]; then
+            final="$initial"
+          else
+            rebuild_attempted=true
+            if [ "$REBUILD_OUTCOME" = success ]; then
+              rebuild_result=passed
+            else
+              rebuild_result=failed
+              final=gate_error
+            fi
+            if [ "$rebuild_result" = passed ]; then
+              final="${FINAL_CLASSIFICATION:-gate_error}"
+            fi
+          fi
+
+          {
+            echo "initial_result=$initial"
+            echo "rebuild_attempted=$rebuild_attempted"
+            echo "rebuild_result=$rebuild_result"
+            echo "final_result=$final"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "$INITIAL_OUTCOME" = success ]; then
+            exit 0
+          fi
+          if [ "$initial" != actionable_vulnerability ] || [ "$RETRY_ENABLED" != true ]; then
+            exit 1
+          fi
+          if [ "$REBUILD_OUTCOME" != success ] || [ "$FINAL_OUTCOME" != success ]; then
+            exit 1
+          fi
 
       - name: Roll out services
         if: inputs.services_up != ''
@@ -400,4 +525,8 @@ jobs:
           status: ${{ job.status == 'success' && 'success' || 'failure' }}
           migration_result: ${{ inputs.deploy_manifest_migration_result }}
           optional_build_result: ${{ steps.optional-builds.outputs.result != '' && steps.optional-builds.outputs.result || 'skipped' }}
+          security_initial_result: ${{ steps.security-final.outputs.initial_result || 'not-run' }}
+          security_rebuild_attempted: ${{ steps.security-final.outputs.rebuild_attempted || 'false' }}
+          security_rebuild_result: ${{ steps.security-final.outputs.rebuild_result || 'skipped' }}
+          security_final_result: ${{ steps.security-final.outputs.final_result || 'not-run' }}
           retention: ${{ inputs.deploy_manifest_retention }}

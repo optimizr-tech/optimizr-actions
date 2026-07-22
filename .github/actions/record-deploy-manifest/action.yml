@@ -1,5 +1,6 @@
 name: Record sanitized deploy manifest
 description: Collect bounded Docker state and atomically record deployment evidence
+
 inputs:
   deploy_path:
     description: Absolute existing deployment directory
@@ -30,6 +31,22 @@ inputs:
     description: passed, failed, skipped or not-reported
     required: false
     default: not-reported
+  security_initial_result:
+    description: clean, actionable_vulnerability, unfixed_warning, gate_error or not-run
+    required: false
+    default: not-run
+  security_rebuild_attempted:
+    description: true when the bounded remediation rebuild ran
+    required: false
+    default: "false"
+  security_rebuild_result:
+    description: passed, failed or skipped
+    required: false
+    default: skipped
+  security_final_result:
+    description: clean, actionable_vulnerability, unfixed_warning, gate_error or not-run
+    required: false
+    default: not-run
   retention:
     description: Immutable manifest files to retain
     required: false
@@ -56,11 +73,15 @@ runs:
         INPUT_STATUS: ${{ inputs.status }}
         INPUT_MIGRATION_RESULT: ${{ inputs.migration_result }}
         INPUT_OPTIONAL_BUILD_RESULT: ${{ inputs.optional_build_result }}
+        INPUT_SECURITY_INITIAL_RESULT: ${{ inputs.security_initial_result }}
+        INPUT_SECURITY_REBUILD_ATTEMPTED: ${{ inputs.security_rebuild_attempted }}
+        INPUT_SECURITY_REBUILD_RESULT: ${{ inputs.security_rebuild_result }}
+        INPUT_SECURITY_FINAL_RESULT: ${{ inputs.security_final_result }}
         INPUT_RETENTION: ${{ inputs.retention }}
       run: |
         set -euo pipefail
         action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
-        python3 "$action_root/scripts/deploy_manifest/record.py" \
+        record_output="$(python3 "$action_root/scripts/deploy_manifest/record.py" \
           --deploy-path "$INPUT_DEPLOY_PATH" \
           --compose-file "$INPUT_COMPOSE_FILE" \
           --container-name "$INPUT_CONTAINER_NAME" \
@@ -69,4 +90,19 @@ runs:
           --status "$INPUT_STATUS" \
           --migration-result "$INPUT_MIGRATION_RESULT" \
           --optional-build-result "$INPUT_OPTIONAL_BUILD_RESULT" \
-          --retention "$INPUT_RETENTION" >> "$GITHUB_OUTPUT"
+          --retention "$INPUT_RETENTION")"
+        printf '%s\n' "$record_output" >> "$GITHUB_OUTPUT"
+        manifest_path="$(printf '%s\n' "$record_output" | sed -n 's/^manifest_path=//p')"
+        last_successful_path="$(printf '%s\n' "$record_output" | sed -n 's/^last_successful_path=//p')"
+        [ -n "$manifest_path" ] && [ -n "$last_successful_path" ] || {
+          echo "::error::deploy manifest recorder did not return expected paths" >&2
+          exit 2
+        }
+        python3 "$action_root/scripts/deploy_manifest/remediation.py" \
+          --manifest "$manifest_path" \
+          --last-successful "$last_successful_path" \
+          --status "$INPUT_STATUS" \
+          --initial-result "$INPUT_SECURITY_INITIAL_RESULT" \
+          --rebuild-attempted "$INPUT_SECURITY_REBUILD_ATTEMPTED" \
+          --rebuild-result "$INPUT_SECURITY_REBUILD_RESULT" \
+          --final-result "$INPUT_SECURITY_FINAL_RESULT"
