@@ -119,6 +119,34 @@ def _write_permissions(content: str) -> set[str]:
     return result
 
 
+def _job_blocks(content: str) -> list[tuple[str, str]]:
+    """Return top-level workflow job blocks without parsing expressions as YAML."""
+    lines = content.splitlines()
+    jobs_index = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if line.strip() == "jobs:" and not line.startswith((" ", "\t"))
+        ),
+        None,
+    )
+    if jobs_index is None:
+        return []
+    starts: list[tuple[int, str]] = []
+    for index in range(jobs_index + 1, len(lines)):
+        line = lines[index]
+        if line and not line.startswith((" ", "\t", "#")):
+            break
+        match = re.match(r"^  ([A-Za-z0-9_-]+):\s*(?:#.*)?$", line)
+        if match:
+            starts.append((index, match.group(1)))
+    blocks: list[tuple[str, str]] = []
+    for position, (start, name) in enumerate(starts):
+        end = starts[position + 1][0] if position + 1 < len(starts) else len(lines)
+        blocks.append((name, "\n".join(lines[start:end])))
+    return blocks
+
+
 def audit_workflows(repository: str, visibility: str, workflows: Mapping[str, str]) -> list[Finding]:
     findings: list[Finding] = []
     for path, content in sorted(workflows.items()):
@@ -161,15 +189,20 @@ def audit_workflows(repository: str, visibility: str, workflows: Mapping[str, st
             add("DUPLICATED_COMMITLINT_WORKFLOW", "Commitlint does not call the canonical optimizr-actions reusable.")
         if basename == "validate-pr.yml" and "optimizr-actions/.github/workflows/_validate-pr.yml@v1" not in content:
             add("DUPLICATED_PR_VALIDATION", "Pull-request validation does not call the canonical optimizr-actions reusable.")
-        if (
-            _has_event(on_block, "pull_request")
-            and "optimizr-actions/.github/workflows/" in content
-            and not PR_BILLING_SKIP_GUARD_RE.search(content)
-        ):
-            add(
-                "MISSING_PR_BILLING_SKIP_GUARD",
-                "Pull-request workflow has no caller-level [skip-tests] guard before its reusable dependency chain, so a billing outage can fail before the reusable starts.",
-            )
+        if _has_event(on_block, "pull_request"):
+            for job_name, job_block in _job_blocks(content):
+                hosted = (
+                    "optimizr-actions/.github/workflows/" in job_block
+                    or re.search(
+                        r"(?m)^\s+runs-on:\s*.*(?:ubuntu|windows|macos)-",
+                        job_block,
+                    )
+                )
+                if hosted and not PR_BILLING_SKIP_GUARD_RE.search(job_block):
+                    add(
+                        "MISSING_PR_BILLING_SKIP_GUARD",
+                        f"Hosted pull-request job `{job_name}` has no caller-level [skip-tests] guard, so a billing outage can fail before dependency-based skipping is resolved.",
+                    )
     return findings
 
 

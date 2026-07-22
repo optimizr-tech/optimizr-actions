@@ -137,6 +137,37 @@ jobs:
             {finding.rule_id for finding in findings},
         )
 
+    def test_detects_unguarded_dependent_hosted_job(self):
+        workflows = {
+            ".github/workflows/test.yml": """
+on:
+  pull_request:
+jobs:
+  root:
+    if: >-
+      !contains(github.event.pull_request.title, '[skip-tests]')
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_docker-compose-validate.yml@v1
+  dependent:
+    needs: root
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo validate
+"""
+        }
+
+        findings = audit_workflows(
+            "optimizr-tech/example", "private", workflows
+        )
+
+        self.assertEqual(
+            ["dependent"],
+            [
+                finding.message.split("job `", 1)[1].split("`", 1)[0]
+                for finding in findings
+                if finding.rule_id == "MISSING_PR_BILLING_SKIP_GUARD"
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
