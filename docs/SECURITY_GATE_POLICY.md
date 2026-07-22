@@ -10,6 +10,11 @@ The deployment is blocked when the selected severities contain at least one of:
 - a misconfiguration;
 - a detected secret.
 
+Misconfiguration analysis is source-owned: the filesystem scan uses Trivy
+`vuln,misconfig,secret`. Image scans use `vuln,secret` to evaluate the runtime
+package and secret surface without treating source files archived inside an
+image layer as the active deployment configuration.
+
 A vulnerability for which the distribution or package source has not published a fixed version is **signal-only**. It does not block deployment because there is no actionable package update for the consumer to apply.
 
 ## Reporting and evidence

@@ -53,6 +53,9 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertIn("misconfiguration_count:", content)
         self.assertIn("secret_count:", content)
         self.assertIn("report_args=(", content)
+        self.assertIn('fs) scanners="vuln,misconfig,secret" ;;', content)
+        self.assertIn('image) scanners="vuln,secret" ;;', content)
+        self.assertIn('--scanners "$scanners"', content)
         self.assertIn('blocking_args=("${report_args[@]}" --ignore-unfixed)', content)
         self.assertIn('--format json --exit-code 0 --output "$json_report"', content)
         self.assertIn('--format json --exit-code 1 --output "$blocking_json_report"', content)
@@ -61,6 +64,12 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertIn("vulnerabilities without an available fix remain visible", content)
         self.assertNotIn("ALLOW_MISSING_TRIVY", content)
         self.assertNotIn("continue-on-error: true", content)
+
+    def test_filesystem_owns_configuration_analysis_and_image_owns_runtime_packages(self) -> None:
+        documentation = read("docs/SECURITY_GATE.md")
+
+        self.assertIn("filesystem source gate owns configuration analysis", documentation)
+        self.assertIn("image gate owns runtime packages and secrets", documentation)
 
     def test_reusable_workflow_runs_same_gate_on_selected_runner(self) -> None:
         content = read(".github/workflows/_security-gate.yml")
