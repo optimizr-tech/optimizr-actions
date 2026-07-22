@@ -24,6 +24,7 @@ runs:
       with:
         version: ${{ inputs.trivy_version }}
         cache: "true"
+        path: ${{ runner.temp }}/optimizr-trivy/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
     - name: Generate immutable SBOM and provenance evidence
       shell: bash
       env:
