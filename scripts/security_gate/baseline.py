@@ -7,8 +7,12 @@ from copy import deepcopy
 from datetime import date, datetime, timezone
 import json
 from pathlib import Path
+import re
 import sys
 from typing import Any, Mapping, Sequence
+
+
+_IMAGE_ID = re.compile(r"sha256:[0-9a-fA-F]{64}\Z")
 
 
 class BaselineError(ValueError):
@@ -76,9 +80,13 @@ def apply_baseline(
     output_path: Path,
     summary_path: Path,
     *,
+    scope: str,
     today: date | None = None,
 ) -> dict[str, Any]:
-    """Remove only exact reviewed fingerprints and return bounded baseline state."""
+    """Remove exact reviewed fingerprints for one immutable image scope."""
+    if _IMAGE_ID.fullmatch(scope) is None:
+        raise BaselineError("baseline scope must be an immutable sha256 image ID")
+
     report = _load_json(report_path, "Trivy report")
     baseline = _load_json(baseline_path, "baseline")
     if baseline.get("version") != 1:
@@ -107,10 +115,17 @@ def apply_baseline(
     for index, item in enumerate(raw_findings):
         if not isinstance(item, Mapping):
             raise BaselineError(f"baseline findings[{index}] must be an object")
+        item_scope = item.get("scope")
+        if not isinstance(item_scope, str) or _IMAGE_ID.fullmatch(item_scope.strip()) is None:
+            raise BaselineError(f"baseline findings[{index}].scope must be a sha256 image ID")
+        if item_scope.strip().lower() != scope.lower():
+            continue
         fingerprint = _baseline_fingerprint(item, index)
         if fingerprint in approved:
             raise BaselineError(f"duplicate baseline fingerprint at findings[{index}]")
         approved.add(fingerprint)
+    if not approved:
+        raise BaselineError(f"baseline has no reviewed findings for image scope {scope}")
 
     filtered = deepcopy(report)
     raw_results = filtered.get("Results", [])
@@ -150,12 +165,13 @@ def apply_baseline(
     stale = approved - matched
     if stale:
         raise BaselineError(
-            f"baseline contains {len(stale)} fingerprint(s) absent from the current report"
+            f"baseline contains {len(stale)} fingerprint(s) absent from the current report for {scope}"
         )
 
     summary = {
         "schema_version": 1,
         "status": "validated",
+        "scope": scope.lower(),
         "owner": owner,
         "reviewed_at": reviewed_at_text,
         "expires": expires_text,
@@ -174,6 +190,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--baseline", type=Path, required=True)
+    parser.add_argument("--scope", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--summary-output", type=Path, required=True)
     return parser
@@ -187,11 +204,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.baseline,
             args.output,
             args.summary_output,
+            scope=args.scope,
         )
         print(
             "::notice title=Reviewed vulnerability baseline::"
-            f"matched={result['matched']} remaining={result['remaining']} "
-            f"expires={result['expires']}"
+            f"scope={result['scope']} matched={result['matched']} "
+            f"remaining={result['remaining']} expires={result['expires']}"
         )
         return 0 if result["remaining"] == 0 else 1
     except (BaselineError, OSError, KeyError) as exc:
