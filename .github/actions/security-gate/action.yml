@@ -127,7 +127,8 @@ runs:
         flock -x 9
 
         case "$INPUT_SCAN_TYPE" in
-          fs|image) ;;
+          fs) scanners="vuln,misconfig,secret" ;;
+          image) scanners="vuln,secret" ;;
           *)
             echo "::error::scan_type must be fs or image" >&2
             exit 2
@@ -220,7 +221,7 @@ runs:
             --severity "$INPUT_SEVERITY"
             --ignorefile "$ignore_file"
             --show-suppressed
-            --scanners vuln,misconfig,secret
+            --scanners "$scanners"
           )
           blocking_args=("${report_args[@]}" --ignore-unfixed)
 
