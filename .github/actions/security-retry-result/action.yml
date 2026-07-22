@@ -1,0 +1,67 @@
+name: Classify bounded security remediation retry
+description: Fail closed unless a retry changes immutable images and its final scan passes
+
+inputs:
+  initial_outcome:
+    description: Outcome of the initial image security-gate step
+    required: true
+  initial_classification:
+    description: Sanitized initial security-gate classification
+    required: false
+    default: ""
+  rebuild_outcome:
+    description: Outcome of the bounded Compose rebuild step
+    required: false
+    default: skipped
+  final_outcome:
+    description: Outcome of the remediated image security-gate step
+    required: false
+    default: skipped
+  final_classification:
+    description: Sanitized remediated image security-gate classification
+    required: false
+    default: ""
+  retry_enabled:
+    description: Whether the caller enabled the bounded retry
+    required: true
+  initial_refs:
+    description: Newline-separated immutable image IDs before the rebuild
+    required: false
+    default: ""
+  remediated_refs:
+    description: Newline-separated immutable image IDs after the rebuild
+    required: false
+    default: ""
+
+outputs:
+  initial_result:
+    description: Sanitized initial classification
+    value: ${{ steps.classify.outputs.initial_result }}
+  rebuild_attempted:
+    description: Whether a bounded Compose rebuild was attempted
+    value: ${{ steps.classify.outputs.rebuild_attempted }}
+  rebuild_result:
+    description: passed, failed, skipped, or no_change
+    value: ${{ steps.classify.outputs.rebuild_result }}
+  final_result:
+    description: Sanitized final classification
+    value: ${{ steps.classify.outputs.final_result }}
+  passed:
+    description: true only when a changed image set passes the final scan
+    value: ${{ steps.classify.outputs.passed }}
+
+runs:
+  using: composite
+  steps:
+    - id: classify
+      shell: bash
+      env:
+        INITIAL_OUTCOME: ${{ inputs.initial_outcome }}
+        INITIAL_CLASSIFICATION: ${{ inputs.initial_classification }}
+        REBUILD_OUTCOME: ${{ inputs.rebuild_outcome }}
+        FINAL_OUTCOME: ${{ inputs.final_outcome }}
+        FINAL_CLASSIFICATION: ${{ inputs.final_classification }}
+        RETRY_ENABLED: ${{ inputs.retry_enabled }}
+        INITIAL_REFS: ${{ inputs.initial_refs }}
+        REMEDIATED_REFS: ${{ inputs.remediated_refs }}
+      run: python3 "$GITHUB_ACTION_PATH/retry_result.py" >> "$GITHUB_OUTPUT"

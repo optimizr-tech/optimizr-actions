@@ -74,6 +74,26 @@ The deploy reusables capture the first image-gate outcome without promoting the 
 
 The retry calls the reviewed `security-rebuild` composite once. It pulls referenced images, builds with `--pull`, optionally disables cache, resolves the rebuilt immutable image IDs, and invokes the same security gate again. The final enforcement step is ordered before every `docker compose up` command.
 
+A successful Compose rebuild step is evidence only that Docker accepted the command; it is not evidence that a dependency or image changed. Before promotion, the reusable compares the sorted sets of initial and remediated immutable image IDs. Equal non-empty sets produce `rebuild_result=no_change`, retain the initial actionable classification, and fail closed without rollout. This makes immutable external-image retries explicit instead of reporting a command success as remediation.
+
+### Retry-result action contract
+
+`security-retry-result` is an internal portable composite used by both deploy
+reusables. It accepts the initial/retry/final step outcomes and classifications,
+the caller's retry policy, and newline-separated immutable ID sets from before
+and after the retry. Its outputs are `initial_result`,
+`rebuild_attempted`, `rebuild_result`, `final_result`, and `passed`.
+`rebuild_result` remains additive evidence: `passed`, `failed`, `skipped`, or
+`no_change`. `passed=true` is emitted only for a non-empty changed ID set whose
+final gate succeeded with `clean` or `unfixed_warning`.
+
+The action returns non-zero for every non-promotable state, but the calling
+step uses `continue-on-error` so its sanitized outputs are retained in the
+deployment manifest. The immediately following enforcement step still fails
+the job, so this does not downgrade the security policy. To roll back the
+contract, pin a consumer to the prior reviewed `optimizr-actions` commit or
+move governed `v1` only after release validation; do not bypass the final gate.
+
 ### Source persistence
 
 Runtime remediation does not write dependency updates back to Git. Pulling a
@@ -145,7 +165,7 @@ Each target produces:
 
 The evidence record contains the repository name, exact 40-character commit SHA, scan type, target, immutable image identity where applicable, Trivy version, database timestamps, report hashes, severity policy, result, and timestamp. It intentionally excludes environment values, credentials, host addresses, production configuration, vulnerability descriptions and source snippets.
 
-When deploy manifests are enabled, they also record only these remediation states: initial classification, whether rebuild was attempted, rebuild result and final classification. Failed remediation never replaces `last-successful.json`.
+When deploy manifests are enabled, they also record only these remediation states: initial classification, whether rebuild was attempted, rebuild result and final classification. `security_rebuild_result` is `passed`, `failed`, `skipped`, or `no_change`; only `passed` means that changed immutable IDs passed the final security gate. Failed or unchanged remediation never replaces `last-successful.json`.
 
 Standalone and deploy workflows upload the evidence as a GitHub Actions artifact with 30-day retention. Evidence upload uses `if: always()` so failed scans retain their reports.
 
@@ -177,7 +197,7 @@ by `flock`.
 
 The gate fails closed when Trivy cannot be installed, the database cannot be refreshed, database metadata is missing or stale, an exception is malformed or expired, no required image is found, an image identity cannot be resolved, a report cannot be written, or an unexcepted finding meets the blocking severity.
 
-An actionable initial image result may enter the one-attempt remediation path. Promotion still fails closed unless the rebuilt immutable image IDs pass the final gate. A missing or malformed classification is treated as `gate_error`.
+An actionable initial image result may enter the one-attempt remediation path. Promotion still fails closed unless a changed set of rebuilt immutable image IDs passes the final gate. A missing image set, missing or malformed classification, unchanged image set, or failed final scan is treated as a non-promotable result; malformed data is reported as `gate_error`.
 
 ## Billing-outage operation
 
@@ -200,7 +220,7 @@ The last step provides defense in depth against caller condition mistakes.
 
 ## Rollback
 
-Before merging, record the previous known-good `optimizr-actions` commit. If the new contract causes an operational regression, pin the consumer to that commit or move governed `v1` back to it. Do not restore a deploy path that accepts all security jobs as skipped. Failed remediation does not mutate the running stack, and the previous `last-successful.json` remains available.
+Before merging, record the previous known-good `optimizr-actions` commit. If the new contract causes an operational regression, pin the consumer to that commit or move governed `v1` back to it. Do not restore a deploy path that accepts all security jobs as skipped. Failed or unchanged remediation does not mutate the running stack, and the previous `last-successful.json` remains available.
 
 The self-hosted Trivy database cache is repository-scoped, runner-owned, mode
 `0700`, and protected by `flock`. The Trivy executable itself is isolated per
