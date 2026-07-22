@@ -11,9 +11,17 @@ _CLASSIFICATIONS = {
     "clean",
     "actionable_vulnerability",
     "unfixed_warning",
-    "gate_error",
+    "misconfiguration_detected",
+    "secret_detected",
+    "scanner_error",
 }
 _IMAGE_ID = re.compile(r"sha256:[0-9a-fA-F]{64}\Z")
+_COUNT_KEYS = (
+    "fixable_vulnerability_count",
+    "unfixed_vulnerability_count",
+    "misconfiguration_count",
+    "secret_count",
+)
 
 
 class RetryResult(TypedDict):
@@ -22,10 +30,16 @@ class RetryResult(TypedDict):
     rebuild_result: str
     final_result: str
     passed: bool
+    fixable_vulnerability_count: int
+    unfixed_vulnerability_count: int
+    misconfiguration_count: int
+    secret_count: int
 
 
 def _classification(raw: str) -> str:
-    return raw if raw in _CLASSIFICATIONS else "gate_error"
+    if raw == "gate_error":
+        return "scanner_error"
+    return raw if raw in _CLASSIFICATIONS else "scanner_error"
 
 
 def _refs(raw: str) -> frozenset[str] | None:
@@ -33,6 +47,10 @@ def _refs(raw: str) -> frozenset[str] | None:
     if any(_IMAGE_ID.fullmatch(ref) is None for ref in refs):
         return None
     return frozenset(refs)
+
+
+def _counts(values: tuple[int, int, int, int]) -> dict[str, int]:
+    return dict(zip(_COUNT_KEYS, values, strict=True))
 
 
 def evaluate_retry(
@@ -45,24 +63,25 @@ def evaluate_retry(
     retry_enabled: bool,
     initial_refs: str,
     remediated_refs: str,
+    initial_counts: tuple[int, int, int, int] = (0, 0, 0, 0),
+    final_counts: tuple[int, int, int, int] = (0, 0, 0, 0),
 ) -> RetryResult:
-    """Return sanitized retry evidence and whether the candidate may promote.
-
-    A successful Compose command establishes only command execution. Remediation
-    succeeds only when the immutable image set changed and its final security
-    gate passed.
-    """
+    """Return sanitized retry evidence and whether the candidate may promote."""
     initial = _classification(initial_classification)
     before = _refs(initial_refs)
     after = _refs(remediated_refs)
+    initial_evidence = _counts(initial_counts)
+    final_evidence = _counts(final_counts)
+
     if before is None or after is None:
         attempted = initial == "actionable_vulnerability" and retry_enabled
         return {
             "initial_result": initial,
             "rebuild_attempted": attempted,
             "rebuild_result": "failed" if attempted else "skipped",
-            "final_result": "gate_error",
+            "final_result": "scanner_error",
             "passed": False,
+            **initial_evidence,
         }
 
     if initial_outcome == "success":
@@ -71,8 +90,9 @@ def evaluate_retry(
                 "initial_result": initial,
                 "rebuild_attempted": False,
                 "rebuild_result": "skipped",
-                "final_result": "gate_error",
+                "final_result": "scanner_error",
                 "passed": False,
+                **initial_evidence,
             }
         return {
             "initial_result": initial,
@@ -80,6 +100,7 @@ def evaluate_retry(
             "rebuild_result": "skipped",
             "final_result": initial,
             "passed": True,
+            **initial_evidence,
         }
 
     if initial != "actionable_vulnerability" or not retry_enabled:
@@ -89,6 +110,7 @@ def evaluate_retry(
             "rebuild_result": "skipped",
             "final_result": initial,
             "passed": False,
+            **initial_evidence,
         }
 
     if rebuild_outcome != "success":
@@ -96,8 +118,9 @@ def evaluate_retry(
             "initial_result": initial,
             "rebuild_attempted": True,
             "rebuild_result": "failed",
-            "final_result": "gate_error",
+            "final_result": "scanner_error",
             "passed": False,
+            **initial_evidence,
         }
 
     if not before or not after:
@@ -105,8 +128,9 @@ def evaluate_retry(
             "initial_result": initial,
             "rebuild_attempted": True,
             "rebuild_result": "failed",
-            "final_result": "gate_error",
+            "final_result": "scanner_error",
             "passed": False,
+            **initial_evidence,
         }
     if before == after:
         return {
@@ -115,6 +139,7 @@ def evaluate_retry(
             "rebuild_result": "no_change",
             "final_result": initial,
             "passed": False,
+            **initial_evidence,
         }
 
     final = _classification(final_classification)
@@ -125,6 +150,7 @@ def evaluate_retry(
             "rebuild_result": "passed",
             "final_result": final,
             "passed": True,
+            **final_evidence,
         }
 
     return {
@@ -133,11 +159,27 @@ def evaluate_retry(
         "rebuild_result": "failed",
         "final_result": final,
         "passed": False,
+        **final_evidence,
     }
 
 
 def _env_bool(name: str) -> bool:
     return os.environ.get(name, "") == "true"
+
+
+def _env_count(name: str) -> int:
+    raw = os.environ.get(name, "0")
+    try:
+        value = int(raw)
+    except ValueError:
+        return 0
+    return value if value >= 0 else 0
+
+
+def _env_counts(prefix: str) -> tuple[int, int, int, int]:
+    return tuple(
+        _env_count(f"{prefix}_{name.upper()}") for name in _COUNT_KEYS
+    )  # type: ignore[return-value]
 
 
 def main() -> int:
@@ -150,6 +192,8 @@ def main() -> int:
         retry_enabled=_env_bool("RETRY_ENABLED"),
         initial_refs=os.environ.get("INITIAL_REFS", ""),
         remediated_refs=os.environ.get("REMEDIATED_REFS", ""),
+        initial_counts=_env_counts("INITIAL"),
+        final_counts=_env_counts("FINAL"),
     )
     for key in (
         "initial_result",
@@ -157,6 +201,7 @@ def main() -> int:
         "rebuild_result",
         "final_result",
         "passed",
+        *_COUNT_KEYS,
     ):
         value = str(result[key]).lower() if isinstance(result[key], bool) else result[key]
         print(f"{key}={value}")
