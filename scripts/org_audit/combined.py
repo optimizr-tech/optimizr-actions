@@ -12,6 +12,10 @@ import sys
 from typing import Mapping, Sequence
 from urllib import parse
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from scripts.org_audit.audit import (
     API_ROOT,
     MAX_WORKFLOW_BYTES,
