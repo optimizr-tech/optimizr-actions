@@ -14,6 +14,16 @@ A production rollout is permitted only after:
 
 The reusable VPS deploy workflows enable the gate by default. They perform the filesystem scan before `rsync`, build local services, pull declared runtime images with `docker compose pull --ignore-buildable`, resolve immutable image IDs, and only then invoke the image scans and `docker compose up`.
 
+### Scan ownership
+
+The filesystem source gate owns configuration analysis: it runs Trivy
+`vuln,misconfig,secret` against the candidate repository before synchronization.
+The image gate owns runtime packages and secrets: it runs only `vuln,secret`
+against each immutable candidate image. Image layers can contain archived tools,
+examples, or development Dockerfiles that are not the deployment configuration;
+those files are deliberately evaluated at their source by the filesystem gate,
+not reclassified as an effective runtime misconfiguration by the image gate.
+
 ## Standalone reusable workflow
 
 ### GitHub-hosted runner
