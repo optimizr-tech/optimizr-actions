@@ -17,7 +17,7 @@ _CLASSIFICATIONS = {
     "gate_error",
     "not-run",
 }
-_REBUILD_RESULTS = {"passed", "failed", "skipped"}
+_REBUILD_RESULTS = {"passed", "failed", "skipped", "no_change"}
 _STATUSES = {"success", "failure"}
 
 

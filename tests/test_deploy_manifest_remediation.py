@@ -60,6 +60,29 @@ class DeployManifestRemediationTests(unittest.TestCase):
 
             self.assertEqual({"stable": True}, json.loads(last_successful.read_text(encoding="utf-8")))
 
+    def test_records_no_change_without_calling_it_remediation_success(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / ".deploy-manifests"
+            root.mkdir()
+            manifest = root / "immutable.json"
+            last_successful = root / "last-successful.json"
+            manifest.write_text('{"schema_version":"1.0","status":"failure"}', encoding="utf-8")
+            last_successful.write_text('{"stable":true}', encoding="utf-8")
+
+            decorate_manifest(
+                manifest=manifest,
+                last_successful=last_successful,
+                status="failure",
+                initial_result="actionable_vulnerability",
+                rebuild_attempted=True,
+                rebuild_result="no_change",
+                final_result="actionable_vulnerability",
+            )
+
+            result = json.loads(manifest.read_text(encoding="utf-8"))
+            self.assertEqual("no_change", result["security_rebuild_result"])
+            self.assertEqual({"stable": True}, json.loads(last_successful.read_text(encoding="utf-8")))
+
     def test_rejects_unbounded_or_inconsistent_values(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / ".deploy-manifests"

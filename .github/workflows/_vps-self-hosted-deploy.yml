@@ -337,54 +337,29 @@ jobs:
       - name: Enforce final image security result
         id: security-final
         if: inputs.security_require_image_scan && always()
+        continue-on-error: true
+        uses: optimizr-tech/optimizr-actions/.github/actions/security-retry-result@v1
+        with:
+          initial_outcome: ${{ steps.security-images-initial-gate.outcome }}
+          initial_classification: ${{ steps.security-images-initial-gate.outputs.classification }}
+          rebuild_outcome: ${{ steps.security-rebuild.outcome }}
+          final_outcome: ${{ steps.security-images-final-gate.outcome }}
+          final_classification: ${{ steps.security-images-final-gate.outputs.classification }}
+          retry_enabled: ${{ inputs.security_rebuild_retry_enabled }}
+          initial_refs: ${{ steps.security-images-initial.outputs.refs }}
+          remediated_refs: ${{ steps.security-images-remediated.outputs.refs }}
+
+      - name: Require effective security remediation
+        if: inputs.security_require_image_scan && always()
         shell: bash
         env:
-          INITIAL_OUTCOME: ${{ steps.security-images-initial-gate.outcome }}
-          INITIAL_CLASSIFICATION: ${{ steps.security-images-initial-gate.outputs.classification }}
-          REBUILD_OUTCOME: ${{ steps.security-rebuild.outcome }}
-          FINAL_OUTCOME: ${{ steps.security-images-final-gate.outcome }}
-          FINAL_CLASSIFICATION: ${{ steps.security-images-final-gate.outputs.classification }}
-          RETRY_ENABLED: ${{ inputs.security_rebuild_retry_enabled }}
+          RETRY_PASSED: ${{ steps.security-final.outputs.passed }}
         run: |
           set -euo pipefail
-          initial="${INITIAL_CLASSIFICATION:-gate_error}"
-          final="$initial"
-          rebuild_attempted=false
-          rebuild_result=skipped
-
-          if [ "$INITIAL_OUTCOME" = success ]; then
-            :
-          elif [ "$initial" != actionable_vulnerability ] || [ "$RETRY_ENABLED" != true ]; then
-            final="$initial"
-          else
-            rebuild_attempted=true
-            if [ "$REBUILD_OUTCOME" = success ]; then
-              rebuild_result=passed
-            else
-              rebuild_result=failed
-              final=gate_error
-            fi
-            if [ "$rebuild_result" = passed ]; then
-              final="${FINAL_CLASSIFICATION:-gate_error}"
-            fi
-          fi
-
-          {
-            echo "initial_result=$initial"
-            echo "rebuild_attempted=$rebuild_attempted"
-            echo "rebuild_result=$rebuild_result"
-            echo "final_result=$final"
-          } >> "$GITHUB_OUTPUT"
-
-          if [ "$INITIAL_OUTCOME" = success ]; then
-            exit 0
-          fi
-          if [ "$initial" != actionable_vulnerability ] || [ "$RETRY_ENABLED" != true ]; then
+          [ "$RETRY_PASSED" = true ] || {
+            echo "::error::Image security gate did not produce a changed, clean candidate" >&2
             exit 1
-          fi
-          if [ "$REBUILD_OUTCOME" != success ] || [ "$FINAL_OUTCOME" != success ]; then
-            exit 1
-          fi
+          }
 
       - name: Pre-deploy validation (nginx -t)
         if: inputs.pre_deploy_validation
