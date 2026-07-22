@@ -14,6 +14,8 @@ Rules detect:
 - CI/deploy triggers without path filters;
 - potential self-hosted pull-request execution;
 - duplicated badge, commitlint and PR-validation workflows;
+- canonical PR-validation callers missing the caller-level `[skip-tests]`
+  billing guard;
 - missing `.github/dependabot.yml` organization configuration;
 - missing governed Dependabot native auto-merge caller;
 - deployment-like workflows that do not call an approved VPS deploy reusable.

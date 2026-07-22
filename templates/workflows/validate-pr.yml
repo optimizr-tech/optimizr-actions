@@ -1,0 +1,29 @@
+name: Validate PR convention
+
+concurrency:
+  group: validate-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  validate-pr:
+    # The caller owns this guard. A condition inside the reusable is too late
+    # to avoid a hosted-runner billing failure while the called job starts.
+    if: >-
+      github.event_name != 'pull_request' ||
+      !contains(github.event.pull_request.title, '[skip-tests]')
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_validate-pr.yml@v1
+    with:
+      run_self_tests: true
+      pr_title: ${{ github.event.pull_request.title }}
+      pr_body: ${{ github.event.pull_request.body }}
+      base_sha: ${{ github.event.pull_request.base.sha }}
+      head_sha: ${{ github.event.pull_request.head.sha }}
