@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+from pathlib import Path
+import subprocess
+import sys
 import unittest
 
 from scripts.org_audit.combined import audit_security_adoption
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class OrgSecurityAdoptionTests(unittest.TestCase):
@@ -53,6 +59,18 @@ jobs:
         )
 
         self.assertEqual([], findings)
+
+    def test_combined_audit_entrypoint_imports_from_repository_root(self) -> None:
+        completed = subprocess.run(
+            [sys.executable, "scripts/org_audit/combined.py", "--help"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertIn("--repositories-env", completed.stdout)
 
 
 if __name__ == "__main__":
