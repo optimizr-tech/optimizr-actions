@@ -14,6 +14,22 @@ def read(path: str) -> str:
 
 
 class SecurityGateContractTests(unittest.TestCase):
+    def test_every_trivy_install_is_isolated_per_job(self) -> None:
+        install_path = (
+            "path: ${{ runner.temp }}/optimizr-trivy/"
+            "${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}"
+        )
+
+        for action in (
+            ".github/actions/security-gate/action.yml",
+            ".github/actions/dependency-policy/action.yml",
+            ".github/actions/supply-chain-evidence/action.yml",
+        ):
+            with self.subTest(action=action):
+                content = read(action)
+                self.assertIn(install_path, content)
+                self.assertNotIn("path: $HOME", content)
+
     def test_composite_action_reports_all_and_blocks_only_actionable_findings(self) -> None:
         content = read(".github/actions/security-gate/action.yml")
 
