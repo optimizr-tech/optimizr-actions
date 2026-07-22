@@ -39,8 +39,9 @@ tests are bypassed.
 
 ## Adoption audit
 
-The organization audit emits `MISSING_PR_BILLING_SKIP_GUARD` when a
-pull-request workflow that calls canonical reusables has no caller-level title
-guard. A guarded root job may safely gate dependent jobs through `needs`; an
-independent reusable caller needs its own guard. This catches the failure mode
-before the next billing outage.
+The organization audit emits `MISSING_PR_BILLING_SKIP_GUARD` for every hosted
+pull-request job or canonical reusable caller that lacks its own title guard.
+Do not rely on a guarded root job and `needs`: during the July 2026 billing
+outage GitHub still rejected a Certbot workflow at startup before
+dependency-based skipping was resolved. This catches the failure mode before
+the next billing outage.
