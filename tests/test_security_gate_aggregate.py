@@ -54,11 +54,17 @@ class SecurityGateAggregateTests(unittest.TestCase):
         self.assertEqual(2, result["fixable_vulnerability_count"])
         self.assertEqual(4, result["unfixed_vulnerability_count"])
 
-    def test_gate_error_precedes_actionable(self) -> None:
+    def test_misconfiguration_precedes_actionable_vulnerability(self) -> None:
         result = aggregate_summaries(
             [self._summary("one.json", fixable=1, misconfigurations=1)]
         )
-        self.assertEqual("gate_error", result["classification"])
+        self.assertEqual("misconfiguration_detected", result["classification"])
+
+    def test_secret_precedes_misconfiguration(self) -> None:
+        result = aggregate_summaries(
+            [self._summary("one.json", misconfigurations=1, secrets=1)]
+        )
+        self.assertEqual("secret_detected", result["classification"])
 
     def test_unfixed_only_is_warning(self) -> None:
         result = aggregate_summaries([self._summary("one.json", unfixed=2)])
@@ -68,11 +74,11 @@ class SecurityGateAggregateTests(unittest.TestCase):
         result = aggregate_summaries([self._summary("one.json")])
         self.assertEqual("clean", result["classification"])
 
-    def test_explicit_runtime_error_forces_gate_error(self) -> None:
+    def test_explicit_runtime_error_forces_scanner_error(self) -> None:
         result = aggregate_summaries(
             [self._summary("one.json", fixable=1)], gate_error=True
         )
-        self.assertEqual("gate_error", result["classification"])
+        self.assertEqual("scanner_error", result["classification"])
 
     def test_cli_writes_outputs(self) -> None:
         summary = self._summary("one.json", fixable=1, unfixed=2)
