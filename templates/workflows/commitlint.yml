@@ -1,0 +1,25 @@
+name: Commitlint on PR
+
+concurrency:
+  group: commitlint-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  commitlint:
+    # The caller owns this guard. A condition inside the reusable is too late
+    # to avoid a hosted-runner billing failure while the called job starts.
+    if: >-
+      github.event_name != 'pull_request' ||
+      !contains(github.event.pull_request.title, '[skip-tests]')
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_commitlint.yml@v1
+    with:
+      install_command: npm ci
+      base_sha: ${{ github.event.pull_request.base.sha }}
+      head_sha: ${{ github.event.pull_request.head.sha }}

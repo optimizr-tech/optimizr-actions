@@ -63,6 +63,20 @@ class SecuritySelfHealingContractTests(unittest.TestCase):
             "Roll out services",
         )
 
+    def test_runtime_remediation_never_mutates_consumer_source(self) -> None:
+        for path in (
+            ".github/workflows/_vps-self-hosted-deploy.yml",
+            ".github/workflows/_vps-monorepo-deploy.yml",
+        ):
+            with self.subTest(workflow=path):
+                content = read(path)
+                self.assertNotIn("git push", content)
+                self.assertNotIn("gh pr create", content)
+
+        documentation = read("docs/SECURITY_GATE.md")
+        self.assertIn("does not write dependency updates back to Git", documentation)
+        self.assertIn("Dependabot", documentation)
+
 
 if __name__ == "__main__":
     unittest.main()
