@@ -74,7 +74,7 @@ The deploy reusables capture the first image-gate outcome without promoting the 
 
 The retry calls the reviewed `security-rebuild` composite once. It pulls referenced images, builds with `--pull`, optionally disables cache, resolves the rebuilt immutable image IDs, and invokes the same security gate again. The final enforcement step is ordered before every `docker compose up` command.
 
-A successful Compose rebuild step is evidence only that Docker accepted the command; it is not evidence that a dependency or image changed. Before promotion, the reusable compares the sorted sets of initial and remediated immutable image IDs. Equal non-empty sets produce `rebuild_result=no_change`, retain the initial actionable classification, and fail closed without rollout. This makes immutable external-image retries explicit instead of reporting a command success as remediation.
+A successful Compose rebuild step is evidence only that Docker accepted the command; it is not evidence that a dependency or image changed. Before promotion, the reusable validates every reference as exactly `sha256:` plus 64 hexadecimal characters, then compares the sorted sets of initial and remediated immutable image IDs. A malformed set produces `gate_error`; equal non-empty sets produce `rebuild_result=no_change`, retain the initial actionable classification, and fail closed without rollout. This makes immutable external-image retries explicit instead of reporting a command success as remediation.
 
 ### Retry-result action contract
 
@@ -85,7 +85,9 @@ and after the retry. Its outputs are `initial_result`,
 `rebuild_attempted`, `rebuild_result`, `final_result`, and `passed`.
 `rebuild_result` remains additive evidence: `passed`, `failed`, `skipped`, or
 `no_change`. `passed=true` is emitted only for a non-empty changed ID set whose
-final gate succeeded with `clean` or `unfixed_warning`.
+final gate succeeded with `clean` or `unfixed_warning`. An initial step outcome
+of `success` is accepted only with one of those two passing classifications and
+a valid non-empty initial image set; missing or contradictory data fails closed.
 
 The action returns non-zero for every non-promotable state, but the calling
 step uses `continue-on-error` so its sanitized outputs are retained in the

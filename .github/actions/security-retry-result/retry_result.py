@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from typing import TypedDict
 
 
@@ -12,6 +13,7 @@ _CLASSIFICATIONS = {
     "unfixed_warning",
     "gate_error",
 }
+_IMAGE_ID = re.compile(r"sha256:[0-9a-fA-F]{64}\Z")
 
 
 class RetryResult(TypedDict):
@@ -26,8 +28,11 @@ def _classification(raw: str) -> str:
     return raw if raw in _CLASSIFICATIONS else "gate_error"
 
 
-def _refs(raw: str) -> frozenset[str]:
-    return frozenset(ref.strip() for ref in raw.splitlines() if ref.strip())
+def _refs(raw: str) -> frozenset[str] | None:
+    refs = tuple(ref.strip() for ref in raw.splitlines() if ref.strip())
+    if any(_IMAGE_ID.fullmatch(ref) is None for ref in refs):
+        return None
+    return frozenset(refs)
 
 
 def evaluate_retry(
@@ -48,7 +53,27 @@ def evaluate_retry(
     gate passed.
     """
     initial = _classification(initial_classification)
+    before = _refs(initial_refs)
+    after = _refs(remediated_refs)
+    if before is None or after is None:
+        attempted = initial == "actionable_vulnerability" and retry_enabled
+        return {
+            "initial_result": initial,
+            "rebuild_attempted": attempted,
+            "rebuild_result": "failed" if attempted else "skipped",
+            "final_result": "gate_error",
+            "passed": False,
+        }
+
     if initial_outcome == "success":
+        if initial not in {"clean", "unfixed_warning"} or not before:
+            return {
+                "initial_result": initial,
+                "rebuild_attempted": False,
+                "rebuild_result": "skipped",
+                "final_result": "gate_error",
+                "passed": False,
+            }
         return {
             "initial_result": initial,
             "rebuild_attempted": False,
@@ -75,8 +100,6 @@ def evaluate_retry(
             "passed": False,
         }
 
-    before = _refs(initial_refs)
-    after = _refs(remediated_refs)
     if not before or not after:
         return {
             "initial_result": initial,

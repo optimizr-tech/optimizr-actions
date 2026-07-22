@@ -25,11 +25,11 @@ inputs:
     description: Whether the caller enabled the bounded retry
     required: true
   initial_refs:
-    description: Newline-separated immutable image IDs before the rebuild
+    description: Newline-separated sha256 image IDs before the rebuild
     required: false
     default: ""
   remediated_refs:
-    description: Newline-separated immutable image IDs after the rebuild
+    description: Newline-separated sha256 image IDs after the rebuild
     required: false
     default: ""
 
