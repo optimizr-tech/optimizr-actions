@@ -35,6 +35,15 @@ class SecuritySelfHealingContractTests(unittest.TestCase):
         self.assertIn("security_rebuild_attempted:", content)
         self.assertIn("security_rebuild_result:", content)
         self.assertIn("security_final_result:", content)
+        self.assertIn(
+            "optimizr-tech/optimizr-actions/.github/actions/security-retry-result@v1",
+            content,
+        )
+        self.assertIn("initial_refs: ${{ steps.security-images-initial.outputs.refs }}", content)
+        self.assertIn(
+            "remediated_refs: ${{ steps.security-images-remediated.outputs.refs }}",
+            content,
+        )
         self.assertNotIn(
             'docker compose -f "$COMPOSE_FILE" images --quiet', content
         )
@@ -76,6 +85,16 @@ class SecuritySelfHealingContractTests(unittest.TestCase):
         documentation = read("docs/SECURITY_GATE.md")
         self.assertIn("does not write dependency updates back to Git", documentation)
         self.assertIn("Dependabot", documentation)
+
+    def test_retry_result_requires_new_immutable_images_before_promotion(self) -> None:
+        action = read(".github/actions/security-retry-result/action.yml")
+        script = read(".github/actions/security-retry-result/retry_result.py")
+
+        self.assertIn("initial_refs:", action)
+        self.assertIn("remediated_refs:", action)
+        self.assertIn("no_change", action)
+        self.assertIn("before == after", script)
+        self.assertIn('"rebuild_result": "no_change"', script)
 
 
 if __name__ == "__main__":

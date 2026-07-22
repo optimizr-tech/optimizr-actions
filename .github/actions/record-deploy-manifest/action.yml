@@ -40,7 +40,7 @@ inputs:
     required: false
     default: "false"
   security_rebuild_result:
-    description: passed, failed or skipped
+    description: passed, failed, skipped or no_change
     required: false
     default: skipped
   security_final_result:
