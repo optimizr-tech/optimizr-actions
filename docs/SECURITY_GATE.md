@@ -53,12 +53,34 @@ The deployment job must depend on the applicable hosted or self-hosted job and m
 |---|---:|---|
 | `security_require_image_scan` | `true` | Require at least one Compose image and scan it before rollout. |
 | `security_severity` | `HIGH,CRITICAL` | Severities that block deployment. |
-| `security_ignore_unfixed` | `false` | Explicit policy for vulnerabilities without a fix. |
+| `security_ignore_unfixed` | `false` | Deprecated caller compatibility value; unfixed findings remain signal-only centrally. |
 | `security_exceptions_file` | empty | Optional Optimizr exception-policy JSON path. |
 | `security_trivy_version` | `v0.70.0` | Controlled Trivy version. |
 | `security_db_max_age_hours` | `30` | Maximum accepted database download age. |
+| `security_rebuild_retry_enabled` | `true` | Permit one deterministic pull, rebuild and rescan for actionable image findings. |
+| `security_rebuild_retry_no_cache` | `true` | Disable the build cache during the bounded remediation retry. |
 
 The filesystem gate has no bypass input and always runs before the deploy workflow mutates the target environment. A consumer that intentionally deploys configuration without a Docker image may set `security_require_image_scan: false`; this is a visible policy exception and should be reviewed in the consumer pull request.
+
+## Bounded automatic remediation
+
+The deploy reusables capture the first image-gate outcome without promoting the candidate. A retry is attempted only when all of the following are true:
+
+- the image gate failed;
+- its sanitized `classification` is exactly `actionable_vulnerability`;
+- `security_rebuild_retry_enabled` is `true`.
+
+The retry calls the reviewed `security-rebuild` composite once. It pulls referenced images, builds with `--pull`, optionally disables cache, resolves the rebuilt immutable image IDs, and invokes the same security gate again. The final enforcement step is ordered before every `docker compose up` command.
+
+Secrets, misconfigurations, malformed policies, stale databases, scanner errors and filesystem findings never trigger a rebuild. They remain fail-closed because rebuilding the same image inputs cannot safely correct them. A failed retry leaves the currently running known-good deployment unchanged.
+
+The `security-gate` action preserves `result=passed|failed` for `v1` compatibility and adds sanitized outputs:
+
+- `classification`: `clean`, `actionable_vulnerability`, `unfixed_warning` or `gate_error`;
+- `fixable_vulnerability_count`;
+- `unfixed_vulnerability_count`;
+- `misconfiguration_count`;
+- `secret_count`.
 
 ## Exception policy
 
@@ -89,12 +111,16 @@ Each target produces:
 
 - a human-readable table report;
 - a JSON report;
+- a blocking JSON report;
 - a SARIF report;
 - validated database metadata;
 - exception-policy metadata and digest;
+- a sanitized finding summary;
 - a sanitized evidence record.
 
-The evidence record contains the repository name, exact 40-character commit SHA, scan type, target, immutable image identity where applicable, Trivy version, database timestamps, report hashes, severity policy, `ignore_unfixed`, result, and timestamp. It intentionally excludes environment values, credentials, host addresses, and production configuration.
+The evidence record contains the repository name, exact 40-character commit SHA, scan type, target, immutable image identity where applicable, Trivy version, database timestamps, report hashes, severity policy, result, and timestamp. It intentionally excludes environment values, credentials, host addresses, production configuration, vulnerability descriptions and source snippets.
+
+When deploy manifests are enabled, they also record only these remediation states: initial classification, whether rebuild was attempted, rebuild result and final classification. Failed remediation never replaces `last-successful.json`.
 
 Standalone and deploy workflows upload the evidence as a GitHub Actions artifact with 30-day retention. Evidence upload uses `if: always()` so failed scans retain their reports.
 
@@ -116,7 +142,7 @@ The action runs Trivy as the unprivileged runner user. When Docker is only avail
 
 The gate fails closed when Trivy cannot be installed, the database cannot be refreshed, database metadata is missing or stale, an exception is malformed or expired, no required image is found, an image identity cannot be resolved, a report cannot be written, or an unexcepted finding meets the blocking severity.
 
-`security_ignore_unfixed` is never inferred. Changing it from `false` requires an explicit caller change and review.
+An actionable initial image result may enter the one-attempt remediation path. Promotion still fails closed unless the rebuilt immutable image IDs pass the final gate. A missing or malformed classification is treated as `gate_error`.
 
 ## Billing-outage operation
 
@@ -134,10 +160,11 @@ The last step provides defense in depth against caller condition mistakes.
 3. Keep hosted gates blocking when billing is available.
 4. Confirm the caller has not disabled `security_require_image_scan` unless the deploy genuinely produces no image.
 5. Confirm image discovery returns the exact candidate images.
-6. Validate artifacts contain both filesystem and image evidence before merge.
+6. Leave the bounded retry enabled unless the consumer has a documented incompatibility with pulling base images.
+7. Validate artifacts contain filesystem, initial-image and any remediated-image evidence before merge.
 
 ## Rollback
 
-Before merging, record the previous known-good `optimizr-actions` commit. If the new contract causes an operational regression, pin the consumer to that commit or revert the deploy integration. Do not restore a deploy path that accepts all security jobs as skipped; retain a blocking local gate during rollback.
+Before merging, record the previous known-good `optimizr-actions` commit. If the new contract causes an operational regression, pin the consumer to that commit or move governed `v1` back to it. Do not restore a deploy path that accepts all security jobs as skipped. Failed remediation does not mutate the running stack, and the previous `last-successful.json` remains available.
 
 The self-hosted Trivy cache is repository-scoped, runner-owned, mode `0700`, and protected by `flock`.

@@ -1,0 +1,15 @@
+name: Dependabot security auto-merge
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_dependabot-security-automerge.yml@v1
+    with:
+      allow_minor: false

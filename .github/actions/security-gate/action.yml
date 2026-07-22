@@ -44,8 +44,23 @@ outputs:
     description: "Directory containing reports and evidence"
     value: ${{ steps.scan.outputs.evidence_dir }}
   result:
-    description: "passed or failed"
+    description: "Legacy result: passed or failed"
     value: ${{ steps.scan.outputs.result }}
+  classification:
+    description: "clean, actionable_vulnerability, unfixed_warning, or gate_error"
+    value: ${{ steps.scan.outputs.classification }}
+  fixable_vulnerability_count:
+    description: "Number of vulnerabilities with an available fixed version"
+    value: ${{ steps.scan.outputs.fixable_vulnerability_count }}
+  unfixed_vulnerability_count:
+    description: "Number of vulnerabilities without an available fixed version"
+    value: ${{ steps.scan.outputs.unfixed_vulnerability_count }}
+  misconfiguration_count:
+    description: "Number of blocking misconfigurations"
+    value: ${{ steps.scan.outputs.misconfiguration_count }}
+  secret_count:
+    description: "Number of detected secrets"
+    value: ${{ steps.scan.outputs.secret_count }}
 
 runs:
   using: composite
@@ -74,11 +89,22 @@ runs:
         action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
         evidence_tool="$action_root/scripts/security_gate/evidence.py"
         report_tool="$action_root/scripts/security_gate/report.py"
+        aggregate_tool="$action_root/scripts/security_gate/aggregate.py"
         repository="${GITHUB_REPOSITORY:-local/unknown}"
         cache_namespace="$(printf '%s' "$repository" | sha256sum | cut -c1-24)"
         cache_root="${XDG_CACHE_HOME:-${HOME:-/tmp}/.cache}/optimizr-security-gate/${cache_namespace}"
         cache_dir="$cache_root/trivy"
         evidence_dir="$INPUT_EVIDENCE_DIR"
+
+        {
+          echo "evidence_dir=$evidence_dir"
+          echo "result=failed"
+          echo "classification=gate_error"
+          echo "fixable_vulnerability_count=0"
+          echo "unfixed_vulnerability_count=0"
+          echo "misconfiguration_count=0"
+          echo "secret_count=0"
+        } >> "$GITHUB_OUTPUT"
 
         for path in "$cache_root" "$cache_dir"; do
           if [ -L "$path" ]; then
@@ -147,6 +173,8 @@ runs:
         trivy_version="$(trivy --version | head -n 1)"
         head_sha="${GITHUB_SHA:-$(git rev-parse HEAD)}"
         aggregate_status=0
+        gate_error=0
+        summary_paths=()
 
         for target in "${targets[@]}"; do
           slug="$(printf '%s' "$target" | sha256sum | cut -c1-16)"
@@ -159,7 +187,6 @@ runs:
           sarif_report="${prefix}.sarif"
           finding_summary="${prefix}-summary.json"
           evidence_report="${prefix}-evidence.json"
-          scan_target="$target"
           temporary_image=""
 
           exception_args=(
@@ -174,12 +201,9 @@ runs:
           python3 "$evidence_tool" "${exception_args[@]}"
 
           command_name=filesystem
-          target_args=("$scan_target")
+          target_args=("$target")
           if [ "$INPUT_SCAN_TYPE" = image ]; then
             command_name=image
-            # Persistent deploy runners commonly grant Docker through passwordless
-            # sudo instead of the runner group. Save once and scan the immutable tar
-            # without running Trivy itself as root.
             if ! docker image inspect "$target" >/dev/null 2>&1; then
               if sudo -n docker image inspect "$target" >/dev/null 2>&1; then
                 temporary_image="${RUNNER_TEMP:-/tmp}/trivy-${slug}.tar"
@@ -200,12 +224,9 @@ runs:
           blocking_args=("${report_args[@]}" --ignore-unfixed)
 
           echo "::group::Trivy $INPUT_SCAN_TYPE scan: $target"
-          # Complete reports retain fixed and unfixed findings for observability.
           trivy "$command_name" "${report_args[@]}" \
             --format table --exit-code 0 --output "$table_report" \
             "${target_args[@]}"
-          # GitHub runner stdout can briefly become non-blocking under heavy logs.
-          # Stream the complete report while retrying EAGAIN without duplicating data.
           if ! python3 - "$table_report" <<'PY'
         import errno
         import os
@@ -249,10 +270,8 @@ runs:
             summary_args+=(--github-summary "$GITHUB_STEP_SUMMARY")
           fi
           python3 "$report_tool" "${summary_args[@]}"
+          summary_paths+=("$finding_summary")
 
-          # The enforcement report filters only vulnerabilities for which the
-          # distribution or package source has not published a fixed version.
-          # Misconfigurations and secrets remain blocking.
           set +e
           trivy "$command_name" "${blocking_args[@]}" \
             --format json --exit-code 1 --output "$blocking_json_report" \
@@ -260,6 +279,10 @@ runs:
           scan_status=$?
           set -e
           echo "::endgroup::"
+
+          if [ "$scan_status" -gt 1 ]; then
+            gate_error=1
+          fi
 
           identity=""
           if [ "$INPUT_SCAN_TYPE" = image ]; then
@@ -273,6 +296,7 @@ runs:
             if [ -z "$identity" ]; then
               echo "::error::image scan did not resolve an immutable identity for $target" >&2
               scan_status=2
+              gate_error=1
             fi
           fi
 
@@ -305,7 +329,17 @@ runs:
           rm -f "$temporary_image"
         done
 
-        echo "evidence_dir=$evidence_dir" >> "$GITHUB_OUTPUT"
+        aggregate_args=()
+        for summary_path in "${summary_paths[@]}"; do
+          aggregate_args+=(--summary "$summary_path")
+        done
+        if [ "$gate_error" -ne 0 ]; then
+          aggregate_args+=(--gate-error)
+        fi
+        python3 "$aggregate_tool" \
+          "${aggregate_args[@]}" \
+          --github-output "$GITHUB_OUTPUT"
+
         if [ "$aggregate_status" -eq 0 ]; then
           echo "result=passed" >> "$GITHUB_OUTPUT"
         else
