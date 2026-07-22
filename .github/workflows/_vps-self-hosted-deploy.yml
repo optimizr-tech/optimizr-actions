@@ -85,6 +85,11 @@ on:
         required: false
         type: string
         default: ""
+      security_baseline_file:
+        description: Reviewed expiring vulnerability baseline for immutable image IDs
+        required: false
+        type: string
+        default: ""
       security_trivy_version:
         description: Controlled Trivy release
         required: false
@@ -270,6 +275,7 @@ jobs:
           severity: ${{ inputs.security_severity }}
           ignore_unfixed: ${{ inputs.security_ignore_unfixed }}
           exceptions_file: ${{ inputs.security_exceptions_file }}
+          baseline_file: ${{ inputs.security_baseline_file }}
           trivy_version: ${{ inputs.security_trivy_version }}
           db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
           evidence_dir: artifacts/security-gate/images-initial
@@ -330,6 +336,7 @@ jobs:
           severity: ${{ inputs.security_severity }}
           ignore_unfixed: ${{ inputs.security_ignore_unfixed }}
           exceptions_file: ${{ inputs.security_exceptions_file }}
+          baseline_file: ${{ inputs.security_baseline_file }}
           trivy_version: ${{ inputs.security_trivy_version }}
           db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
           evidence_dir: artifacts/security-gate/images-remediated
@@ -342,9 +349,17 @@ jobs:
         with:
           initial_outcome: ${{ steps.security-images-initial-gate.outcome }}
           initial_classification: ${{ steps.security-images-initial-gate.outputs.classification }}
+          initial_fixable_vulnerability_count: ${{ steps.security-images-initial-gate.outputs.fixable_vulnerability_count }}
+          initial_unfixed_vulnerability_count: ${{ steps.security-images-initial-gate.outputs.unfixed_vulnerability_count }}
+          initial_misconfiguration_count: ${{ steps.security-images-initial-gate.outputs.misconfiguration_count }}
+          initial_secret_count: ${{ steps.security-images-initial-gate.outputs.secret_count }}
           rebuild_outcome: ${{ steps.security-rebuild.outcome }}
           final_outcome: ${{ steps.security-images-final-gate.outcome }}
           final_classification: ${{ steps.security-images-final-gate.outputs.classification }}
+          final_fixable_vulnerability_count: ${{ steps.security-images-final-gate.outputs.fixable_vulnerability_count }}
+          final_unfixed_vulnerability_count: ${{ steps.security-images-final-gate.outputs.unfixed_vulnerability_count }}
+          final_misconfiguration_count: ${{ steps.security-images-final-gate.outputs.misconfiguration_count }}
+          final_secret_count: ${{ steps.security-images-final-gate.outputs.secret_count }}
           retry_enabled: ${{ inputs.security_rebuild_retry_enabled }}
           initial_refs: ${{ steps.security-images-initial.outputs.refs }}
           remediated_refs: ${{ steps.security-images-remediated.outputs.refs }}
@@ -354,10 +369,16 @@ jobs:
         shell: bash
         env:
           RETRY_PASSED: ${{ steps.security-final.outputs.passed }}
+          SECURITY_CLASSIFICATION: ${{ steps.security-final.outputs.final_result }}
+          FIXABLE_COUNT: ${{ steps.security-final.outputs.fixable_vulnerability_count }}
+          UNFIXED_COUNT: ${{ steps.security-final.outputs.unfixed_vulnerability_count }}
+          MISCONFIGURATION_COUNT: ${{ steps.security-final.outputs.misconfiguration_count }}
+          SECRET_COUNT: ${{ steps.security-final.outputs.secret_count }}
+          REBUILD_RESULT: ${{ steps.security-final.outputs.rebuild_result }}
         run: |
           set -euo pipefail
           [ "$RETRY_PASSED" = true ] || {
-            echo "::error::Image security gate did not produce a changed, clean candidate" >&2
+            echo "::error::Image security gate blocked deployment: classification=${SECURITY_CLASSIFICATION} rebuild=${REBUILD_RESULT} fixable=${FIXABLE_COUNT} unfixed=${UNFIXED_COUNT} misconfigurations=${MISCONFIGURATION_COUNT} secrets=${SECRET_COUNT}" >&2
             exit 1
           }
 
