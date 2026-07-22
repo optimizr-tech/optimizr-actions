@@ -70,6 +70,7 @@ runs:
       with:
         version: ${{ inputs.trivy_version }}
         cache: "true"
+        path: ${{ runner.temp }}/optimizr-trivy/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
 
     - name: Run blocking security gate
       id: scan

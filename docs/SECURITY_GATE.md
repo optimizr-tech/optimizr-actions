@@ -163,6 +163,16 @@ A self-hosted security runner must:
 
 The action runs Trivy as the unprivileged runner user. When Docker is only available through passwordless sudo, it saves the candidate image to a temporary archive and scans that archive without running Trivy as root.
 
+Every Optimizr action installs the controlled Trivy binary below a path unique
+to the workflow run, attempt, and job in `runner.temp`. Multiple runner services
+may share the same operating-system user, so the setup action's default
+`$HOME/.local/bin/trivy-bin` is not safe for concurrent jobs: one setup can
+replace an executable while another job is scanning and produce Linux
+`ETXTBSY` (`Text file busy`). The per-job path is added to `PATH` by
+`aquasecurity/setup-trivy` and is disposable with the runner's temporary data.
+The repository-scoped vulnerability database cache remains separately protected
+by `flock`.
+
 ## Failure modes
 
 The gate fails closed when Trivy cannot be installed, the database cannot be refreshed, database metadata is missing or stale, an exception is malformed or expired, no required image is found, an image identity cannot be resolved, a report cannot be written, or an unexcepted finding meets the blocking severity.
@@ -192,4 +202,6 @@ The last step provides defense in depth against caller condition mistakes.
 
 Before merging, record the previous known-good `optimizr-actions` commit. If the new contract causes an operational regression, pin the consumer to that commit or move governed `v1` back to it. Do not restore a deploy path that accepts all security jobs as skipped. Failed remediation does not mutate the running stack, and the previous `last-successful.json` remains available.
 
-The self-hosted Trivy cache is repository-scoped, runner-owned, mode `0700`, and protected by `flock`.
+The self-hosted Trivy database cache is repository-scoped, runner-owned, mode
+`0700`, and protected by `flock`. The Trivy executable itself is isolated per
+job under `runner.temp`.
