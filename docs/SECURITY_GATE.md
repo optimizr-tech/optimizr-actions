@@ -74,6 +74,29 @@ The deploy reusables capture the first image-gate outcome without promoting the 
 
 The retry calls the reviewed `security-rebuild` composite once. It pulls referenced images, builds with `--pull`, optionally disables cache, resolves the rebuilt immutable image IDs, and invokes the same security gate again. The final enforcement step is ordered before every `docker compose up` command.
 
+### Source persistence
+
+Runtime remediation does not write dependency updates back to Git. Pulling a
+mutable tag or rebuilding with a fresher base can prove whether a candidate is
+deployable, but that runner-local result is deliberately disposable and must
+not create an unreviewed source commit.
+
+Persistent remediation remains consumer-owned:
+
+1. declare explicit image versions and, for production, reviewed manifest
+   digests in Compose or Dockerfiles;
+2. use the repository's Docker ecosystem entry in Dependabot to propose source
+   updates;
+3. validate the new pins with consumer contract tests and the same security
+   gate;
+4. merge the reviewed PR before the new artifact can become the declared
+   production candidate.
+
+When the newest upstream image still contains fixable dependencies, the gate
+remains closed. A derived image or a scoped, accountable, expiring exception
+requires a separate security review; the retry loop does not pretend that the
+source was fixed.
+
 Secrets, misconfigurations, malformed policies, stale databases, scanner errors and filesystem findings never trigger a rebuild. They remain fail-closed because rebuilding the same image inputs cannot safely correct them. A failed retry leaves the currently running known-good deployment unchanged.
 
 The `security-gate` action preserves `result=passed|failed` for `v1` compatibility and adds sanitized outputs:

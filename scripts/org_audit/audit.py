@@ -22,6 +22,11 @@ REPO_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$")
 USES_RE = re.compile(r"(?m)^\s*-?\s*uses:\s*([^\s#]+)")
 INTERNAL_REF_RE = re.compile(r"optimizr-tech/optimizr-actions/(?:\.github/(?:workflows|actions)/[^@\s]+)@([^\s#]+)")
 THIRD_PARTY_RE = re.compile(r"^(?!\./)([^/\s]+)/([^@\s]+)@([^\s]+)$")
+PR_BILLING_SKIP_GUARD_RE = re.compile(
+    r"!\s*contains\(\s*github\.event\.pull_request\.title\s*,\s*"
+    r"['\"]\[skip-tests\]['\"]\s*\)",
+    re.MULTILINE,
+)
 WRITE_PERMISSIONS = {"contents", "actions", "issues", "pull-requests", "security-events", "packages", "id-token"}
 START_MARKER = "<!-- optimizr-actions-audit:start -->"
 END_MARKER = "<!-- optimizr-actions-audit:end -->"
@@ -156,6 +161,15 @@ def audit_workflows(repository: str, visibility: str, workflows: Mapping[str, st
             add("DUPLICATED_COMMITLINT_WORKFLOW", "Commitlint does not call the canonical optimizr-actions reusable.")
         if basename == "validate-pr.yml" and "optimizr-actions/.github/workflows/_validate-pr.yml@v1" not in content:
             add("DUPLICATED_PR_VALIDATION", "Pull-request validation does not call the canonical optimizr-actions reusable.")
+        if (
+            _has_event(on_block, "pull_request")
+            and "optimizr-actions/.github/workflows/" in content
+            and not PR_BILLING_SKIP_GUARD_RE.search(content)
+        ):
+            add(
+                "MISSING_PR_BILLING_SKIP_GUARD",
+                "Pull-request workflow has no caller-level [skip-tests] guard before its reusable dependency chain, so a billing outage can fail before the reusable starts.",
+            )
     return findings
 
 

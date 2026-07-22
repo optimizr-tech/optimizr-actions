@@ -73,6 +73,70 @@ jobs:
         self.assertNotIn("old", updated)
         self.assertEqual(update_marked_section(updated, "new report"), updated)
 
+    def test_detects_reusable_pr_checks_without_caller_billing_guard(self):
+        workflows = {
+            ".github/workflows/commitlint.yml": """
+on:
+  pull_request:
+jobs:
+  commitlint:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_commitlint.yml@v1
+""",
+            ".github/workflows/validate-pr.yml": """
+on:
+  pull_request:
+jobs:
+  validate-pr:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_validate-pr.yml@v1
+""",
+        }
+
+        findings = audit_workflows(
+            "optimizr-tech/example", "private", workflows
+        )
+
+        self.assertEqual(
+            2,
+            sum(
+                finding.rule_id == "MISSING_PR_BILLING_SKIP_GUARD"
+                for finding in findings
+            ),
+        )
+
+    def test_accepts_canonical_caller_level_skip_guard(self):
+        guard = """
+    if: >-
+      github.event_name != 'pull_request' ||
+      !contains(github.event.pull_request.title, '[skip-tests]')
+"""
+        workflows = {
+            ".github/workflows/commitlint.yml": f"""
+on:
+  pull_request:
+jobs:
+  commitlint:
+{guard}
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_commitlint.yml@v1
+""",
+            ".github/workflows/validate-pr.yml": f"""
+on:
+  pull_request:
+jobs:
+  validate-pr:
+{guard}
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_validate-pr.yml@v1
+""",
+        }
+
+        findings = audit_workflows(
+            "optimizr-tech/example", "private", workflows
+        )
+
+        self.assertNotIn(
+            "MISSING_PR_BILLING_SKIP_GUARD",
+            {finding.rule_id for finding in findings},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
