@@ -9,6 +9,22 @@ inputs:
     description: Sanitized initial security-gate classification
     required: false
     default: ""
+  initial_fixable_vulnerability_count:
+    description: Initial fixable vulnerability count
+    required: false
+    default: "0"
+  initial_unfixed_vulnerability_count:
+    description: Initial unfixed vulnerability count
+    required: false
+    default: "0"
+  initial_misconfiguration_count:
+    description: Initial misconfiguration count
+    required: false
+    default: "0"
+  initial_secret_count:
+    description: Initial secret count
+    required: false
+    default: "0"
   rebuild_outcome:
     description: Outcome of the bounded Compose rebuild step
     required: false
@@ -21,6 +37,22 @@ inputs:
     description: Sanitized remediated image security-gate classification
     required: false
     default: ""
+  final_fixable_vulnerability_count:
+    description: Final fixable vulnerability count
+    required: false
+    default: "0"
+  final_unfixed_vulnerability_count:
+    description: Final unfixed vulnerability count
+    required: false
+    default: "0"
+  final_misconfiguration_count:
+    description: Final misconfiguration count
+    required: false
+    default: "0"
+  final_secret_count:
+    description: Final secret count
+    required: false
+    default: "0"
   retry_enabled:
     description: Whether the caller enabled the bounded retry
     required: true
@@ -49,6 +81,18 @@ outputs:
   passed:
     description: true only when a changed image set passes the final scan
     value: ${{ steps.classify.outputs.passed }}
+  fixable_vulnerability_count:
+    description: Effective fixable vulnerability count
+    value: ${{ steps.classify.outputs.fixable_vulnerability_count }}
+  unfixed_vulnerability_count:
+    description: Effective unfixed vulnerability count
+    value: ${{ steps.classify.outputs.unfixed_vulnerability_count }}
+  misconfiguration_count:
+    description: Effective misconfiguration count
+    value: ${{ steps.classify.outputs.misconfiguration_count }}
+  secret_count:
+    description: Effective secret count
+    value: ${{ steps.classify.outputs.secret_count }}
 
 runs:
   using: composite
@@ -58,9 +102,17 @@ runs:
       env:
         INITIAL_OUTCOME: ${{ inputs.initial_outcome }}
         INITIAL_CLASSIFICATION: ${{ inputs.initial_classification }}
+        INITIAL_FIXABLE_VULNERABILITY_COUNT: ${{ inputs.initial_fixable_vulnerability_count }}
+        INITIAL_UNFIXED_VULNERABILITY_COUNT: ${{ inputs.initial_unfixed_vulnerability_count }}
+        INITIAL_MISCONFIGURATION_COUNT: ${{ inputs.initial_misconfiguration_count }}
+        INITIAL_SECRET_COUNT: ${{ inputs.initial_secret_count }}
         REBUILD_OUTCOME: ${{ inputs.rebuild_outcome }}
         FINAL_OUTCOME: ${{ inputs.final_outcome }}
         FINAL_CLASSIFICATION: ${{ inputs.final_classification }}
+        FINAL_FIXABLE_VULNERABILITY_COUNT: ${{ inputs.final_fixable_vulnerability_count }}
+        FINAL_UNFIXED_VULNERABILITY_COUNT: ${{ inputs.final_unfixed_vulnerability_count }}
+        FINAL_MISCONFIGURATION_COUNT: ${{ inputs.final_misconfiguration_count }}
+        FINAL_SECRET_COUNT: ${{ inputs.final_secret_count }}
         RETRY_ENABLED: ${{ inputs.retry_enabled }}
         INITIAL_REFS: ${{ inputs.initial_refs }}
         REMEDIATED_REFS: ${{ inputs.remediated_refs }}
