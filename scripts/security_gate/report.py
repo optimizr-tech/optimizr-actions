@@ -26,9 +26,7 @@ def _load_report(path: Path) -> Mapping[str, Any]:
     return payload
 
 
-def summarize_trivy_report(report_path: Path) -> dict[str, Any]:
-    """Return sanitized counts for actionable and signal-only Trivy findings."""
-    report = _load_report(report_path)
+def _counts(report: Mapping[str, Any]) -> tuple[Counter[str], int, int, int, int]:
     raw_results = report.get("Results", [])
     if raw_results is None:
         raw_results = []
@@ -68,6 +66,27 @@ def summarize_trivy_report(report_path: Path) -> dict[str, Any]:
         if not isinstance(secret_findings, list):
             raise TrivyReportError("Trivy Secrets must be an array")
         secrets += len(secret_findings)
+
+    return severities, fixable, unfixed, misconfigurations, secrets
+
+
+def _complete_report_for_enforcement(report_path: Path) -> Path | None:
+    suffix = "-enforced.json"
+    if not report_path.name.endswith(suffix):
+        return None
+    candidate = report_path.with_name(report_path.name[: -len(suffix)] + ".json")
+    return candidate if candidate.is_file() and not candidate.is_symlink() else None
+
+
+def summarize_trivy_report(report_path: Path) -> dict[str, Any]:
+    """Return sanitized effective counts and preserve signal-only unfixed findings."""
+    report = _load_report(report_path)
+    severities, fixable, unfixed, misconfigurations, secrets = _counts(report)
+
+    complete_path = _complete_report_for_enforcement(report_path)
+    if complete_path is not None:
+        _, _, complete_unfixed, _, _ = _counts(_load_report(complete_path))
+        unfixed = complete_unfixed
 
     total = fixable + unfixed
     return {
