@@ -341,6 +341,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
+          sudo docker compose -f "$COMPOSE_FILE" pull --ignore-buildable || true
           mapfile -t configured_images < <(
             sudo docker compose -f "$COMPOSE_FILE" config --images | sed '/^$/d' | sort -u
           )
