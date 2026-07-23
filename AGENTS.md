@@ -66,6 +66,7 @@ Breaking changes require a new major contract or an explicit deprecation period.
 
 Before opening or updating a PR:
 
+- inspect remote PR state (via `gh pr view`) before modifying or pushing to a PR branch, ensuring merged or closed PRs are never edited;
 - run `python -m unittest discover -v`;
 - validate workflow and action YAML;
 - run `git diff --check`;

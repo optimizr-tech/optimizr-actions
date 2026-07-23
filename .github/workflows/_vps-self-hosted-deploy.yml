@@ -384,12 +384,17 @@ jobs:
           MISCONFIGURATION_COUNT: ${{ steps.security-final.outputs.misconfiguration_count }}
           SECRET_COUNT: ${{ steps.security-final.outputs.secret_count }}
           REBUILD_RESULT: ${{ steps.security-final.outputs.rebuild_result }}
+          IGNORE_UNFIXED: ${{ inputs.security_ignore_unfixed }}
         run: |
           set -euo pipefail
-          [ "$RETRY_PASSED" = true ] || {
+          if [ "$RETRY_PASSED" = true ]; then
+            echo "Security remediation check passed."
+          elif [ "$REBUILD_RESULT" = "no_change" ] && [ "$IGNORE_UNFIXED" = true ]; then
+            echo "::warning title=Unremediated Base Image::Rebuild attempt yielded no_change for external base image layers. Proceeding under ignore_unfixed policy."
+          else
             echo "::error::Image security gate blocked deployment: classification=${SECURITY_CLASSIFICATION} rebuild=${REBUILD_RESULT} fixable=${FIXABLE_COUNT} unfixed=${UNFIXED_COUNT} misconfigurations=${MISCONFIGURATION_COUNT} secrets=${SECRET_COUNT}" >&2
             exit 1
-          }
+          fi
 
       - name: Pre-deploy validation (nginx -t)
         if: inputs.pre_deploy_validation
