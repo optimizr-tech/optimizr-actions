@@ -313,6 +313,14 @@ jobs:
             image_ids+=("$image_id")
           done
           mapfile -t image_ids < <(printf '%s\n' "${image_ids[@]}" | sort -u)
+          initial_refs="${{ steps.security-images-initial.outputs.refs }}"
+          current_refs="$(printf '%s\n' "${image_ids[@]}")"
+          if [ "$initial_refs" = "$current_refs" ]; then
+            echo "::warning title=Security Rebuild::Unchanged image digests detected after rebuild attempt (no_change). Previous vulnerabilities remain."
+            echo "rebuild_status=no_change" >> "$GITHUB_OUTPUT"
+          else
+            echo "rebuild_status=rebuilt" >> "$GITHUB_OUTPUT"
+          fi
           {
             echo 'refs<<OPTIMIZR_IMAGES'
             printf '%s\n' "${image_ids[@]}"
