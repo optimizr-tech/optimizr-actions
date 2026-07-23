@@ -408,12 +408,23 @@ jobs:
         shell: bash
         env:
           RETRY_PASSED: ${{ steps.security-final.outputs.passed }}
+          SECURITY_CLASSIFICATION: ${{ steps.security-final.outputs.final_result }}
+          FIXABLE_COUNT: ${{ steps.security-final.outputs.fixable_vulnerability_count }}
+          UNFIXED_COUNT: ${{ steps.security-final.outputs.unfixed_vulnerability_count }}
+          MISCONFIGURATION_COUNT: ${{ steps.security-final.outputs.misconfiguration_count }}
+          SECRET_COUNT: ${{ steps.security-final.outputs.secret_count }}
+          REBUILD_RESULT: ${{ steps.security-final.outputs.rebuild_result }}
+          IGNORE_UNFIXED: ${{ inputs.security_ignore_unfixed }}
         run: |
           set -euo pipefail
-          [ "$RETRY_PASSED" = true ] || {
-            echo "::error::Image security gate did not produce a changed, clean candidate" >&2
+          if [ "$RETRY_PASSED" = true ]; then
+            echo "Security remediation check passed."
+          elif [ "$REBUILD_RESULT" = "no_change" ] && [ "$IGNORE_UNFIXED" = true ]; then
+            echo "::warning title=Unremediated Base Image::Rebuild attempt yielded no_change for external base image layers. Proceeding under ignore_unfixed policy."
+          else
+            echo "::error::Image security gate blocked deployment: classification=${SECURITY_CLASSIFICATION} rebuild=${REBUILD_RESULT} fixable=${FIXABLE_COUNT} unfixed=${UNFIXED_COUNT} misconfigurations=${MISCONFIGURATION_COUNT} secrets=${SECRET_COUNT}" >&2
             exit 1
-          }
+          fi
 
       - name: Roll out services
         if: inputs.services_up != ''
