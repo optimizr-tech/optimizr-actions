@@ -115,11 +115,18 @@ class SecurityRetryResultTests(unittest.TestCase):
                 )
 
                 self.assertEqual("failed", result["rebuild_result"])
-                self.assertEqual("gate_error", result["final_result"])
+                self.assertEqual("scanner_error", result["final_result"])
                 self.assertFalse(result["passed"])
 
     def test_initial_success_requires_a_passing_classification(self) -> None:
-        for classification in ("", "gate_error", "actionable_vulnerability"):
+        for classification in (
+            "",
+            "gate_error",
+            "scanner_error",
+            "misconfiguration_detected",
+            "secret_detected",
+            "actionable_vulnerability",
+        ):
             with self.subTest(classification=classification):
                 result = evaluate_retry(
                     initial_outcome="success",
@@ -132,9 +139,26 @@ class SecurityRetryResultTests(unittest.TestCase):
                     remediated_refs="",
                 )
 
-                self.assertEqual("gate_error", result["final_result"])
+                self.assertEqual("scanner_error", result["final_result"])
                 self.assertEqual("skipped", result["rebuild_result"])
                 self.assertFalse(result["passed"])
+
+    def test_no_change_preserves_initial_diagnostic_counts(self) -> None:
+        result = evaluate_retry(
+            initial_outcome="failure",
+            initial_classification="actionable_vulnerability",
+            rebuild_outcome="success",
+            final_outcome="failure",
+            final_classification="actionable_vulnerability",
+            retry_enabled=True,
+            initial_refs=IMAGE_A,
+            remediated_refs=IMAGE_A,
+            initial_counts=(12, 3, 0, 0),
+            final_counts=(8, 2, 0, 0),
+        )
+
+        self.assertEqual(12, result["fixable_vulnerability_count"])
+        self.assertEqual(3, result["unfixed_vulnerability_count"])
 
     def test_cli_emits_no_change_evidence_before_failing_closed(self) -> None:
         environment = {
@@ -146,6 +170,8 @@ class SecurityRetryResultTests(unittest.TestCase):
             "RETRY_ENABLED": "true",
             "INITIAL_REFS": IMAGE_A,
             "REMEDIATED_REFS": IMAGE_A,
+            "INITIAL_FIXABLE_VULNERABILITY_COUNT": "12",
+            "INITIAL_UNFIXED_VULNERABILITY_COUNT": "3",
         }
         output = io.StringIO()
 
@@ -155,6 +181,8 @@ class SecurityRetryResultTests(unittest.TestCase):
         self.assertEqual(1, exit_code)
         self.assertIn("rebuild_result=no_change", output.getvalue())
         self.assertIn("passed=false", output.getvalue())
+        self.assertIn("fixable_vulnerability_count=12", output.getvalue())
+        self.assertIn("unfixed_vulnerability_count=3", output.getvalue())
 
 
 if __name__ == "__main__":

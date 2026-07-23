@@ -64,8 +64,12 @@ def aggregate_summaries(
             payload.get("secrets"), "secrets"
         )
 
-    if gate_error or totals["misconfiguration_count"] or totals["secret_count"]:
-        classification = "gate_error"
+    if gate_error:
+        classification = "scanner_error"
+    elif totals["secret_count"]:
+        classification = "secret_detected"
+    elif totals["misconfiguration_count"]:
+        classification = "misconfiguration_detected"
     elif totals["fixable_vulnerability_count"]:
         classification = "actionable_vulnerability"
     elif totals["unfixed_vulnerability_count"]:

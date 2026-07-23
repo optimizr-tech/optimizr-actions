@@ -26,6 +26,10 @@ inputs:
     description: "Optional Optimizr JSON exception policy"
     required: false
     default: ""
+  baseline_file:
+    description: "Optional reviewed, expiring vulnerability baseline for immutable image IDs"
+    required: false
+    default: ""
   trivy_version:
     description: "Controlled Trivy release"
     required: false
@@ -47,13 +51,13 @@ outputs:
     description: "Legacy result: passed or failed"
     value: ${{ steps.scan.outputs.result }}
   classification:
-    description: "clean, actionable_vulnerability, unfixed_warning, or gate_error"
+    description: "clean, actionable_vulnerability, unfixed_warning, misconfiguration_detected, secret_detected, or scanner_error"
     value: ${{ steps.scan.outputs.classification }}
   fixable_vulnerability_count:
-    description: "Number of vulnerabilities with an available fixed version"
+    description: "Number of effective vulnerabilities with an available fixed version"
     value: ${{ steps.scan.outputs.fixable_vulnerability_count }}
   unfixed_vulnerability_count:
-    description: "Number of vulnerabilities without an available fixed version"
+    description: "Number of effective vulnerabilities without an available fixed version"
     value: ${{ steps.scan.outputs.unfixed_vulnerability_count }}
   misconfiguration_count:
     description: "Number of blocking misconfigurations"
@@ -82,6 +86,7 @@ runs:
         INPUT_SEVERITY: ${{ inputs.severity }}
         INPUT_IGNORE_UNFIXED: ${{ inputs.ignore_unfixed }}
         INPUT_EXCEPTIONS_FILE: ${{ inputs.exceptions_file }}
+        INPUT_BASELINE_FILE: ${{ inputs.baseline_file }}
         INPUT_DB_MAX_AGE_HOURS: ${{ inputs.db_max_age_hours }}
         INPUT_EVIDENCE_DIR: ${{ inputs.evidence_dir }}
       run: |
@@ -91,6 +96,7 @@ runs:
         evidence_tool="$action_root/scripts/security_gate/evidence.py"
         report_tool="$action_root/scripts/security_gate/report.py"
         aggregate_tool="$action_root/scripts/security_gate/aggregate.py"
+        baseline_tool="$action_root/scripts/security_gate/baseline.py"
         repository="${GITHUB_REPOSITORY:-local/unknown}"
         cache_namespace="$(printf '%s' "$repository" | sha256sum | cut -c1-24)"
         cache_root="${XDG_CACHE_HOME:-${HOME:-/tmp}/.cache}/optimizr-security-gate/${cache_namespace}"
@@ -100,7 +106,7 @@ runs:
         {
           echo "evidence_dir=$evidence_dir"
           echo "result=failed"
-          echo "classification=gate_error"
+          echo "classification=scanner_error"
           echo "fixable_vulnerability_count=0"
           echo "unfixed_vulnerability_count=0"
           echo "misconfiguration_count=0"
@@ -144,6 +150,10 @@ runs:
         if [ "$INPUT_IGNORE_UNFIXED" = false ]; then
           echo "::notice title=Security policy updated::ignore_unfixed=false is deprecated; vulnerabilities without an available fix remain visible but do not block deployment."
         fi
+        if [ -n "$INPUT_BASELINE_FILE" ] && [ "$INPUT_SCAN_TYPE" != image ]; then
+          echo "::error::baseline_file is supported only for immutable image scans" >&2
+          exit 2
+        fi
         if ! [[ "$INPUT_DB_MAX_AGE_HOURS" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
           echo "::error::db_max_age_hours must be numeric" >&2
           exit 2
@@ -175,7 +185,7 @@ runs:
         trivy_version="$(trivy --version | head -n 1)"
         head_sha="${GITHUB_SHA:-$(git rev-parse HEAD)}"
         aggregate_status=0
-        gate_error=0
+        scanner_error=0
         summary_paths=()
 
         for target in "${targets[@]}"; do
@@ -183,9 +193,12 @@ runs:
           prefix="$evidence_dir/${INPUT_SCAN_TYPE}-${slug}"
           ignore_file="${prefix}-ignore.yaml"
           exception_summary="${prefix}-exceptions.json"
+          baseline_summary="${prefix}-baseline.json"
           table_report="${prefix}.txt"
           json_report="${prefix}.json"
+          complete_summary="${prefix}-complete-summary.json"
           blocking_json_report="${prefix}-blocking.json"
+          enforced_json_report="${prefix}-enforced.json"
           sarif_report="${prefix}.sarif"
           finding_summary="${prefix}-summary.json"
           evidence_report="${prefix}-evidence.json"
@@ -264,15 +277,14 @@ runs:
             --format json --exit-code 0 --output "$json_report" \
             "${target_args[@]}"
 
-          summary_args=(
+          complete_summary_args=(
             --report "$json_report"
-            --output "$finding_summary"
+            --output "$complete_summary"
           )
           if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
-            summary_args+=(--github-summary "$GITHUB_STEP_SUMMARY")
+            complete_summary_args+=(--github-summary "$GITHUB_STEP_SUMMARY")
           fi
-          python3 "$report_tool" "${summary_args[@]}"
-          summary_paths+=("$finding_summary")
+          python3 "$report_tool" "${complete_summary_args[@]}"
 
           set +e
           trivy "$command_name" "${blocking_args[@]}" \
@@ -280,10 +292,39 @@ runs:
             "${target_args[@]}"
           scan_status=$?
           set -e
+
+          if [ -n "$INPUT_BASELINE_FILE" ]; then
+            set +e
+            python3 "$baseline_tool" \
+              --report "$blocking_json_report" \
+              --baseline "$INPUT_BASELINE_FILE" \
+              --scope "$target" \
+              --output "$enforced_json_report" \
+              --summary-output "$baseline_summary"
+            scan_status=$?
+            set -e
+          else
+            cp "$blocking_json_report" "$enforced_json_report"
+            python3 - "$baseline_summary" <<'PY'
+        import json
+        import pathlib
+        import sys
+
+        pathlib.Path(sys.argv[1]).write_text(
+            json.dumps({"schema_version": 1, "status": "not-configured"}, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        PY
+          fi
+
+          python3 "$report_tool" \
+            --report "$enforced_json_report" \
+            --output "$finding_summary"
+          summary_paths+=("$finding_summary")
           echo "::endgroup::"
 
           if [ "$scan_status" -gt 1 ]; then
-            gate_error=1
+            scanner_error=1
           fi
 
           identity=""
@@ -298,7 +339,7 @@ runs:
             if [ -z "$identity" ]; then
               echo "::error::image scan did not resolve an immutable identity for $target" >&2
               scan_status=2
-              gate_error=1
+              scanner_error=1
             fi
           fi
 
@@ -321,7 +362,10 @@ runs:
             --exception-summary "$exception_summary"
             --report "table=$table_report"
             --report "json=$json_report"
+            --report "complete_summary=$complete_summary"
             --report "blocking_json=$blocking_json_report"
+            --report "enforced_json=$enforced_json_report"
+            --report "baseline=$baseline_summary"
             --report "sarif=$sarif_report"
             --report "summary=$finding_summary"
             --result "$result"
@@ -335,7 +379,7 @@ runs:
         for summary_path in "${summary_paths[@]}"; do
           aggregate_args+=(--summary "$summary_path")
         done
-        if [ "$gate_error" -ne 0 ]; then
+        if [ "$scanner_error" -ne 0 ]; then
           aggregate_args+=(--gate-error)
         fi
         python3 "$aggregate_tool" \
