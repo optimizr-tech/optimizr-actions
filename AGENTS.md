@@ -16,6 +16,7 @@ Agents must:
 
 Agents must not:
 
+- include `[skip-tests]` in commit messages for public repositories (such as `optimizr-actions`), as workflows run automatically on public repositories and `[skip-tests]` suppresses required CI and release-tag validation;
 - store host addresses, credentials, private keys, customer data, signed URLs, or production `.env` content;
 - introduce dependencies on `optimizr-infra-ops` for portable workflows or composite actions;
 - move the floating `v1` tag without successful release validation;

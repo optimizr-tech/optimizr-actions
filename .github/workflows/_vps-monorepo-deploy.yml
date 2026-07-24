@@ -328,7 +328,8 @@ jobs:
           inputs.security_require_image_scan &&
           inputs.security_rebuild_retry_enabled &&
           steps.security-images-initial-gate.outcome == 'failure' &&
-          steps.security-images-initial-gate.outputs.classification == 'actionable_vulnerability'
+          (steps.security-images-initial-gate.outputs.classification == 'actionable_vulnerability' ||
+           steps.security-images-initial-gate.outputs.classification == 'secret_detected')
         continue-on-error: true
         uses: optimizr-tech/optimizr-actions/.github/actions/security-rebuild@v1
         with:
@@ -400,9 +401,17 @@ jobs:
         with:
           initial_outcome: ${{ steps.security-images-initial-gate.outcome }}
           initial_classification: ${{ steps.security-images-initial-gate.outputs.classification }}
+          initial_fixable_vulnerability_count: ${{ steps.security-images-initial-gate.outputs.fixable_vulnerability_count }}
+          initial_unfixed_vulnerability_count: ${{ steps.security-images-initial-gate.outputs.unfixed_vulnerability_count }}
+          initial_misconfiguration_count: ${{ steps.security-images-initial-gate.outputs.misconfiguration_count }}
+          initial_secret_count: ${{ steps.security-images-initial-gate.outputs.secret_count }}
           rebuild_outcome: ${{ steps.security-rebuild.outcome }}
           final_outcome: ${{ steps.security-images-final-gate.outcome }}
           final_classification: ${{ steps.security-images-final-gate.outputs.classification }}
+          final_fixable_vulnerability_count: ${{ steps.security-images-final-gate.outputs.fixable_vulnerability_count }}
+          final_unfixed_vulnerability_count: ${{ steps.security-images-final-gate.outputs.unfixed_vulnerability_count }}
+          final_misconfiguration_count: ${{ steps.security-images-final-gate.outputs.misconfiguration_count }}
+          final_secret_count: ${{ steps.security-images-final-gate.outputs.secret_count }}
           retry_enabled: ${{ inputs.security_rebuild_retry_enabled }}
           initial_refs: ${{ steps.security-images-initial.outputs.refs }}
           remediated_refs: ${{ steps.security-images-remediated.outputs.refs }}
@@ -423,8 +432,8 @@ jobs:
           set -euo pipefail
           if [ "$RETRY_PASSED" = true ]; then
             echo "Security remediation check passed."
-          elif [ "$REBUILD_RESULT" = "no_change" ] && [ "$IGNORE_UNFIXED" = true ]; then
-            echo "::warning title=Unremediated Base Image::Rebuild attempt yielded no_change for external base image layers. Proceeding under ignore_unfixed policy."
+          elif { [ "$REBUILD_RESULT" = "no_change" ] || [ "$REBUILD_RESULT" = "skipped" ]; } && [ "$IGNORE_UNFIXED" = true ]; then
+            echo "::warning title=Unremediated Base Image::Rebuild attempt yielded $REBUILD_RESULT for external base image layers. Proceeding under ignore_unfixed policy."
           else
             echo "::error::Image security gate blocked deployment: classification=${SECURITY_CLASSIFICATION} rebuild=${REBUILD_RESULT} fixable=${FIXABLE_COUNT} unfixed=${UNFIXED_COUNT} misconfigurations=${MISCONFIGURATION_COUNT} secrets=${SECRET_COUNT}" >&2
             exit 1
