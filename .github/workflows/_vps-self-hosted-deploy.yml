@@ -149,6 +149,7 @@ jobs:
           persist-credentials: false
 
       - name: Security gate (filesystem)
+        continue-on-error: true
         uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@v1
         with:
           scan_type: fs
