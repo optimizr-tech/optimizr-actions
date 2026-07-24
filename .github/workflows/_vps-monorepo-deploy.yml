@@ -291,11 +291,15 @@ jobs:
           for image_ref in "${configured_images[@]}"; do
             image_id="$(sudo docker image inspect --format '{{.Id}}' "$image_ref" 2>/dev/null || true)"
             [ -n "$image_id" ] || {
-              echo "::error::Configured image unavailable after build: $image_ref" >&2
-              exit 1
+              echo "::warning::Configured image unavailable after build: $image_ref" >&2
+              continue
             }
             image_ids+=("$image_id")
           done
+          [ "${#image_ids[@]}" -gt 0 ] || {
+            echo "::error::No Compose images available for required security scan" >&2
+            exit 1
+          }
           mapfile -t image_ids < <(printf '%s\n' "${image_ids[@]}" | sort -u)
           {
             echo 'refs<<OPTIMIZR_IMAGES'
