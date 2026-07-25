@@ -7,9 +7,9 @@ description: Prune containers/images/builder + workspace temp; nunca toca volume
 
 inputs:
   image_age_threshold:
-    description: "Idade mínima pra image prune untagged (formato Docker filter, ex 168h)"
+    description: "Idade mínima pra image prune untagged (formato Docker filter, ex 24h)"
     required: false
-    default: "168h"
+    default: "24h"
 
 runs:
   using: composite
@@ -27,7 +27,7 @@ runs:
         sudo docker container prune -f
         sudo docker image prune -f
         sudo docker image prune -af --filter "until=${IMAGE_AGE}"
-        sudo docker builder prune -f
+        sudo docker builder prune -af --filter "until=${IMAGE_AGE}"
 
         if [ -n "${RUNNER_WORKSPACE:-}" ]; then
           runner_root="$(dirname "$RUNNER_WORKSPACE")"

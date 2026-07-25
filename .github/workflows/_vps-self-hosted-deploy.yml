@@ -64,7 +64,7 @@ on:
         description: Docker age filter used by image prune
         required: false
         type: string
-        default: 168h
+        default: 24h
       security_require_image_scan:
         description: Require scanning built Compose images before rollout
         required: false
@@ -470,7 +470,7 @@ jobs:
           sudo docker container prune -f
           sudo docker image prune -f
           sudo docker image prune -af --filter "until=${IMAGE_AGE}"
-          sudo docker builder prune -f
+          sudo docker builder prune -af --filter "until=${IMAGE_AGE}"
           if [ -n "${RUNNER_WORKSPACE:-}" ]; then
             runner_root="$(dirname "$RUNNER_WORKSPACE")"
             sudo find "$runner_root/_temp" -mindepth 1 -maxdepth 1 -mmin +60 -exec rm -rf {} + 2>/dev/null || true
