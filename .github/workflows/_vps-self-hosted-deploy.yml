@@ -149,7 +149,6 @@ jobs:
           persist-credentials: false
 
       - name: Security gate (filesystem)
-        continue-on-error: true
         uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@v1
         with:
           scan_type: fs
@@ -291,8 +290,7 @@ jobs:
           inputs.security_require_image_scan &&
           inputs.security_rebuild_retry_enabled &&
           steps.security-images-initial-gate.outcome == 'failure' &&
-          (steps.security-images-initial-gate.outputs.classification == 'actionable_vulnerability' ||
-           steps.security-images-initial-gate.outputs.classification == 'secret_detected')
+          steps.security-images-initial-gate.outputs.classification == 'actionable_vulnerability'
         continue-on-error: true
         uses: optimizr-tech/optimizr-actions/.github/actions/security-rebuild@v1
         with:
@@ -384,6 +382,7 @@ jobs:
         shell: bash
         env:
           RETRY_PASSED: ${{ steps.security-final.outputs.passed }}
+          COMPATIBILITY_ALLOWED: ${{ steps.security-final.outputs.compatibility_allowed }}
           SECURITY_CLASSIFICATION: ${{ steps.security-final.outputs.final_result }}
           FIXABLE_COUNT: ${{ steps.security-final.outputs.fixable_vulnerability_count }}
           UNFIXED_COUNT: ${{ steps.security-final.outputs.unfixed_vulnerability_count }}
@@ -395,8 +394,8 @@ jobs:
           set -euo pipefail
           if [ "$RETRY_PASSED" = true ]; then
             echo "Security remediation check passed."
-          elif { [ "$REBUILD_RESULT" = "no_change" ] || [ "$REBUILD_RESULT" = "skipped" ]; } && [ "$IGNORE_UNFIXED" = true ]; then
-            echo "::warning title=Unremediated Base Image::Rebuild attempt yielded $REBUILD_RESULT for external base image layers. Proceeding under ignore_unfixed policy."
+          elif [ "$IGNORE_UNFIXED" = true ] && [ "$COMPATIBILITY_ALLOWED" = true ]; then
+            echo "::warning title=Unremediated Base Image::Proceeding under the narrow ignore_unfixed compatibility policy for classification=$SECURITY_CLASSIFICATION rebuild=$REBUILD_RESULT."
           else
             echo "::error::Image security gate blocked deployment: classification=${SECURITY_CLASSIFICATION} rebuild=${REBUILD_RESULT} fixable=${FIXABLE_COUNT} unfixed=${UNFIXED_COUNT} misconfigurations=${MISCONFIGURATION_COUNT} secrets=${SECRET_COUNT}" >&2
             exit 1

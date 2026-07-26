@@ -4,17 +4,19 @@ from __future__ import annotations
 
 import os
 import re
+from pathlib import Path
+import sys
 from typing import TypedDict
 
+ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-_CLASSIFICATIONS = {
-    "clean",
-    "actionable_vulnerability",
-    "unfixed_warning",
-    "misconfiguration_detected",
-    "secret_detected",
-    "scanner_error",
-}
+from scripts.security_gate.classifications import (  # noqa: E402
+    SECURITY_CLASSIFICATIONS,
+    normalize_security_classification,
+)
+
 _IMAGE_ID = re.compile(r"sha256:[0-9a-fA-F]{64}\Z")
 _COUNT_KEYS = (
     "fixable_vulnerability_count",
@@ -34,12 +36,44 @@ class RetryResult(TypedDict):
     unfixed_vulnerability_count: int
     misconfiguration_count: int
     secret_count: int
+    compatibility_allowed: bool
 
 
 def _classification(raw: str) -> str:
-    if raw == "gate_error":
+    try:
+        normalized = normalize_security_classification(raw)
+    except ValueError:
         return "scanner_error"
-    return raw if raw in _CLASSIFICATIONS else "scanner_error"
+    return (
+        normalized
+        if normalized in SECURITY_CLASSIFICATIONS - {"not-run"}
+        else "scanner_error"
+    )
+
+
+def _compatibility_allowed(
+    *,
+    final_result: str,
+    rebuild_attempted: bool,
+    rebuild_result: str,
+    counts: dict[str, int],
+) -> bool:
+    """Keep the legacy bypass narrow and explicitly non-security-sensitive."""
+    if counts["misconfiguration_count"] or counts["secret_count"]:
+        return False
+    if (
+        final_result == "unfixed_warning"
+        and rebuild_result in {"skipped", "no_change"}
+        and counts["fixable_vulnerability_count"] == 0
+        and counts["unfixed_vulnerability_count"] > 0
+    ):
+        return True
+    return (
+        final_result == "actionable_vulnerability"
+        and rebuild_attempted
+        and rebuild_result == "no_change"
+        and counts["fixable_vulnerability_count"] > 0
+    )
 
 
 def _refs(raw: str) -> frozenset[str] | None:
@@ -75,13 +109,20 @@ def evaluate_retry(
 
     if before is None or after is None:
         attempted = initial == "actionable_vulnerability" and retry_enabled
+        evidence = initial_evidence
         return {
             "initial_result": initial,
             "rebuild_attempted": attempted,
             "rebuild_result": "failed" if attempted else "skipped",
             "final_result": "scanner_error",
             "passed": False,
-            **initial_evidence,
+            "compatibility_allowed": _compatibility_allowed(
+                final_result="scanner_error",
+                rebuild_attempted=attempted,
+                rebuild_result="failed" if attempted else "skipped",
+                counts=evidence,
+            ),
+            **evidence,
         }
 
     if initial_outcome == "success":
@@ -92,6 +133,7 @@ def evaluate_retry(
                 "rebuild_result": "skipped",
                 "final_result": "scanner_error",
                 "passed": False,
+                "compatibility_allowed": False,
                 **initial_evidence,
             }
         return {
@@ -100,6 +142,12 @@ def evaluate_retry(
             "rebuild_result": "skipped",
             "final_result": initial,
             "passed": True,
+            "compatibility_allowed": _compatibility_allowed(
+                final_result=initial,
+                rebuild_attempted=False,
+                rebuild_result="skipped",
+                counts=initial_evidence,
+            ),
             **initial_evidence,
         }
 
@@ -110,6 +158,12 @@ def evaluate_retry(
             "rebuild_result": "skipped",
             "final_result": initial,
             "passed": False,
+            "compatibility_allowed": _compatibility_allowed(
+                final_result=initial,
+                rebuild_attempted=False,
+                rebuild_result="skipped",
+                counts=initial_evidence,
+            ),
             **initial_evidence,
         }
 
@@ -120,6 +174,7 @@ def evaluate_retry(
             "rebuild_result": "failed",
             "final_result": "scanner_error",
             "passed": False,
+            "compatibility_allowed": False,
             **initial_evidence,
         }
 
@@ -130,6 +185,7 @@ def evaluate_retry(
             "rebuild_result": "failed",
             "final_result": "scanner_error",
             "passed": False,
+            "compatibility_allowed": False,
             **initial_evidence,
         }
     if before == after:
@@ -139,6 +195,12 @@ def evaluate_retry(
             "rebuild_result": "no_change",
             "final_result": initial,
             "passed": False,
+            "compatibility_allowed": _compatibility_allowed(
+                final_result=initial,
+                rebuild_attempted=True,
+                rebuild_result="no_change",
+                counts=initial_evidence,
+            ),
             **initial_evidence,
         }
 
@@ -150,6 +212,12 @@ def evaluate_retry(
             "rebuild_result": "passed",
             "final_result": final,
             "passed": True,
+            "compatibility_allowed": _compatibility_allowed(
+                final_result=final,
+                rebuild_attempted=True,
+                rebuild_result="passed",
+                counts=final_evidence,
+            ),
             **final_evidence,
         }
 
@@ -159,6 +227,12 @@ def evaluate_retry(
         "rebuild_result": "failed",
         "final_result": final,
         "passed": False,
+        "compatibility_allowed": _compatibility_allowed(
+            final_result=final,
+            rebuild_attempted=True,
+            rebuild_result="failed",
+            counts=final_evidence,
+        ),
         **final_evidence,
     }
 

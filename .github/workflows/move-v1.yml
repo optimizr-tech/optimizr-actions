@@ -12,6 +12,8 @@ on:
       - ".github/actions/**"
       - ".github/workflows/**"
       - "templates/**"
+      - "presets/**"
+      - "scripts/**"
   pull_request_target:
     types: [closed]
     branches: [main]
@@ -79,7 +81,7 @@ jobs:
                   --jq '.[].filename'
               )"
               if printf '%s\n' "$changed_files" \
-                | grep -Eq '^(\.github/actions/|\.github/workflows/|templates/)'; then
+                | grep -Eq '^(\.github/actions/|\.github/workflows/|templates/|presets/|scripts/)'; then
                 publish=true
               else
                 publish=false
