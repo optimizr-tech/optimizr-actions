@@ -45,8 +45,17 @@ class SecuritySelfHealingContractTests(unittest.TestCase):
             content,
         )
         filesystem = content.index("Security gate (filesystem)")
+        filesystem_enforcement = content.index("Require filesystem security result")
         synchronization = content.index("Backup and synchronize files")
-        self.assertNotIn("continue-on-error: true", content[filesystem:synchronization])
+        filesystem_gate = content[filesystem:filesystem_enforcement]
+        filesystem_check = content[filesystem_enforcement:synchronization]
+        self.assertLess(filesystem, filesystem_enforcement)
+        self.assertLess(filesystem_enforcement, synchronization)
+        self.assertIn("id: security-filesystem-gate", filesystem_gate)
+        self.assertIn("continue-on-error: true", filesystem_gate)
+        self.assertIn("FILESYSTEM_OUTCOME: ${{ steps.security-filesystem-gate.outcome }}", filesystem_check)
+        self.assertIn("Filesystem security gate blocked deployment", filesystem_check)
+        self.assertNotIn("inputs.security_require_image_scan && always()", content)
         self.assertIn(
             "optimizr-tech/optimizr-actions/.github/actions/security-retry-result@v1",
             content,
