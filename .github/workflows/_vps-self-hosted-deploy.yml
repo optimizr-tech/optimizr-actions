@@ -166,7 +166,8 @@ jobs:
           set -euo pipefail
           BACKUP_ROOT="/opt/optimizr/backups/${{ inputs.service_name }}/deploys"
           sudo mkdir -p "$DEPLOY_PATH" "$BACKUP_ROOT"
-          sudo chown -R "$(id -un):$(id -gn)" "$DEPLOY_PATH" "$BACKUP_ROOT"
+          sudo chown "$(id -un):$(id -gn)" "$DEPLOY_PATH" "$BACKUP_ROOT"
+          sudo find "$DEPLOY_PATH" -mindepth 1 -maxdepth 1 -not -name '.secrets' -exec chown -R "$(id -un):$(id -gn)" {} +
           sudo chmod 750 "$BACKUP_ROOT"
 
           if [ -d "$DEPLOY_PATH" ] && [ "$(ls -A "$DEPLOY_PATH" 2>/dev/null)" ]; then
