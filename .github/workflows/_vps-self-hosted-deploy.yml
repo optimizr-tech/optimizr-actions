@@ -167,7 +167,14 @@ jobs:
           BACKUP_ROOT="/opt/optimizr/backups/${{ inputs.service_name }}/deploys"
           sudo mkdir -p "$DEPLOY_PATH" "$BACKUP_ROOT"
           sudo chown "$(id -un):$(id -gn)" "$DEPLOY_PATH" "$BACKUP_ROOT"
-          sudo find "$DEPLOY_PATH" -mindepth 1 -maxdepth 1 -not -name '.secrets' -exec chown -R "$(id -un):$(id -gn)" {} +
+          while IFS= read -r -d '' path; do
+            sudo chown -R "$(id -un):$(id -gn)" "$path"
+          done < <(
+            find "$DEPLOY_PATH" \
+              -mindepth 1 \
+              -maxdepth 1 \
+              -not -name '.secrets' -print0
+          )
           sudo chmod 750 "$BACKUP_ROOT"
 
           if [ -d "$DEPLOY_PATH" ] && [ "$(ls -A "$DEPLOY_PATH" 2>/dev/null)" ]; then
@@ -177,6 +184,8 @@ jobs:
               tar \
                 --exclude='.env' --exclude='*/.env' \
                 --exclude='.env.*' --exclude='*/.env.*' \
+                --exclude='.secrets' --exclude='*/.secrets' \
+                --exclude='.secrets/*' --exclude='*/.secrets/*' \
                 --exclude='*.pem' --exclude='*.key' \
                 --exclude='*.p12' --exclude='*.pfx' \
                 -czf "$backup_file" -C "$DEPLOY_PATH" . 2>/dev/null
