@@ -245,11 +245,119 @@ class SecurityRetryResultTests(unittest.TestCase):
         with mock.patch.dict("os.environ", environment, clear=True), contextlib.redirect_stdout(output):
             exit_code = MODULE.main()
 
-        self.assertEqual(1, exit_code)
+        self.assertEqual(0, exit_code)
         self.assertIn("rebuild_result=no_change", output.getvalue())
         self.assertIn("passed=false", output.getvalue())
+        self.assertIn("compatibility_allowed=true", output.getvalue())
         self.assertIn("fixable_vulnerability_count=12", output.getvalue())
         self.assertIn("unfixed_vulnerability_count=3", output.getvalue())
+
+
+    def test_skipped_initial_scan_fails_closed_with_explicit_outputs(self) -> None:
+        result = evaluate_retry(
+            initial_outcome="skipped",
+            initial_classification="",
+            rebuild_outcome="skipped",
+            final_outcome="skipped",
+            final_classification="",
+            retry_enabled=True,
+            initial_refs="",
+            remediated_refs="",
+        )
+
+        self.assertEqual("scanner_error", result["initial_result"])
+        self.assertEqual("scanner_error", result["final_result"])
+        self.assertEqual("skipped", result["rebuild_result"])
+        self.assertFalse(result["passed"])
+        self.assertFalse(result["compatibility_allowed"])
+
+    def test_empty_initial_classification_fails_closed(self) -> None:
+        result = evaluate_retry(
+            initial_outcome="failure",
+            initial_classification="",
+            rebuild_outcome="skipped",
+            final_outcome="skipped",
+            final_classification="",
+            retry_enabled=True,
+            initial_refs=IMAGE_A,
+            remediated_refs="",
+        )
+
+        self.assertEqual("scanner_error", result["final_result"])
+        self.assertFalse(result["passed"])
+        self.assertFalse(result["compatibility_allowed"])
+
+    def test_scanner_error_is_explicit_and_fail_closed(self) -> None:
+        result = evaluate_retry(
+            initial_outcome="failure",
+            initial_classification="scanner_error",
+            rebuild_outcome="skipped",
+            final_outcome="skipped",
+            final_classification="",
+            retry_enabled=True,
+            initial_refs=IMAGE_A,
+            remediated_refs="",
+        )
+
+        self.assertEqual("scanner_error", result["final_result"])
+        self.assertEqual("skipped", result["rebuild_result"])
+        self.assertFalse(result["passed"])
+
+    def test_disabled_retry_preserves_actionable_counts_and_references(self) -> None:
+        result = evaluate_retry(
+            initial_outcome="failure",
+            initial_classification="actionable_vulnerability",
+            rebuild_outcome="skipped",
+            final_outcome="skipped",
+            final_classification="",
+            retry_enabled=False,
+            initial_refs=IMAGE_A,
+            remediated_refs="",
+            initial_counts=(4, 2, 0, 0),
+        )
+
+        self.assertEqual("actionable_vulnerability", result["final_result"])
+        self.assertEqual("skipped", result["rebuild_result"])
+        self.assertEqual(4, result["fixable_vulnerability_count"])
+        self.assertEqual(2, result["unfixed_vulnerability_count"])
+        self.assertFalse(result["passed"])
+
+    def test_cli_always_publishes_the_complete_output_contract(self) -> None:
+        environment = {
+            "INITIAL_OUTCOME": "skipped",
+            "INITIAL_CLASSIFICATION": "",
+            "REBUILD_OUTCOME": "skipped",
+            "FINAL_OUTCOME": "skipped",
+            "FINAL_CLASSIFICATION": "",
+            "RETRY_ENABLED": "true",
+            "INITIAL_REFS": "",
+            "REMEDIATED_REFS": "",
+        }
+        output = io.StringIO()
+
+        with mock.patch.dict("os.environ", environment, clear=True), contextlib.redirect_stdout(output):
+            exit_code = MODULE.main()
+
+        published = dict(line.split("=", 1) for line in output.getvalue().splitlines())
+        self.assertEqual(0, exit_code)
+        self.assertEqual(
+            {
+                "initial_result",
+                "rebuild_attempted",
+                "rebuild_result",
+                "final_result",
+                "passed",
+                "compatibility_allowed",
+                "fixable_vulnerability_count",
+                "unfixed_vulnerability_count",
+                "misconfiguration_count",
+                "secret_count",
+            },
+            set(published),
+        )
+        self.assertEqual("scanner_error", published["final_result"])
+        self.assertEqual("false", published["passed"])
+        self.assertEqual("false", published["compatibility_allowed"])
 
 
 if __name__ == "__main__":
