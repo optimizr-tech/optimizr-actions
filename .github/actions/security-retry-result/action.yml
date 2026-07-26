@@ -81,6 +81,9 @@ outputs:
   passed:
     description: true only when a changed image set passes the final scan
     value: ${{ steps.classify.outputs.passed }}
+  compatibility_allowed:
+    description: true only for the narrow legacy unfixed/no-change compatibility cases
+    value: ${{ steps.classify.outputs.compatibility_allowed }}
   fixable_vulnerability_count:
     description: Effective fixable vulnerability count
     value: ${{ steps.classify.outputs.fixable_vulnerability_count }}

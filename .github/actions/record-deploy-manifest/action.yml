@@ -32,7 +32,7 @@ inputs:
     required: false
     default: not-reported
   security_initial_result:
-    description: clean, actionable_vulnerability, unfixed_warning, gate_error or not-run
+    description: Canonical security classification; gate_error is accepted as a legacy alias
     required: false
     default: not-run
   security_rebuild_attempted:
@@ -44,7 +44,7 @@ inputs:
     required: false
     default: skipped
   security_final_result:
-    description: clean, actionable_vulnerability, unfixed_warning, gate_error or not-run
+    description: Canonical security classification; gate_error is accepted as a legacy alias
     required: false
     default: not-run
   retention:
