@@ -8,6 +8,13 @@ import unittest
 from pathlib import Path
 
 
+ROOT = Path(__file__).resolve().parents[1]
+WORKFLOWS = (
+    ROOT / ".github/workflows/_vps-self-hosted-deploy.yml",
+    ROOT / ".github/workflows/_vps-monorepo-deploy.yml",
+)
+
+
 class VpsDeploySecretsTests(unittest.TestCase):
     def test_secrets_directory_is_excluded_from_chown(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -25,15 +32,10 @@ class VpsDeploySecretsTests(unittest.TestCase):
             another_dir.mkdir()
             another_file.touch()
 
+            paths_to_chown_recursively = [
+                path for path in deploy_path.iterdir() if path.name != ".secrets"
+            ]
 
-            # This logic mirrors the shell command in the workflow.
-            # It simulates: find "$DEPLOY_PATH" -mindepth 1 -maxdepth 1 -not -name '.secrets'
-            paths_to_chown_recursively = []
-            for path in deploy_path.iterdir():
-                if path.name != ".secrets":
-                    paths_to_chown_recursively.append(path)
-
-            # The `chown -R` would affect the path itself and everything inside it.
             all_affected_paths = set()
             for path in paths_to_chown_recursively:
                 all_affected_paths.add(path)
@@ -49,6 +51,30 @@ class VpsDeploySecretsTests(unittest.TestCase):
             self.assertIn(another_file, all_affected_paths)
             self.assertNotIn(secrets_path, all_affected_paths)
             self.assertNotIn(secrets_file, all_affected_paths)
+
+    def test_workflows_run_find_unprivileged_and_chown_only_selected_paths(self) -> None:
+        for workflow in WORKFLOWS:
+            with self.subTest(workflow=workflow.name):
+                content = workflow.read_text(encoding="utf-8")
+                self.assertNotIn('sudo find "$DEPLOY_PATH"', content)
+                self.assertIn("while IFS= read -r -d '' path; do", content)
+                self.assertIn(
+                    'sudo chown -R "$(id -un):$(id -gn)" "$path"', content
+                )
+                self.assertIn("-not -name '.secrets' -print0", content)
+
+    def test_configuration_backups_exclude_runtime_secret_directories(self) -> None:
+        required_exclusions = (
+            "--exclude='.secrets'",
+            "--exclude='*/.secrets'",
+            "--exclude='.secrets/*'",
+            "--exclude='*/.secrets/*'",
+        )
+        for workflow in WORKFLOWS:
+            with self.subTest(workflow=workflow.name):
+                content = workflow.read_text(encoding="utf-8")
+                for exclusion in required_exclusions:
+                    self.assertIn(exclusion, content)
 
 
 if __name__ == "__main__":
