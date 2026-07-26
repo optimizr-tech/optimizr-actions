@@ -147,6 +147,8 @@ The `security-gate` action preserves `result=passed|failed` for `v1` compatibili
 
 Exceptions use JSON so they can be validated with the Python standard library before Trivy receives a generated `.yaml` ignore document.
 
+Consumers continue to provide `expires` as `YYYY-MM-DD`; the generated Trivy document renders that date as `expired_at` at `23:59:59Z` so the source policy remains date-only while Trivy receives an RFC3339 timestamp.
+
 ```json
 {
   "version": 1,

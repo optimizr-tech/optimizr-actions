@@ -6,6 +6,8 @@ from datetime import date, datetime, timedelta, timezone
 import hashlib
 import json
 from pathlib import Path
+import shutil
+import subprocess
 import tempfile
 import unittest
 
@@ -91,11 +93,98 @@ class SecurityGateEvidenceTests(unittest.TestCase):
         rendered = json.loads(output.read_text(encoding="utf-8"))
         entry = rendered["vulnerabilities"][0]
         self.assertEqual(entry["id"], "CVE-2026-0001")
-        self.assertEqual(entry["expired_at"], "2026-08-19")
+        self.assertEqual(entry["expired_at"], "2026-08-19T23:59:59Z")
         self.assertIn("owner=security@example.invalid", entry["statement"])
         self.assertIn("control=Ingress route blocks", entry["statement"])
         self.assertEqual(summary["active_exceptions"], 1)
         self.assertEqual(summary["policy_sha256"], hashlib.sha256(source.read_bytes()).hexdigest())
+
+    def test_exception_policy_renders_date_only_expiry_as_rfc3339(self) -> None:
+        source = self._write_json(
+            "exceptions.json",
+            {
+                "version": 1,
+                "vulnerabilities": [
+                    {
+                        "id": "CVE-2026-0001",
+                        "owner": "security@example.invalid",
+                        "statement": "Not reachable in the deployed configuration",
+                        "compensating_control": "Ingress route blocks the vulnerable endpoint",
+                        "expires": "2026-08-19",
+                        "targets": ["sha256:image-a"],
+                    }
+                ],
+            },
+        )
+        output = self.root / "generated-ignore.yaml"
+
+        evidence.render_exception_policy(
+            source,
+            target="sha256:image-a",
+            output=output,
+            today=date(2026, 7, 19),
+        )
+
+        rendered = json.loads(output.read_text(encoding="utf-8"))
+        expired_at = rendered["vulnerabilities"][0]["expired_at"]
+        self.assertEqual(expired_at, "2026-08-19T23:59:59Z")
+        self.assertEqual(
+            datetime.fromisoformat(expired_at.replace("Z", "+00:00")).tzinfo,
+            timezone.utc,
+        )
+
+    def test_rendered_exception_policy_is_accepted_by_trivy(self) -> None:
+        trivy = shutil.which("trivy")
+        if trivy is None:
+            self.skipTest("Trivy is not installed")
+
+        source = self._write_json(
+            "exceptions.json",
+            {
+                "version": 1,
+                "vulnerabilities": [
+                    {
+                        "id": "CVE-2026-0001",
+                        "owner": "security@example.invalid",
+                        "statement": "Not reachable in the deployed configuration",
+                        "compensating_control": "Ingress route blocks the vulnerable endpoint",
+                        "expires": "2026-08-19",
+                        "targets": ["sha256:image-a"],
+                    }
+                ],
+            },
+        )
+        output = self.root / "generated-ignore.yaml"
+
+        evidence.render_exception_policy(
+            source,
+            target="sha256:image-a",
+            output=output,
+            today=date(2026, 7, 19),
+        )
+
+        completed = subprocess.run(
+            [
+                trivy,
+                "fs",
+                "--scanners",
+                "secret",
+                "--skip-db-update",
+                "--skip-java-db-update",
+                "--ignorefile",
+                str(output),
+                str(self.root),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(
+            completed.returncode,
+            0,
+            completed.stdout + completed.stderr,
+        )
 
     def test_exception_policy_rejects_expired_or_incomplete_entries(self) -> None:
         expired = self._write_json(

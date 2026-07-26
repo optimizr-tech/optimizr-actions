@@ -161,7 +161,7 @@ def render_exception_policy(
 
         rendered_entry: dict[str, Any] = {
             "id": vulnerability_id,
-            "expired_at": expires_text,
+            "expired_at": f"{expires.isoformat()}T23:59:59Z",
             "statement": (
                 f"{statement}; owner={owner}; control={control}"
             ),
