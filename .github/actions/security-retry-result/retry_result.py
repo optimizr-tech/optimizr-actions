@@ -275,11 +275,13 @@ def main() -> int:
         "rebuild_result",
         "final_result",
         "passed",
+        "compatibility_allowed",
         *_COUNT_KEYS,
     ):
         value = str(result[key]).lower() if isinstance(result[key], bool) else result[key]
         print(f"{key}={value}")
-    return 0 if result["passed"] else 1
+    # This action classifies and publishes evidence; the caller enforces it.
+    return 0
 
 
 if __name__ == "__main__":

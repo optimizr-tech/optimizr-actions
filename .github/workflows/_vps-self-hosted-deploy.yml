@@ -149,6 +149,8 @@ jobs:
           persist-credentials: false
 
       - name: Security gate (filesystem)
+        id: security-filesystem-gate
+        continue-on-error: true
         uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@v1
         with:
           scan_type: fs
@@ -159,6 +161,33 @@ jobs:
           trivy_version: ${{ inputs.security_trivy_version }}
           db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
           evidence_dir: artifacts/security-gate/filesystem
+
+
+      - name: Require filesystem security result
+        if: always() && steps.security-filesystem-gate.outcome != 'skipped'
+        shell: bash
+        env:
+          FILESYSTEM_OUTCOME: ${{ steps.security-filesystem-gate.outcome }}
+          SECURITY_CLASSIFICATION: ${{ steps.security-filesystem-gate.outputs.classification }}
+          FIXABLE_COUNT: ${{ steps.security-filesystem-gate.outputs.fixable_vulnerability_count }}
+          UNFIXED_COUNT: ${{ steps.security-filesystem-gate.outputs.unfixed_vulnerability_count }}
+          MISCONFIGURATION_COUNT: ${{ steps.security-filesystem-gate.outputs.misconfiguration_count }}
+          SECRET_COUNT: ${{ steps.security-filesystem-gate.outputs.secret_count }}
+        run: |
+          set -euo pipefail
+          classification="${SECURITY_CLASSIFICATION:-gate_error}"
+          fixable="${FIXABLE_COUNT:-0}"
+          unfixed="${UNFIXED_COUNT:-0}"
+          misconfigurations="${MISCONFIGURATION_COUNT:-0}"
+          secrets="${SECRET_COUNT:-0}"
+          if [ "$FILESYSTEM_OUTCOME" = success ] && {
+            [ "$classification" = clean ] || [ "$classification" = unfixed_warning ];
+          }; then
+            echo "Filesystem security gate passed: classification=$classification fixable=$fixable unfixed=$unfixed."
+          else
+            echo "::error::Filesystem security gate blocked deployment: classification=$classification fixable=$fixable unfixed=$unfixed misconfigurations=$misconfigurations secrets=$secrets" >&2
+            exit 1
+          fi
 
       - name: Backup and synchronize files
         shell: bash
@@ -366,7 +395,7 @@ jobs:
 
       - name: Enforce final image security result
         id: security-final
-        if: inputs.security_require_image_scan && always()
+        if: inputs.security_require_image_scan
         continue-on-error: true
         uses: optimizr-tech/optimizr-actions/.github/actions/security-retry-result@v1
         with:
@@ -388,7 +417,7 @@ jobs:
           remediated_refs: ${{ steps.security-images-remediated.outputs.refs }}
 
       - name: Require effective security remediation
-        if: inputs.security_require_image_scan && always()
+        if: inputs.security_require_image_scan
         shell: bash
         env:
           RETRY_PASSED: ${{ steps.security-final.outputs.passed }}
