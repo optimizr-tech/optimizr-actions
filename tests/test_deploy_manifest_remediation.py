@@ -9,6 +9,39 @@ from scripts.deploy_manifest.remediation import RemediationError, decorate_manif
 
 
 class DeployManifestRemediationTests(unittest.TestCase):
+    def test_accepts_every_terminal_security_classification(self) -> None:
+        for classification in (
+            "clean",
+            "actionable_vulnerability",
+            "unfixed_warning",
+            "misconfiguration_detected",
+            "secret_detected",
+            "scanner_error",
+        ):
+            with self.subTest(classification=classification):
+                with tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary) / ".deploy-manifests"
+                    root.mkdir()
+                    manifest = root / "immutable.json"
+                    last_successful = root / "last-successful.json"
+                    manifest.write_text(
+                        '{"schema_version":"1.0","status":"failure"}',
+                        encoding="utf-8",
+                    )
+
+                    decorate_manifest(
+                        manifest=manifest,
+                        last_successful=last_successful,
+                        status="failure",
+                        initial_result=classification,
+                        rebuild_attempted=False,
+                        rebuild_result="skipped",
+                        final_result=classification,
+                    )
+
+                    result = json.loads(manifest.read_text(encoding="utf-8"))
+                    self.assertEqual(classification, result["security_final_result"])
+
     def test_adds_only_sanitized_remediation_state(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / ".deploy-manifests"

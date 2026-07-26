@@ -126,6 +126,11 @@ class WorkflowStaticPolicyTests(unittest.TestCase):
         content = read(".github/workflows/move-v1.yml")
         self.assertIn('- "templates/**"', content)
 
+    def test_v1_moves_when_portable_scripts_or_presets_change(self) -> None:
+        content = read(".github/workflows/move-v1.yml")
+        self.assertIn('- "presets/**"', content)
+        self.assertIn('- "scripts/**"', content)
+
     def test_failed_compose_diagnostics_include_stopped_services(self) -> None:
         content = read(".github/workflows/_vps-self-hosted-deploy.yml")
         self.assertIn(

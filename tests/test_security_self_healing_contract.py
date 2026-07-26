@@ -36,6 +36,18 @@ class SecuritySelfHealingContractTests(unittest.TestCase):
         self.assertIn("security_rebuild_result:", content)
         self.assertIn("security_final_result:", content)
         self.assertIn(
+            "COMPATIBILITY_ALLOWED: ${{ steps.security-final.outputs.compatibility_allowed }}",
+            content,
+        )
+        self.assertIn('[ "$COMPATIBILITY_ALLOWED" = true ]', content)
+        self.assertNotIn(
+            "steps.security-images-initial-gate.outputs.classification == 'secret_detected'",
+            content,
+        )
+        filesystem = content.index("Security gate (filesystem)")
+        synchronization = content.index("Backup and synchronize files")
+        self.assertNotIn("continue-on-error: true", content[filesystem:synchronization])
+        self.assertIn(
             "optimizr-tech/optimizr-actions/.github/actions/security-retry-result@v1",
             content,
         )
@@ -89,7 +101,11 @@ class SecuritySelfHealingContractTests(unittest.TestCase):
     def test_retry_result_requires_new_immutable_images_before_promotion(self) -> None:
         action = read(".github/actions/security-retry-result/action.yml")
         script = read(".github/actions/security-retry-result/retry_result.py")
+        manifest = read("scripts/deploy_manifest/remediation.py")
 
+        self.assertIn("compatibility_allowed:", action)
+        self.assertIn("scripts.security_gate.classifications", script)
+        self.assertIn("scripts.security_gate.classifications", manifest)
         self.assertIn("initial_refs:", action)
         self.assertIn("remediated_refs:", action)
         self.assertIn("no_change", action)

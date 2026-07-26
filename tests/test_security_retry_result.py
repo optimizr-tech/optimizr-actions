@@ -23,6 +23,73 @@ IMAGE_B = "sha256:" + "b" * 64
 
 
 class SecurityRetryResultTests(unittest.TestCase):
+    def test_secret_findings_never_receive_ignore_unfixed_compatibility(self) -> None:
+        result = evaluate_retry(
+            initial_outcome="failure",
+            initial_classification="secret_detected",
+            rebuild_outcome="skipped",
+            final_outcome="skipped",
+            final_classification="",
+            retry_enabled=True,
+            initial_refs=IMAGE_A,
+            remediated_refs="",
+            initial_counts=(0, 0, 0, 1),
+        )
+
+        self.assertEqual("secret_detected", result["final_result"])
+        self.assertFalse(result["passed"])
+        self.assertFalse(result["compatibility_allowed"])
+
+    def test_unfixed_only_findings_allow_narrow_ignore_unfixed_compatibility(self) -> None:
+        result = evaluate_retry(
+            initial_outcome="failure",
+            initial_classification="unfixed_warning",
+            rebuild_outcome="skipped",
+            final_outcome="skipped",
+            final_classification="",
+            retry_enabled=True,
+            initial_refs=IMAGE_A,
+            remediated_refs="",
+            initial_counts=(0, 3, 0, 0),
+        )
+
+        self.assertEqual("unfixed_warning", result["final_result"])
+        self.assertFalse(result["passed"])
+        self.assertTrue(result["compatibility_allowed"])
+
+    def test_no_change_rebuild_allows_only_the_documented_compatibility_case(self) -> None:
+        result = evaluate_retry(
+            initial_outcome="failure",
+            initial_classification="actionable_vulnerability",
+            rebuild_outcome="success",
+            final_outcome="failure",
+            final_classification="actionable_vulnerability",
+            retry_enabled=True,
+            initial_refs=IMAGE_A,
+            remediated_refs=IMAGE_A,
+            initial_counts=(2, 0, 0, 0),
+        )
+
+        self.assertEqual("no_change", result["rebuild_result"])
+        self.assertFalse(result["passed"])
+        self.assertTrue(result["compatibility_allowed"])
+
+    def test_failed_remediation_retry_never_receives_compatibility(self) -> None:
+        result = evaluate_retry(
+            initial_outcome="failure",
+            initial_classification="actionable_vulnerability",
+            rebuild_outcome="success",
+            final_outcome="failure",
+            final_classification="unfixed_warning",
+            retry_enabled=True,
+            initial_refs=IMAGE_A,
+            remediated_refs=IMAGE_B,
+            final_counts=(0, 2, 0, 0),
+        )
+
+        self.assertEqual("failed", result["rebuild_result"])
+        self.assertFalse(result["compatibility_allowed"])
+
     def test_identical_immutable_ids_are_no_change_and_fail_closed(self) -> None:
         result = evaluate_retry(
             initial_outcome="failure",

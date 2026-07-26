@@ -6,17 +6,19 @@ import argparse
 import json
 import os
 from pathlib import Path
+import sys
 import tempfile
 from typing import Any, Mapping, Sequence
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-_CLASSIFICATIONS = {
-    "clean",
-    "actionable_vulnerability",
-    "unfixed_warning",
-    "gate_error",
-    "not-run",
-}
+from scripts.security_gate.classifications import (  # noqa: E402
+    SECURITY_CLASSIFICATION_INPUTS,
+    normalize_security_classification,
+)
+
 _REBUILD_RESULTS = {"passed", "failed", "skipped", "no_change"}
 _STATUSES = {"success", "failure"}
 
@@ -68,8 +70,11 @@ def decorate_manifest(
     """Persist only enum/boolean remediation state in deploy evidence."""
     if status not in _STATUSES:
         raise RemediationError("status must be success or failure")
-    if initial_result not in _CLASSIFICATIONS or final_result not in _CLASSIFICATIONS:
-        raise RemediationError("security classification is not allowed")
+    try:
+        initial_result = normalize_security_classification(initial_result)
+        final_result = normalize_security_classification(final_result)
+    except ValueError as exc:
+        raise RemediationError(str(exc)) from exc
     if rebuild_result not in _REBUILD_RESULTS:
         raise RemediationError("security rebuild result is not allowed")
     if not isinstance(rebuild_attempted, bool):
@@ -111,10 +116,14 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--last-successful", type=Path, required=True)
     parser.add_argument("--status", choices=sorted(_STATUSES), required=True)
-    parser.add_argument("--initial-result", choices=sorted(_CLASSIFICATIONS), required=True)
+    parser.add_argument(
+        "--initial-result", choices=sorted(SECURITY_CLASSIFICATION_INPUTS), required=True
+    )
     parser.add_argument("--rebuild-attempted", type=_boolean, required=True)
     parser.add_argument("--rebuild-result", choices=sorted(_REBUILD_RESULTS), required=True)
-    parser.add_argument("--final-result", choices=sorted(_CLASSIFICATIONS), required=True)
+    parser.add_argument(
+        "--final-result", choices=sorted(SECURITY_CLASSIFICATION_INPUTS), required=True
+    )
     return parser
 
 

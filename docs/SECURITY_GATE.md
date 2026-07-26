@@ -63,7 +63,7 @@ The deployment job must depend on the applicable hosted or self-hosted job and m
 |---|---:|---|
 | `security_require_image_scan` | `true` | Require at least one Compose image and scan it before rollout. |
 | `security_severity` | `HIGH,CRITICAL` | Severities that block deployment. |
-| `security_ignore_unfixed` | `false` | Deprecated caller compatibility value; unfixed findings remain signal-only centrally. |
+| `security_ignore_unfixed` | `false` | Deprecated compatibility input; only the retry action's narrow `compatibility_allowed=true` result can use it. |
 | `security_exceptions_file` | empty | Optional Optimizr exception-policy JSON path. |
 | `security_trivy_version` | `v0.70.0` | Controlled Trivy version. |
 | `security_db_max_age_hours` | `30` | Maximum accepted database download age. |
@@ -95,7 +95,11 @@ and after the retry. Its outputs are `initial_result`,
 `rebuild_attempted`, `rebuild_result`, `final_result`, and `passed`.
 `rebuild_result` remains additive evidence: `passed`, `failed`, `skipped`, or
 `no_change`. `passed=true` is emitted only for a non-empty changed ID set whose
-final gate succeeded with `clean` or `unfixed_warning`. An initial step outcome
+final gate succeeded with `clean` or `unfixed_warning`. The additive
+`compatibility_allowed` output is true only when the final result is an
+unfixed-only warning with no fixable, misconfiguration or secret findings, or
+when the explicitly documented no-change rebuild case retains an actionable
+vulnerability and no misconfiguration or secret findings. An initial step outcome
 of `success` is accepted only with one of those two passing classifications and
 a valid non-empty initial image set; missing or contradictory data fails closed.
 
@@ -129,11 +133,11 @@ remains closed. A derived image or a scoped, accountable, expiring exception
 requires a separate security review; the retry loop does not pretend that the
 source was fixed.
 
-Secrets, misconfigurations, malformed policies, stale databases, scanner errors and filesystem findings never trigger a rebuild. They remain fail-closed because rebuilding the same image inputs cannot safely correct them. A failed retry leaves the currently running known-good deployment unchanged.
+Secrets, misconfigurations, malformed policies, stale databases, scanner errors and filesystem findings never receive `compatibility_allowed=true`; they remain fail-closed because rebuilding the same image inputs cannot safely correct them. A failed retry leaves the currently running known-good deployment unchanged. Both VPS deploy reusables require this explicit output in addition to `security_ignore_unfixed=true`, so a secret, misconfiguration or scanner error cannot reach rollout through the compatibility branch.
 
 The `security-gate` action preserves `result=passed|failed` for `v1` compatibility and adds sanitized outputs:
 
-- `classification`: `clean`, `actionable_vulnerability`, `unfixed_warning` or `gate_error`;
+- `classification`: `clean`, `actionable_vulnerability`, `unfixed_warning`, `misconfiguration_detected`, `secret_detected` or `scanner_error`;
 - `fixable_vulnerability_count`;
 - `unfixed_vulnerability_count`;
 - `misconfiguration_count`;
