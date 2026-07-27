@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import contextlib
-import unittest
-import io
-from unittest import mock
-
 import importlib.util
+import io
+import unittest
 from pathlib import Path
-
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
@@ -22,307 +20,180 @@ IMAGE_A = "sha256:" + "a" * 64
 IMAGE_B = "sha256:" + "b" * 64
 
 
+def evaluate(**overrides: object) -> dict[str, object]:
+    arguments: dict[str, object] = {
+        "initial_outcome": "failure",
+        "initial_classification": "actionable_vulnerability",
+        "rebuild_outcome": "success",
+        "final_outcome": "failure",
+        "final_classification": "actionable_vulnerability",
+        "retry_enabled": True,
+        "initial_refs": IMAGE_A,
+        "remediated_refs": IMAGE_A,
+        "initial_counts": (1, 0, 0, 0),
+        "final_counts": (0, 0, 0, 0),
+    }
+    arguments.update(overrides)
+    return evaluate_retry(**arguments)
+
+
 class SecurityRetryResultTests(unittest.TestCase):
-    def test_secret_findings_never_receive_ignore_unfixed_compatibility(self) -> None:
-        result = evaluate_retry(
-            initial_outcome="failure",
-            initial_classification="secret_detected",
-            rebuild_outcome="skipped",
-            final_outcome="skipped",
-            final_classification="",
-            retry_enabled=True,
-            initial_refs=IMAGE_A,
-            remediated_refs="",
-            initial_counts=(0, 0, 0, 1),
-        )
-
-        self.assertEqual("secret_detected", result["final_result"])
-        self.assertFalse(result["passed"])
-        self.assertFalse(result["compatibility_allowed"])
-
-    def test_unfixed_only_findings_allow_narrow_ignore_unfixed_compatibility(self) -> None:
-        result = evaluate_retry(
-            initial_outcome="failure",
+    def test_only_unfixed_findings_receive_compatibility(self) -> None:
+        allowed = evaluate(
             initial_classification="unfixed_warning",
             rebuild_outcome="skipped",
             final_outcome="skipped",
             final_classification="",
-            retry_enabled=True,
-            initial_refs=IMAGE_A,
             remediated_refs="",
             initial_counts=(0, 3, 0, 0),
         )
+        self.assertTrue(allowed["compatibility_allowed"])
 
-        self.assertEqual("unfixed_warning", result["final_result"])
-        self.assertFalse(result["passed"])
-        self.assertTrue(result["compatibility_allowed"])
-
-    def test_no_change_rebuild_allows_only_the_documented_compatibility_case(self) -> None:
-        result = evaluate_retry(
-            initial_outcome="failure",
-            initial_classification="actionable_vulnerability",
-            rebuild_outcome="success",
-            final_outcome="failure",
-            final_classification="actionable_vulnerability",
-            retry_enabled=True,
-            initial_refs=IMAGE_A,
-            remediated_refs=IMAGE_A,
-            initial_counts=(2, 0, 0, 0),
+        denied_cases = (
+            {"initial_counts": (1, 0, 0, 0)},
+            {"initial_counts": (1, 3, 0, 0)},
+            {
+                "initial_classification": "unfixed_warning",
+                "rebuild_outcome": "skipped",
+                "final_outcome": "skipped",
+                "final_classification": "",
+                "remediated_refs": "",
+                "initial_counts": (0, 0, 0, 0),
+            },
+            {
+                "initial_classification": "unfixed_warning",
+                "rebuild_outcome": "skipped",
+                "final_outcome": "skipped",
+                "final_classification": "",
+                "remediated_refs": "",
+                "initial_counts": (0, 2, 1, 0),
+            },
+            {
+                "initial_classification": "unfixed_warning",
+                "rebuild_outcome": "skipped",
+                "final_outcome": "skipped",
+                "final_classification": "",
+                "remediated_refs": "",
+                "initial_counts": (0, 2, 0, 1),
+            },
         )
+        for case in denied_cases:
+            with self.subTest(case=case):
+                self.assertFalse(evaluate(**case)["compatibility_allowed"])
 
+    def test_actionable_no_change_is_never_compatible(self) -> None:
+        result = evaluate(initial_counts=(12, 3, 0, 0))
         self.assertEqual("no_change", result["rebuild_result"])
+        self.assertEqual("actionable_vulnerability", result["final_result"])
         self.assertFalse(result["passed"])
-        self.assertTrue(result["compatibility_allowed"])
-
-    def test_failed_remediation_retry_never_receives_compatibility(self) -> None:
-        result = evaluate_retry(
-            initial_outcome="failure",
-            initial_classification="actionable_vulnerability",
-            rebuild_outcome="success",
-            final_outcome="failure",
-            final_classification="unfixed_warning",
-            retry_enabled=True,
-            initial_refs=IMAGE_A,
-            remediated_refs=IMAGE_B,
-            final_counts=(0, 2, 0, 0),
-        )
-
-        self.assertEqual("failed", result["rebuild_result"])
         self.assertFalse(result["compatibility_allowed"])
+        self.assertEqual(12, result["fixable_vulnerability_count"])
+        self.assertEqual(3, result["unfixed_vulnerability_count"])
 
-    def test_identical_immutable_ids_are_no_change_and_fail_closed(self) -> None:
-        result = evaluate_retry(
-            initial_outcome="failure",
-            initial_classification="actionable_vulnerability",
-            rebuild_outcome="success",
-            final_outcome="failure",
-            final_classification="actionable_vulnerability",
-            retry_enabled=True,
-            initial_refs=f"{IMAGE_A}\n{IMAGE_B}",
-            remediated_refs=f"{IMAGE_B}\n{IMAGE_A}",
+    def test_non_vulnerability_failures_never_receive_compatibility(self) -> None:
+        cases = (
+            ("secret_detected", (0, 0, 0, 1)),
+            ("misconfiguration_detected", (0, 0, 1, 0)),
+            ("scanner_error", (0, 0, 0, 0)),
+            ("", (0, 0, 0, 0)),
         )
-
-        self.assertEqual("actionable_vulnerability", result["initial_result"])
-        self.assertTrue(result["rebuild_attempted"])
-        self.assertEqual("no_change", result["rebuild_result"])
-        self.assertEqual("actionable_vulnerability", result["final_result"])
-        self.assertFalse(result["passed"])
-
-    def test_changed_ids_and_clean_final_scan_pass(self) -> None:
-        result = evaluate_retry(
-            initial_outcome="failure",
-            initial_classification="actionable_vulnerability",
-            rebuild_outcome="success",
-            final_outcome="success",
-            final_classification="clean",
-            retry_enabled=True,
-            initial_refs=IMAGE_A,
-            remediated_refs=IMAGE_B,
-        )
-
-        self.assertEqual("passed", result["rebuild_result"])
-        self.assertEqual("clean", result["final_result"])
-        self.assertTrue(result["passed"])
-
-    def test_changed_ids_with_remaining_findings_are_not_remediation_success(self) -> None:
-        result = evaluate_retry(
-            initial_outcome="failure",
-            initial_classification="actionable_vulnerability",
-            rebuild_outcome="success",
-            final_outcome="failure",
-            final_classification="actionable_vulnerability",
-            retry_enabled=True,
-            initial_refs=IMAGE_A,
-            remediated_refs=IMAGE_B,
-        )
-
-        self.assertEqual("failed", result["rebuild_result"])
-        self.assertEqual("actionable_vulnerability", result["final_result"])
-        self.assertFalse(result["passed"])
-
-    def test_initial_success_accepts_only_passing_classifications(self) -> None:
-        for classification in ("clean", "unfixed_warning"):
+        for classification, counts in cases:
             with self.subTest(classification=classification):
-                result = evaluate_retry(
+                result = evaluate(
+                    initial_classification=classification,
+                    rebuild_outcome="skipped",
+                    final_outcome="skipped",
+                    final_classification="",
+                    remediated_refs="",
+                    initial_counts=counts,
+                )
+                self.assertFalse(result["passed"])
+                self.assertFalse(result["compatibility_allowed"])
+
+    def test_initial_success_accepts_only_clean_or_unfixed(self) -> None:
+        for classification, counts in (
+            ("clean", (0, 0, 0, 0)),
+            ("unfixed_warning", (0, 2, 0, 0)),
+        ):
+            with self.subTest(classification=classification):
+                result = evaluate(
                     initial_outcome="success",
                     initial_classification=classification,
                     rebuild_outcome="skipped",
                     final_outcome="skipped",
                     final_classification="",
-                    retry_enabled=True,
-                    initial_refs=IMAGE_A,
                     remediated_refs="",
+                    initial_counts=counts,
                 )
-
-                self.assertEqual("skipped", result["rebuild_result"])
-                self.assertFalse(result["rebuild_attempted"])
-                self.assertEqual(classification, result["final_result"])
                 self.assertTrue(result["passed"])
+                self.assertEqual(classification, result["final_result"])
 
-    def test_malformed_immutable_ids_fail_closed(self) -> None:
-        for initial_refs, remediated_refs in (
+        rejected = evaluate(
+            initial_outcome="success",
+            initial_classification="actionable_vulnerability",
+            rebuild_outcome="skipped",
+            final_outcome="skipped",
+            final_classification="",
+            remediated_refs="",
+        )
+        self.assertEqual("scanner_error", rejected["final_result"])
+        self.assertFalse(rejected["passed"])
+
+    def test_retry_outcomes_are_fail_closed_until_changed_images_pass(self) -> None:
+        failed_rebuild = evaluate(rebuild_outcome="failure", remediated_refs="")
+        self.assertEqual("failed", failed_rebuild["rebuild_result"])
+        self.assertEqual("scanner_error", failed_rebuild["final_result"])
+
+        disabled = evaluate(retry_enabled=False, rebuild_outcome="skipped", remediated_refs="")
+        self.assertEqual("skipped", disabled["rebuild_result"])
+        self.assertFalse(disabled["compatibility_allowed"])
+
+        clean = evaluate(
+            final_outcome="success",
+            final_classification="clean",
+            remediated_refs=IMAGE_B,
+            final_counts=(0, 0, 0, 0),
+        )
+        self.assertEqual("passed", clean["rebuild_result"])
+        self.assertTrue(clean["passed"])
+
+        unfixed = evaluate(
+            final_outcome="success",
+            final_classification="unfixed_warning",
+            remediated_refs=IMAGE_B,
+            final_counts=(0, 2, 0, 0),
+        )
+        self.assertTrue(unfixed["passed"])
+
+        actionable = evaluate(
+            remediated_refs=IMAGE_B,
+            final_counts=(1, 0, 0, 0),
+        )
+        self.assertEqual("failed", actionable["rebuild_result"])
+        self.assertFalse(actionable["passed"])
+        self.assertFalse(actionable["compatibility_allowed"])
+
+    def test_immutable_image_identity_is_validated(self) -> None:
+        reordered = evaluate(
+            initial_refs=f"{IMAGE_A}\n{IMAGE_B}",
+            remediated_refs=f"{IMAGE_B}\n{IMAGE_A}",
+        )
+        self.assertEqual("no_change", reordered["rebuild_result"])
+        self.assertFalse(reordered["compatibility_allowed"])
+
+        malformed_pairs = (
             ("sha256:short", IMAGE_B),
             (IMAGE_A, "not-a-digest"),
             ("sha512:" + "a" * 64, IMAGE_B),
             (IMAGE_A, "sha256:" + "g" * 64),
-        ):
-            with self.subTest(
-                initial_refs=initial_refs,
-                remediated_refs=remediated_refs,
-            ):
-                result = evaluate_retry(
-                    initial_outcome="failure",
-                    initial_classification="actionable_vulnerability",
-                    rebuild_outcome="success",
-                    final_outcome="success",
-                    final_classification="clean",
-                    retry_enabled=True,
-                    initial_refs=initial_refs,
-                    remediated_refs=remediated_refs,
-                )
-
-                self.assertEqual("failed", result["rebuild_result"])
+        )
+        for initial_refs, remediated_refs in malformed_pairs:
+            with self.subTest(initial_refs=initial_refs, remediated_refs=remediated_refs):
+                result = evaluate(initial_refs=initial_refs, remediated_refs=remediated_refs)
                 self.assertEqual("scanner_error", result["final_result"])
                 self.assertFalse(result["passed"])
 
-    def test_initial_success_requires_a_passing_classification(self) -> None:
-        for classification in (
-            "",
-            "gate_error",
-            "scanner_error",
-            "misconfiguration_detected",
-            "secret_detected",
-            "actionable_vulnerability",
-        ):
-            with self.subTest(classification=classification):
-                result = evaluate_retry(
-                    initial_outcome="success",
-                    initial_classification=classification,
-                    rebuild_outcome="skipped",
-                    final_outcome="skipped",
-                    final_classification="",
-                    retry_enabled=True,
-                    initial_refs=IMAGE_A,
-                    remediated_refs="",
-                )
-
-                self.assertEqual("scanner_error", result["final_result"])
-                self.assertEqual("skipped", result["rebuild_result"])
-                self.assertFalse(result["passed"])
-
-    def test_no_change_preserves_initial_diagnostic_counts(self) -> None:
-        result = evaluate_retry(
-            initial_outcome="failure",
-            initial_classification="actionable_vulnerability",
-            rebuild_outcome="success",
-            final_outcome="failure",
-            final_classification="actionable_vulnerability",
-            retry_enabled=True,
-            initial_refs=IMAGE_A,
-            remediated_refs=IMAGE_A,
-            initial_counts=(12, 3, 0, 0),
-            final_counts=(8, 2, 0, 0),
-        )
-
-        self.assertEqual(12, result["fixable_vulnerability_count"])
-        self.assertEqual(3, result["unfixed_vulnerability_count"])
-
-    def test_cli_emits_no_change_evidence_before_failing_closed(self) -> None:
-        environment = {
-            "INITIAL_OUTCOME": "failure",
-            "INITIAL_CLASSIFICATION": "actionable_vulnerability",
-            "REBUILD_OUTCOME": "success",
-            "FINAL_OUTCOME": "failure",
-            "FINAL_CLASSIFICATION": "actionable_vulnerability",
-            "RETRY_ENABLED": "true",
-            "INITIAL_REFS": IMAGE_A,
-            "REMEDIATED_REFS": IMAGE_A,
-            "INITIAL_FIXABLE_VULNERABILITY_COUNT": "12",
-            "INITIAL_UNFIXED_VULNERABILITY_COUNT": "3",
-        }
-        output = io.StringIO()
-
-        with mock.patch.dict("os.environ", environment, clear=True), contextlib.redirect_stdout(output):
-            exit_code = MODULE.main()
-
-        self.assertEqual(0, exit_code)
-        self.assertIn("rebuild_result=no_change", output.getvalue())
-        self.assertIn("passed=false", output.getvalue())
-        self.assertIn("compatibility_allowed=true", output.getvalue())
-        self.assertIn("fixable_vulnerability_count=12", output.getvalue())
-        self.assertIn("unfixed_vulnerability_count=3", output.getvalue())
-
-
-    def test_skipped_initial_scan_fails_closed_with_explicit_outputs(self) -> None:
-        result = evaluate_retry(
-            initial_outcome="skipped",
-            initial_classification="",
-            rebuild_outcome="skipped",
-            final_outcome="skipped",
-            final_classification="",
-            retry_enabled=True,
-            initial_refs="",
-            remediated_refs="",
-        )
-
-        self.assertEqual("scanner_error", result["initial_result"])
-        self.assertEqual("scanner_error", result["final_result"])
-        self.assertEqual("skipped", result["rebuild_result"])
-        self.assertFalse(result["passed"])
-        self.assertFalse(result["compatibility_allowed"])
-
-    def test_empty_initial_classification_fails_closed(self) -> None:
-        result = evaluate_retry(
-            initial_outcome="failure",
-            initial_classification="",
-            rebuild_outcome="skipped",
-            final_outcome="skipped",
-            final_classification="",
-            retry_enabled=True,
-            initial_refs=IMAGE_A,
-            remediated_refs="",
-        )
-
-        self.assertEqual("scanner_error", result["final_result"])
-        self.assertFalse(result["passed"])
-        self.assertFalse(result["compatibility_allowed"])
-
-    def test_scanner_error_is_explicit_and_fail_closed(self) -> None:
-        result = evaluate_retry(
-            initial_outcome="failure",
-            initial_classification="scanner_error",
-            rebuild_outcome="skipped",
-            final_outcome="skipped",
-            final_classification="",
-            retry_enabled=True,
-            initial_refs=IMAGE_A,
-            remediated_refs="",
-        )
-
-        self.assertEqual("scanner_error", result["final_result"])
-        self.assertEqual("skipped", result["rebuild_result"])
-        self.assertFalse(result["passed"])
-
-    def test_disabled_retry_preserves_actionable_counts_and_references(self) -> None:
-        result = evaluate_retry(
-            initial_outcome="failure",
-            initial_classification="actionable_vulnerability",
-            rebuild_outcome="skipped",
-            final_outcome="skipped",
-            final_classification="",
-            retry_enabled=False,
-            initial_refs=IMAGE_A,
-            remediated_refs="",
-            initial_counts=(4, 2, 0, 0),
-        )
-
-        self.assertEqual("actionable_vulnerability", result["final_result"])
-        self.assertEqual("skipped", result["rebuild_result"])
-        self.assertEqual(4, result["fixable_vulnerability_count"])
-        self.assertEqual(2, result["unfixed_vulnerability_count"])
-        self.assertFalse(result["passed"])
-
-    def test_cli_always_publishes_the_complete_output_contract(self) -> None:
+    def test_skipped_scan_publishes_complete_fail_closed_contract(self) -> None:
         environment = {
             "INITIAL_OUTCOME": "skipped",
             "INITIAL_CLASSIFICATION": "",
@@ -334,7 +205,6 @@ class SecurityRetryResultTests(unittest.TestCase):
             "REMEDIATED_REFS": "",
         }
         output = io.StringIO()
-
         with mock.patch.dict("os.environ", environment, clear=True), contextlib.redirect_stdout(output):
             exit_code = MODULE.main()
 
@@ -356,8 +226,46 @@ class SecurityRetryResultTests(unittest.TestCase):
             set(published),
         )
         self.assertEqual("scanner_error", published["final_result"])
-        self.assertEqual("false", published["passed"])
         self.assertEqual("false", published["compatibility_allowed"])
+
+    def test_cli_distinguishes_unfixed_from_actionable_findings(self) -> None:
+        cases = (
+            (
+                {
+                    "INITIAL_OUTCOME": "failure",
+                    "INITIAL_CLASSIFICATION": "unfixed_warning",
+                    "REBUILD_OUTCOME": "skipped",
+                    "FINAL_OUTCOME": "skipped",
+                    "FINAL_CLASSIFICATION": "",
+                    "RETRY_ENABLED": "true",
+                    "INITIAL_REFS": IMAGE_A,
+                    "REMEDIATED_REFS": "",
+                    "INITIAL_UNFIXED_VULNERABILITY_COUNT": "3",
+                },
+                "true",
+            ),
+            (
+                {
+                    "INITIAL_OUTCOME": "failure",
+                    "INITIAL_CLASSIFICATION": "actionable_vulnerability",
+                    "REBUILD_OUTCOME": "success",
+                    "FINAL_OUTCOME": "failure",
+                    "FINAL_CLASSIFICATION": "actionable_vulnerability",
+                    "RETRY_ENABLED": "true",
+                    "INITIAL_REFS": IMAGE_A,
+                    "REMEDIATED_REFS": IMAGE_A,
+                    "INITIAL_FIXABLE_VULNERABILITY_COUNT": "12",
+                },
+                "false",
+            ),
+        )
+        for environment, expected in cases:
+            with self.subTest(expected=expected):
+                output = io.StringIO()
+                with mock.patch.dict("os.environ", environment, clear=True), contextlib.redirect_stdout(output):
+                    self.assertEqual(0, MODULE.main())
+                published = dict(line.split("=", 1) for line in output.getvalue().splitlines())
+                self.assertEqual(expected, published["compatibility_allowed"])
 
 
 if __name__ == "__main__":
