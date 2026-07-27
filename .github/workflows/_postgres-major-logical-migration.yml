@@ -1,0 +1,319 @@
+name: _postgres-major-logical-migration
+
+on:
+  workflow_call:
+    inputs:
+      service_name:
+        description: Stable service identifier used for backup and evidence paths
+        required: true
+        type: string
+      runner_label:
+        description: Trusted self-hosted runner label
+        required: true
+        type: string
+      source_container:
+        description: Running PostgreSQL container; omit when resolving through Compose
+        required: false
+        type: string
+        default: ""
+      source_compose_directory:
+        description: Absolute deployed Compose directory used when source_container is empty
+        required: false
+        type: string
+        default: ""
+      source_compose_file:
+        description: Compose file relative to source_compose_directory
+        required: false
+        type: string
+        default: docker-compose.yml
+      source_service:
+        description: PostgreSQL Compose service used when source_container is empty
+        required: false
+        type: string
+        default: ""
+      quiesce_containers:
+        description: Whitespace-separated application containers stopped during backup
+        required: false
+        type: string
+        default: ""
+      source_volume:
+        description: Source Docker volume; omit to resolve it from source_mount_path
+        required: false
+        type: string
+        default: ""
+      source_mount_path:
+        description: Source volume mount path inside the running container
+        required: false
+        type: string
+        default: /var/lib/postgresql/data
+      source_major:
+        description: Expected source PostgreSQL major version
+        required: true
+        type: string
+      target_volume:
+        description: Fresh Docker volume that receives the restored target cluster
+        required: true
+        type: string
+      target_mount_path:
+        description: Target volume mount path for the target image
+        required: false
+        type: string
+        default: /var/lib/postgresql
+      target_pgdata:
+        description: PGDATA path used by the target image
+        required: true
+        type: string
+      target_major:
+        description: Expected target PostgreSQL major version
+        required: true
+        type: string
+      target_image:
+        description: Immutable target PostgreSQL image including sha256 digest
+        required: true
+        type: string
+      database_name:
+        description: Database to dump, restore and verify
+        required: true
+        type: string
+      database_user:
+        description: Superuser role used for globals, dump, restore and verification
+        required: true
+        type: string
+      verification_sql:
+        description: Read-only SQL returning the same deterministic value on source and target
+        required: true
+        type: string
+      backup_retention_days:
+        description: Retention for migration backup directories
+        required: false
+        type: number
+        default: 30
+    secrets:
+      database_password:
+        description: Password for database_user
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: Logical PostgreSQL major migration
+    runs-on:
+      - self-hosted
+      - Linux
+      - ${{ inputs.runner_label }}
+    timeout-minutes: 60
+    environment:
+      name: production
+    concurrency:
+      group: postgres-major-${{ inputs.service_name }}
+      cancel-in-progress: false
+    env:
+      SERVICE_NAME: ${{ inputs.service_name }}
+      BACKUP_ROOT: /opt/optimizr/backups/${{ inputs.service_name }}/postgres-major
+      SOURCE_CONTAINER: ${{ inputs.source_container }}
+      SOURCE_COMPOSE_DIRECTORY: ${{ inputs.source_compose_directory }}
+      SOURCE_COMPOSE_FILE: ${{ inputs.source_compose_file }}
+      SOURCE_SERVICE: ${{ inputs.source_service }}
+      QUIESCE_CONTAINERS: ${{ inputs.quiesce_containers }}
+      SOURCE_VOLUME: ${{ inputs.source_volume }}
+      SOURCE_MOUNT_PATH: ${{ inputs.source_mount_path }}
+      SOURCE_MAJOR: ${{ inputs.source_major }}
+      TARGET_VOLUME: ${{ inputs.target_volume }}
+      TARGET_MOUNT_PATH: ${{ inputs.target_mount_path }}
+      TARGET_PGDATA: ${{ inputs.target_pgdata }}
+      TARGET_MAJOR: ${{ inputs.target_major }}
+      TARGET_IMAGE: ${{ inputs.target_image }}
+      DATABASE_NAME: ${{ inputs.database_name }}
+      DATABASE_USER: ${{ inputs.database_user }}
+      VERIFY_SQL: ${{ inputs.verification_sql }}
+      RETAIN_DAYS: ${{ inputs.backup_retention_days }}
+
+    steps:
+      - name: Checkout caller repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+
+      - name: Validate migration contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SERVICE_NAME" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "::error::service_name contains unsupported characters" >&2; exit 1; }
+          [[ "$DATABASE_NAME" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || { echo "::error::database_name must be a simple PostgreSQL identifier" >&2; exit 1; }
+          [[ "$DATABASE_USER" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || { echo "::error::database_user must be a simple PostgreSQL identifier" >&2; exit 1; }
+          [[ "$TARGET_VOLUME" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || { echo "::error::target_volume contains unsupported characters" >&2; exit 1; }
+          [[ "$SOURCE_MAJOR" =~ ^[0-9]+$ ]] || { echo "::error::source_major must be numeric" >&2; exit 1; }
+          [[ "$TARGET_MAJOR" =~ ^[0-9]+$ ]] || { echo "::error::target_major must be numeric" >&2; exit 1; }
+          [ "$SOURCE_MAJOR" != "$TARGET_MAJOR" ] || { echo "::error::source_major and target_major must differ" >&2; exit 1; }
+          if [ -n "$SOURCE_CONTAINER" ]; then
+            [[ "$SOURCE_CONTAINER" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || { echo "::error::source_container contains unsupported characters" >&2; exit 1; }
+          else
+            [ -n "$SOURCE_COMPOSE_DIRECTORY" ] && [ -n "$SOURCE_SERVICE" ] || { echo "::error::provide source_container or source_compose_directory plus source_service" >&2; exit 1; }
+            [[ "$SOURCE_COMPOSE_DIRECTORY" = /* ]] || { echo "::error::source_compose_directory must be absolute" >&2; exit 1; }
+            [[ "$SOURCE_SERVICE" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || { echo "::error::source_service contains unsupported characters" >&2; exit 1; }
+            [[ "$SOURCE_COMPOSE_FILE" =~ ^[A-Za-z0-9_./-]+$ ]] || { echo "::error::source_compose_file contains unsupported characters" >&2; exit 1; }
+          fi
+          if [ -n "$SOURCE_VOLUME" ]; then
+            [[ "$SOURCE_VOLUME" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || { echo "::error::source_volume contains unsupported characters" >&2; exit 1; }
+            [ "$SOURCE_VOLUME" != "$TARGET_VOLUME" ] || { echo "::error::source_volume and target_volume must differ" >&2; exit 1; }
+          fi
+          case "$TARGET_IMAGE" in *@sha256:*) ;; *) echo "::error::target_image must be pinned by sha256 digest" >&2; exit 1 ;; esac
+          case "$SOURCE_MOUNT_PATH:$TARGET_MOUNT_PATH:$TARGET_PGDATA" in *..*|*$'\n'*|*$'\r'*|*$'\t'*) echo "::error::unsupported mount or PGDATA path" >&2; exit 1 ;; esac
+          case "$SOURCE_MOUNT_PATH:$TARGET_MOUNT_PATH:$TARGET_PGDATA" in /*:/*:/*) ;; *) echo "::error::mount and PGDATA paths must be absolute" >&2; exit 1 ;; esac
+          [[ "$RETAIN_DAYS" =~ ^[0-9]+$ ]] || { echo "::error::backup_retention_days must be an integer" >&2; exit 1; }
+
+      - name: Resolve source container and volume
+        shell: bash
+        run: |
+          set -euo pipefail
+          resolved_container="$SOURCE_CONTAINER"
+          if [ -z "$resolved_container" ]; then
+            [ -d "$SOURCE_COMPOSE_DIRECTORY" ] || { echo "::error::deployed Compose directory is missing" >&2; exit 1; }
+            resolved_container="$(cd "$SOURCE_COMPOSE_DIRECTORY" && sudo -n docker compose -f "$SOURCE_COMPOSE_FILE" ps -q "$SOURCE_SERVICE")"
+          fi
+          [ -n "$resolved_container" ] || { echo "::error::unable to resolve source PostgreSQL container" >&2; exit 1; }
+          sudo -n docker inspect "$resolved_container" >/dev/null
+          resolved_volume="$(sudo -n docker inspect "$resolved_container" | jq -r --arg destination "$SOURCE_MOUNT_PATH" '.[0].Mounts[] | select(.Type == "volume" and .Destination == $destination) | .Name' | head -n 1)"
+          [ -n "$resolved_volume" ] || { echo "::error::unable to resolve source volume from declared mount" >&2; exit 1; }
+          if [ -n "$SOURCE_VOLUME" ] && [ "$SOURCE_VOLUME" != "$resolved_volume" ]; then
+            echo "::error::resolved source volume does not match declared source_volume" >&2
+            exit 1
+          fi
+          [ "$resolved_volume" != "$TARGET_VOLUME" ] || { echo "::error::source_volume and target_volume must differ" >&2; exit 1; }
+          {
+            echo "SOURCE_CONTAINER=$resolved_container"
+            echo "SOURCE_VOLUME=$resolved_volume"
+          } >> "$GITHUB_ENV"
+
+      - name: Validate source and fresh target volume
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ "$(sudo -n docker inspect -f '{{.State.Running}}' "$SOURCE_CONTAINER")" = true ] || { echo "::error::source PostgreSQL container is not running" >&2; exit 1; }
+          sudo -n docker volume inspect "$SOURCE_VOLUME" >/dev/null
+          actual_major="$(sudo -n docker exec "$SOURCE_CONTAINER" sh -ec 'cat "$1/PG_VERSION"' sh "$SOURCE_MOUNT_PATH")"
+          [ "$actual_major" = "$SOURCE_MAJOR" ] || { echo "::error::source PG_VERSION=${actual_major:-unknown}; expected $SOURCE_MAJOR" >&2; exit 1; }
+          if sudo -n docker volume inspect "$TARGET_VOLUME" >/dev/null 2>&1; then
+            target_in_use="$(sudo -n docker ps -aq --filter "volume=$TARGET_VOLUME" --format '{{.ID}}' | head -n 1)"
+            [ -z "$target_in_use" ] || { echo "::error::target volume is attached to a container" >&2; exit 1; }
+            target_entries="$(sudo -n docker run --rm --mount "source=${TARGET_VOLUME},target=/target,readonly" --entrypoint sh "$TARGET_IMAGE" -ec 'find /target -mindepth 1 -maxdepth 1 -print -quit')"
+            [ -z "$target_entries" ] || { echo "::error::target volume is not empty; choose a fresh volume" >&2; exit 1; }
+          else
+            sudo -n docker volume create "$TARGET_VOLUME" >/dev/null
+          fi
+
+      - name: Quiesce applications and create verified backup
+        id: backup
+        shell: bash
+        env:
+          DATABASE_PASSWORD: ${{ secrets.database_password }}
+        run: |
+          set -euo pipefail
+          migration_id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          backup_dir="${BACKUP_ROOT}/${migration_id}"
+          env_file="$(mktemp)"
+          stopped=()
+          restart_apps() {
+            for container in "${stopped[@]}"; do sudo -n docker start "$container" >/dev/null 2>&1 || true; done
+            rm -f "$env_file"
+          }
+          trap restart_apps EXIT
+          umask 077
+          printf 'PGPASSWORD=%s\n' "$DATABASE_PASSWORD" > "$env_file"
+          read -r -a quiesce <<< "$QUIESCE_CONTAINERS"
+          for container in "${quiesce[@]}"; do
+            [ "$container" != "$SOURCE_CONTAINER" ] || { echo "::error::source database container cannot be quiesced" >&2; exit 1; }
+            [[ "$container" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || { echo "::error::quiesce container contains unsupported characters" >&2; exit 1; }
+            if [ "$(sudo -n docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null || true)" = true ]; then
+              sudo -n docker stop -t 60 "$container" >/dev/null
+              stopped+=("$container")
+            fi
+          done
+          sudo -n mkdir -p "$backup_dir"
+          sudo -n chown "$(id -un):$(id -gn)" "$backup_dir"
+          dump_file="${backup_dir}/database.dump"
+          globals_file="${backup_dir}/globals.sql"
+          globals_restore_file="${backup_dir}/globals.restore.sql"
+          sudo -n docker exec --env-file "$env_file" "$SOURCE_CONTAINER" pg_dump -U "$DATABASE_USER" -d "$DATABASE_NAME" -Fc --no-owner | tee "$dump_file" >/dev/null
+          sudo -n docker exec --env-file "$env_file" "$SOURCE_CONTAINER" pg_dumpall -U "$DATABASE_USER" --globals-only | tee "$globals_file" >/dev/null
+          awk -v role="$DATABASE_USER" '$0 != "CREATE ROLE " role ";"' "$globals_file" > "$globals_restore_file"
+          test -s "$dump_file" && test -s "$globals_file" && test -s "$globals_restore_file"
+          sha256sum "$dump_file" > "${dump_file}.sha256"
+          sha256sum "$globals_restore_file" > "${globals_restore_file}.sha256"
+          chmod 600 "$dump_file" "${dump_file}.sha256" "$globals_file" "$globals_restore_file" "${globals_restore_file}.sha256"
+          sudo -n docker run --rm --mount "type=bind,source=${backup_dir},target=/migration,readonly" --entrypoint pg_restore "$TARGET_IMAGE" --list /migration/database.dump >/dev/null
+          source_value="$(sudo -n docker exec --env-file "$env_file" -e 'PGOPTIONS=-c default_transaction_read_only=on' "$SOURCE_CONTAINER" psql -X -v ON_ERROR_STOP=1 -At -U "$DATABASE_USER" -d "$DATABASE_NAME" -c "$VERIFY_SQL")"
+          [ -n "$source_value" ] || { echo "::error::verification_sql returned an empty source fingerprint" >&2; exit 1; }
+          source_sha="$(printf '%s' "$source_value" | sha256sum | cut -d' ' -f1)"
+          restart_apps
+          trap - EXIT
+          {
+            echo "backup_dir=$backup_dir"
+            echo "dump_sha=$(cut -d' ' -f1 "${dump_file}.sha256")"
+            echo "globals_sha=$(cut -d' ' -f1 "${globals_restore_file}.sha256")"
+            echo "source_fingerprint_sha=$source_sha"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Restore into isolated target cluster
+        id: restore
+        shell: bash
+        env:
+          DATABASE_PASSWORD: ${{ secrets.database_password }}
+          BACKUP_DIR: ${{ steps.backup.outputs.backup_dir }}
+          DUMP_SHA: ${{ steps.backup.outputs.dump_sha }}
+          GLOBALS_SHA: ${{ steps.backup.outputs.globals_sha }}
+          SOURCE_FINGERPRINT_SHA: ${{ steps.backup.outputs.source_fingerprint_sha }}
+        run: |
+          set -euo pipefail
+          container="optimizr-pg-major-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          env_file="$(mktemp)"
+          marker_tmp="$(mktemp)"
+          cleanup() { sudo -n docker rm -f "$container" >/dev/null 2>&1 || true; rm -f "$env_file" "$marker_tmp"; }
+          trap cleanup EXIT
+          umask 077
+          {
+            printf 'POSTGRES_DB=%s\n' "$DATABASE_NAME"
+            printf 'POSTGRES_USER=%s\n' "$DATABASE_USER"
+            printf 'POSTGRES_PASSWORD=%s\n' "$DATABASE_PASSWORD"
+            printf 'PGPASSWORD=%s\n' "$DATABASE_PASSWORD"
+          } > "$env_file"
+          sudo -n docker run -d --name "$container" --env-file "$env_file" --mount "source=${TARGET_VOLUME},target=${TARGET_MOUNT_PATH}" --mount "type=bind,source=${BACKUP_DIR},target=/migration,readonly" "$TARGET_IMAGE" >/dev/null
+          deadline=$((SECONDS + 180))
+          until sudo -n docker exec "$container" pg_isready -U "$DATABASE_USER" -d "$DATABASE_NAME" >/dev/null 2>&1; do
+            if [ "$SECONDS" -ge "$deadline" ]; then sudo -n docker logs --tail=200 "$container" >&2 || true; echo "::error::target PostgreSQL did not become ready" >&2; exit 1; fi
+            sleep 3
+          done
+          actual_target_major="$(sudo -n docker exec "$container" sh -ec 'cat "$1/PG_VERSION"' sh "$TARGET_PGDATA")"
+          [ "$actual_target_major" = "$TARGET_MAJOR" ] || { echo "::error::target PG_VERSION=${actual_target_major:-unknown}; expected $TARGET_MAJOR" >&2; exit 1; }
+          sudo -n docker exec --env-file "$env_file" "$container" psql -X -v ON_ERROR_STOP=1 -U "$DATABASE_USER" -d postgres -f /migration/globals.restore.sql
+          sudo -n docker exec --env-file "$env_file" "$container" pg_restore -U "$DATABASE_USER" -d "$DATABASE_NAME" --clean --if-exists --no-owner --exit-on-error /migration/database.dump
+          target_value="$(sudo -n docker exec --env-file "$env_file" -e 'PGOPTIONS=-c default_transaction_read_only=on' "$container" psql -X -v ON_ERROR_STOP=1 -At -U "$DATABASE_USER" -d "$DATABASE_NAME" -c "$VERIFY_SQL")"
+          [ -n "$target_value" ] || { echo "::error::verification_sql returned an empty target fingerprint" >&2; exit 1; }
+          target_sha="$(printf '%s' "$target_value" | sha256sum | cut -d' ' -f1)"
+          [ "$target_sha" = "$SOURCE_FINGERPRINT_SHA" ] || { echo "::error::source and target verification fingerprints differ" >&2; exit 1; }
+          jq -n --arg service "$SERVICE_NAME" --arg source_major "$SOURCE_MAJOR" --arg target_major "$TARGET_MAJOR" --arg source_volume "$SOURCE_VOLUME" --arg target_volume "$TARGET_VOLUME" --arg dump_sha "$DUMP_SHA" --arg globals_sha "$GLOBALS_SHA" --arg verification_sha "$target_sha" --arg migrated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{service:$service,source_major:$source_major,target_major:$target_major,source_volume:$source_volume,target_volume:$target_volume,dump_sha256:$dump_sha,globals_sha256:$globals_sha,verification_sha256:$verification_sha,migrated_at:$migrated_at}' > "$marker_tmp"
+          marker="${TARGET_MOUNT_PATH}/.optimizr-postgres-major-migration.json"
+          marker_json="$(<"$marker_tmp")"
+          sudo -n docker exec -u 0 -e MARKER_JSON="$marker_json" "$container" sh -ec 'umask 077; printf "%s\n" "$MARKER_JSON" > "$1"; chown postgres:postgres "$1"' sh "$marker"
+          mkdir -p artifacts/postgres-major-migration
+          cp "$marker_tmp" artifacts/postgres-major-migration/manifest.json
+          echo "target_major=$actual_target_major" >> "$GITHUB_OUTPUT"
+          echo "verification_sha=$target_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Rotate old migration backups
+        if: always() && steps.backup.outputs.backup_dir != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -n find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -mtime "+${RETAIN_DAYS}" -print -exec rm -rf -- {} +
+
+      - name: Upload sanitized migration evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: postgres-major-migration-${{ inputs.service_name }}-${{ github.run_id }}
+          path: artifacts/postgres-major-migration
+          if-no-files-found: error
+          retention-days: 30
