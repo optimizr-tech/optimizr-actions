@@ -58,21 +58,21 @@ def _compatibility_allowed(
     rebuild_result: str,
     counts: dict[str, int],
 ) -> bool:
-    """Keep the legacy bypass narrow and explicitly non-security-sensitive."""
-    if counts["misconfiguration_count"] or counts["secret_count"]:
-        return False
-    if (
+    """Allow compatibility only for vulnerabilities with no current fix.
+
+    ``security_ignore_unfixed`` must never approve an actionable vulnerability,
+    even when a rebuild was attempted and produced the same immutable image IDs.
+    The unused ``rebuild_attempted`` argument remains in the internal signature
+    for the stable v1 call contract.
+    """
+    del rebuild_attempted
+    return (
         final_result == "unfixed_warning"
         and rebuild_result in {"skipped", "no_change"}
         and counts["fixable_vulnerability_count"] == 0
         and counts["unfixed_vulnerability_count"] > 0
-    ):
-        return True
-    return (
-        final_result == "actionable_vulnerability"
-        and rebuild_attempted
-        and rebuild_result == "no_change"
-        and counts["fixable_vulnerability_count"] > 0
+        and counts["misconfiguration_count"] == 0
+        and counts["secret_count"] == 0
     )
 
 
