@@ -53,6 +53,9 @@ outputs:
   classification:
     description: "clean, actionable_vulnerability, unfixed_warning, misconfiguration_detected, secret_detected, or scanner_error"
     value: ${{ steps.scan.outputs.classification }}
+  failure_reason:
+    description: "Sanitized operational reason when the gate cannot run"
+    value: ${{ steps.scan.outputs.failure_reason }}
   fixable_vulnerability_count:
     description: "Number of effective vulnerabilities with an available fixed version"
     value: ${{ steps.scan.outputs.fixable_vulnerability_count }}
@@ -107,6 +110,7 @@ runs:
           echo "evidence_dir=$evidence_dir"
           echo "result=failed"
           echo "classification=scanner_error"
+          echo "failure_reason="
           echo "fixable_vulnerability_count=0"
           echo "unfixed_vulnerability_count=0"
           echo "misconfiguration_count=0"
@@ -125,10 +129,11 @@ runs:
           exit 2
         fi
         chmod 700 "$cache_root" "$cache_dir"
-        command -v flock >/dev/null 2>&1 || {
-          echo "::error::flock is required to protect the shared Trivy cache" >&2
+        if ! command -v flock >/dev/null 2>&1; then
+          echo "failure_reason=missing_flock" >> "$GITHUB_OUTPUT"
+          echo "::error title=Missing security-gate runner dependency::flock is required to protect the shared Trivy cache. Install util-linux on the self-hosted runner or use a runner image that provides flock; do not bypass the lock." >&2
           exit 2
-        }
+        fi
         exec 9>"$cache_root/gate.lock"
         flock -x 9
 
