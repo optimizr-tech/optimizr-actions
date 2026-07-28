@@ -32,8 +32,35 @@ class PostgresMajorLogicalMigrationContract(unittest.TestCase):
             "verification_sql",
             "source and target verification fingerprints differ",
             ".optimizr-postgres-major-migration.json",
+            ".github/actions/postgres-migration-diagnostics@v1",
+            "source_fingerprint_file",
+            "target-diagnostics",
+            "source-verification.json",
+            "target-verification.json",
+            "diagnostic-manifest.json",
         ):
             self.assertIn(token, self.text)
+
+    def test_mismatch_evidence_and_cleanup_do_not_replace_primary_failure(self) -> None:
+        self.assertIn("status=mismatch", self.text)
+        self.assertIn("source and target verification fingerprints differ", self.text)
+        self.assertIn('find "$BACKUP_ROOT"', self.text)
+        self.assertIn("sudo -n find", self.text)
+        self.assertIn("if-no-files-found: warn", self.text)
+        self.assertIn("continue-on-error: true", self.text)
+        self.assertNotIn("if-no-files-found: error", self.text)
+
+    def test_diagnostics_composite_is_self_contained_and_mode_checked(self) -> None:
+        action = (ROOT / ".github" / "actions" / "postgres-migration-diagnostics" / "action.yml").read_text(encoding="utf-8")
+
+        for token in (
+            "mode:",
+            "component)",
+            "comparison)",
+            "scripts/postgres_major_migration/diagnostics.py",
+            "mode must be component or comparison",
+        ):
+            self.assertIn(token, action)
 
     def test_resolves_compose_sources_without_hardcoded_container_names(self) -> None:
         for token in (
@@ -56,7 +83,7 @@ class PostgresMajorLogicalMigrationContract(unittest.TestCase):
 
     def test_quiesced_applications_are_restarted(self) -> None:
         self.assertIn("Quiesce applications and create verified backup", self.text)
-        self.assertIn("trap restart_apps EXIT", self.text)
+        self.assertIn("trap 'restart_apps; cleanup_files' EXIT", self.text)
         self.assertIn('docker start "$container"', self.text)
 
     def test_sensitive_global_dump_is_not_uploaded(self) -> None:

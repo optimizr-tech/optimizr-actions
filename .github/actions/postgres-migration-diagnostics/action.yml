@@ -1,0 +1,71 @@
+name: PostgreSQL migration diagnostics
+description: Write sanitized component hashes for PostgreSQL migration verification
+
+inputs:
+  mode:
+    description: component or comparison
+    required: false
+    default: component
+  input_file:
+    description: Temporary file containing one raw verification result
+    required: false
+    default: ""
+  side:
+    description: source or target component manifest side
+    required: false
+    default: ""
+  overall_sha256:
+    description: Existing overall fingerprint for the raw verification result
+    required: false
+    default: ""
+  output_file:
+    description: Sanitized output manifest path
+    required: true
+  source_file:
+    description: Sanitized source component manifest for comparison mode
+    required: false
+    default: ""
+  target_file:
+    description: Sanitized target component manifest for comparison mode
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Write sanitized migration diagnostic
+      shell: bash
+      env:
+        INPUT_MODE: ${{ inputs.mode }}
+        INPUT_FILE: ${{ inputs.input_file }}
+        INPUT_SIDE: ${{ inputs.side }}
+        INPUT_OVERALL_SHA256: ${{ inputs.overall_sha256 }}
+        INPUT_OUTPUT_FILE: ${{ inputs.output_file }}
+        INPUT_SOURCE_FILE: ${{ inputs.source_file }}
+        INPUT_TARGET_FILE: ${{ inputs.target_file }}
+      run: |
+        set -euo pipefail
+        diagnostic_tool="$GITHUB_ACTION_PATH/../../../scripts/postgres_major_migration/diagnostics.py"
+        case "$INPUT_MODE" in
+          component)
+            [ -n "$INPUT_FILE" ] || { echo "::error::input_file is required for component diagnostics" >&2; exit 1; }
+            [ "$INPUT_SIDE" = source ] || [ "$INPUT_SIDE" = target ] || { echo "::error::side must be source or target" >&2; exit 1; }
+            python3 "$diagnostic_tool" component \
+              --input "$INPUT_FILE" \
+              --side "$INPUT_SIDE" \
+              --overall-sha256 "$INPUT_OVERALL_SHA256" \
+              --output "$INPUT_OUTPUT_FILE"
+            ;;
+          comparison)
+            [ -n "$INPUT_SOURCE_FILE" ] || { echo "::error::source_file is required for comparison diagnostics" >&2; exit 1; }
+            [ -n "$INPUT_TARGET_FILE" ] || { echo "::error::target_file is required for comparison diagnostics" >&2; exit 1; }
+            python3 "$diagnostic_tool" comparison \
+              --source "$INPUT_SOURCE_FILE" \
+              --target "$INPUT_TARGET_FILE" \
+              --output "$INPUT_OUTPUT_FILE"
+            ;;
+          *)
+            echo "::error::mode must be component or comparison" >&2
+            exit 1
+            ;;
+        esac
