@@ -507,7 +507,48 @@ jobs:
       - name: Clean runner workspace
         if: always()
         shell: bash
-        run: sudo find "$GITHUB_WORKSPACE" -mindepth 1 -delete
+        run: |
+          set -euo pipefail
+          workspace="${GITHUB_WORKSPACE:-}"
+          workspace="${workspace%/}"
+          if [ -z "$workspace" ] || [ "$workspace" = "/" ]; then
+            echo "::error::Refusing to clean an empty or root workspace" >&2
+            exit 1
+          fi
+          case "$workspace" in
+            /*) ;;
+            *)
+              echo "::error::Refusing to clean a non-absolute workspace: $workspace" >&2
+              exit 1
+              ;;
+          esac
+          if [ ! -d "$workspace" ]; then
+            echo "::warning::Workspace does not exist; skipping cleanup: $workspace"
+            exit 0
+          fi
+          if ! workspace_real="$(realpath -e -- "$workspace")"; then
+            echo "::error::Unable to resolve workspace safely: $workspace" >&2
+            exit 1
+          fi
+          if [ "$workspace_real" = "/" ] || [ "$workspace_real" != "$workspace" ]; then
+            echo "::error::Refusing to clean a root or symlinked workspace: $workspace" >&2
+            exit 1
+          fi
+          path_depth="$(awk -F/ '{print NF - 1}' <<< "$workspace_real")"
+          if [ "$path_depth" -lt 4 ]; then
+            echo "::error::Refusing to clean an unexpectedly shallow workspace: $workspace" >&2
+            exit 1
+          fi
+          if ! find -- "$workspace_real" -mindepth 1 -delete; then
+            echo "::warning::Workspace cleanup needs elevated permissions; retrying non-interactively"
+            if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+              if ! sudo -n find -- "$workspace_real" -mindepth 1 -delete; then
+                echo "::warning::Non-interactive workspace cleanup could not remove protected files"
+              fi
+            else
+              echo "::warning::Non-interactive sudo is unavailable; protected workspace files may remain"
+            fi
+          fi
 
       - name: Checkout coherent deploy-manifest recorder
         if: always() && inputs.deploy_manifest_enabled

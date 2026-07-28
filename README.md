@@ -20,6 +20,11 @@ attempt, including when Docker pruning is enabled. Backup rotation, persistent
 volume cleanup, and runner installation/version retention remain operational
 responsibilities of `optimizr-infra-ops`.
 
+Workspace cleanup validates the exact absolute workspace, refuses root or
+symlinked paths, runs first as the runner user, and only attempts `sudo -n` as
+a non-interactive fallback. An unavailable privilege escalation emits a
+warning rather than prompting for a password or changing the deployment result.
+
 ## Organization boundary
 
 `optimizr-actions` is the source of truth for portable reusable workflows, composite actions, validation contracts and deploy-evidence schemas. `optimizr-infra-ops` owns VPS provisioning, runner registration, operational users and permissions, canonical server paths, runbooks and adoption tracking.
