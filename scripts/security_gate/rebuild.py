@@ -98,9 +98,6 @@ def run_remediation(
     optional = _services(optional_services)
     if build_all and (required or optional):
         raise RebuildError("build_all cannot be combined with service lists")
-    if not build_all and not required and not optional:
-        # Pull-only remediation remains useful for Compose services using registry images.
-        pass
 
     prefix = ["sudo", "docker", "compose", "-f", compose]
     if runner([*prefix, "pull", "--ignore-buildable"], root) != 0:
@@ -113,10 +110,17 @@ def run_remediation(
     if build_all:
         if runner([*prefix, "build", *build_options], root) != 0:
             raise RebuildError("Compose rebuild failed")
-    else:
+    elif required:
         for service in required:
             if runner([*prefix, "build", *build_options, service], root) != 0:
                 raise RebuildError(f"required service rebuild failed: {service}")
+    elif not optional:
+        # Callers may build images inside pre-deploy commands and therefore have
+        # no services_build input. In that case Compose itself is the source of
+        # truth: rebuild every service declaring build:, while registry-only
+        # services remain covered by the pull above.
+        if runner([*prefix, "build", *build_options], root) != 0:
+            raise RebuildError("Compose rebuild failed")
 
     optional_result = "skipped"
     if optional:
