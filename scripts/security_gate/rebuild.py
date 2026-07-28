@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path, PurePosixPath
 import re
 import subprocess
@@ -151,7 +152,17 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--required-services", default="")
     parser.add_argument("--optional-services", default="")
     parser.add_argument("--no-cache", type=_boolean, default=True)
+    parser.add_argument("--github-output", default=None)
     return parser
+
+
+def _publish_output(output_path: str | None, result: str) -> None:
+    output = output_path or os.environ.get("GITHUB_OUTPUT")
+    if not output:
+        print(f"optional_build_result={result}")
+        return
+    with Path(output).open("a", encoding="utf-8", newline="") as stream:
+        stream.write(f"optional_build_result={result}\n")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -165,7 +176,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             optional_services=args.optional_services,
             no_cache=args.no_cache,
         )
-        print(f"optional_build_result={result}")
+        _publish_output(args.github_output, result)
         return 0
     except (OSError, RebuildError) as exc:
         print(f"security rebuild error: {exc}", file=sys.stderr)
