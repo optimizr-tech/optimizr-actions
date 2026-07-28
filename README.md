@@ -10,6 +10,16 @@ Optimizr-managed consumers should use the floating `v1` tag so compatible automa
 
 The self-hosted VPS deploy reusable captures status and logs from failed one-shot Compose services, including containers that have already stopped, so consumer runs retain the root-cause output instead of only Compose's exit code.
 
+The VPS deploy reusables delegate their per-job Docker and runner cleanup to
+[`docker-prune-safe`](.github/actions/docker-prune-safe/action.yml). The
+`run_prune` and `image_age_threshold` inputs remain backward-compatible. The
+cleanup reports disk and Docker usage before and after the operation, prunes
+containers, untagged/old images, build cache, and stale runner temp files, and
+never prunes volumes or networks. The deploy workspace is cleaned after every
+attempt, including when Docker pruning is enabled. Backup rotation, persistent
+volume cleanup, and runner installation/version retention remain operational
+responsibilities of `optimizr-infra-ops`.
+
 ## Organization boundary
 
 `optimizr-actions` is the source of truth for portable reusable workflows, composite actions, validation contracts and deploy-evidence schemas. `optimizr-infra-ops` owns VPS provisioning, runner registration, operational users and permissions, canonical server paths, runbooks and adoption tracking.

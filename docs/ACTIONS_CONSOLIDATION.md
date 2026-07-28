@@ -15,8 +15,24 @@ This migration is intentionally staged. Existing paths in `optimizr-infra-ops` r
 | `.github/workflows/_vps-self-hosted-deploy.yml` | `a048ef9ee81669d9c7d8ebd74c3d3314ed67ac6f` | `06dea45fc392a23c83be5b5361bd7f293f59a366` | Divergent | Use `optimizr-actions` as the implementation base; retain operational path policy in `infra-ops` docs |
 | `.github/workflows/_vps-monorepo-deploy.yml` | `08141e98a8879bdaec9d5432de3d6d07920df6d0` | `6b62b325781115ee0e33fafc10559e46607b132b` | Divergent | Remove the internal dependency on the `infra-ops` healthcheck action before consumer migration |
 | `.github/workflows/_quality-gate-pr.yml` | `115576e43cd42d39025d82f6c1e987fd63b573b4` | `3c155b54acb650e25eba87b5e59b5e443dc89080` | Divergent | Move portable quality-gate scripts and adapter ownership to `optimizr-actions` in a dedicated PR |
+| `.github/actions/docker-prune-safe/action.yml` | canonical | compatibility copies may exist | Portable per-deploy cleanup | Keep the implementation in `optimizr-actions`; leave host-wide retention in `infra-ops` |
 
 Blob identifiers above are evidence from the repositories at the start of this migration. Future changes must update this inventory or supersede it with a new migration record.
+
+## Deploy cleanup boundary
+
+The two VPS deploy reusables call the public `docker-prune-safe` composite after
+the deployment attempt. This is deliberately scoped to resources created or
+left behind by that job: containers, untagged/old images, build cache, stale
+runner temporary files, and the checked-out workspace. It emits disk and Docker
+usage before and after cleanup for diagnosis and does not prune volumes,
+networks, persistent application data, deployment backups, or installed runner
+versions.
+
+`run_prune` and `image_age_threshold` retain their existing defaults and
+meaning. Publishing this fix under `v1` still requires the protected release
+workflow and its successful validation; consumers can roll back by pinning the
+previous compatible immutable Actions revision.
 
 ## Existing migration debt
 

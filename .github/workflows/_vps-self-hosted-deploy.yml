@@ -500,22 +500,12 @@ jobs:
 
       - name: Cleanup runner and Docker leftovers
         if: always() && inputs.run_prune
-        shell: bash
-        env:
-          IMAGE_AGE: ${{ inputs.image_age_threshold }}
-        run: |
-          set -euo pipefail
-          sudo docker container prune -f
-          sudo docker image prune -f
-          sudo docker image prune -af --filter "until=${IMAGE_AGE}"
-          sudo docker builder prune -af --filter "until=${IMAGE_AGE}"
-          if [ -n "${RUNNER_WORKSPACE:-}" ]; then
-            runner_root="$(dirname "$RUNNER_WORKSPACE")"
-            sudo find "$runner_root/_temp" -mindepth 1 -maxdepth 1 -mmin +60 -exec rm -rf {} + 2>/dev/null || true
-          fi
+        uses: optimizr-tech/optimizr-actions/.github/actions/docker-prune-safe@v1
+        with:
+          image_age_threshold: ${{ inputs.image_age_threshold }}
 
       - name: Clean runner workspace
-        if: always() && !inputs.run_prune
+        if: always()
         shell: bash
         run: sudo find "$GITHUB_WORKSPACE" -mindepth 1 -delete
 
