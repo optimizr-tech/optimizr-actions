@@ -129,12 +129,19 @@ jobs:
       DATABASE_USER: ${{ inputs.database_user }}
       VERIFY_SQL: ${{ inputs.verification_sql }}
       RETAIN_DAYS: ${{ inputs.backup_retention_days }}
+      EVIDENCE_DIR: artifacts/postgres-major-migration
 
     steps:
       - name: Checkout caller repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           persist-credentials: false
+
+      - name: Prepare sanitized migration evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$EVIDENCE_DIR"
 
       - name: Validate migration contract
         shell: bash
@@ -214,12 +221,14 @@ jobs:
           migration_id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           backup_dir="${BACKUP_ROOT}/${migration_id}"
           env_file="$(mktemp)"
+          source_value_file="$(mktemp)"
           stopped=()
           restart_apps() {
             for container in "${stopped[@]}"; do sudo -n docker start "$container" >/dev/null 2>&1 || true; done
             rm -f "$env_file"
           }
-          trap restart_apps EXIT
+          cleanup_files() { rm -f "$env_file" "$source_value_file"; }
+          trap 'restart_apps; cleanup_files' EXIT
           umask 077
           printf 'PGPASSWORD=%s\n' "$DATABASE_PASSWORD" > "$env_file"
           read -r -a quiesce <<< "$QUIESCE_CONTAINERS"
@@ -247,6 +256,7 @@ jobs:
           source_value="$(sudo -n docker exec --env-file "$env_file" -e 'PGOPTIONS=-c default_transaction_read_only=on' "$SOURCE_CONTAINER" psql -X -v ON_ERROR_STOP=1 -At -U "$DATABASE_USER" -d "$DATABASE_NAME" -c "$VERIFY_SQL")"
           [ -n "$source_value" ] || { echo "::error::verification_sql returned an empty source fingerprint" >&2; exit 1; }
           source_sha="$(printf '%s' "$source_value" | sha256sum | cut -d' ' -f1)"
+          printf '%s' "$source_value" > "$source_value_file"
           restart_apps
           trap - EXIT
           {
@@ -254,7 +264,23 @@ jobs:
             echo "dump_sha=$(cut -d' ' -f1 "${dump_file}.sha256")"
             echo "globals_sha=$(cut -d' ' -f1 "${globals_restore_file}.sha256")"
             echo "source_fingerprint_sha=$source_sha"
+            echo "source_fingerprint_file=$source_value_file"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Write sanitized source verification diagnostics
+        if: steps.backup.outcome == 'success'
+        uses: optimizr-tech/optimizr-actions/.github/actions/postgres-migration-diagnostics@v1
+        with:
+          mode: component
+          input_file: ${{ steps.backup.outputs.source_fingerprint_file }}
+          side: source
+          overall_sha256: ${{ steps.backup.outputs.source_fingerprint_sha }}
+          output_file: ${{ env.EVIDENCE_DIR }}/source-verification.json
+
+      - name: Remove raw source verification output
+        if: always() && steps.backup.outputs.source_fingerprint_file != ''
+        shell: bash
+        run: rm -f -- "${{ steps.backup.outputs.source_fingerprint_file }}"
 
       - name: Restore into isolated target cluster
         id: restore
@@ -269,9 +295,7 @@ jobs:
           set -euo pipefail
           container="optimizr-pg-major-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           env_file="$(mktemp)"
-          marker_tmp="$(mktemp)"
-          cleanup() { sudo -n docker rm -f "$container" >/dev/null 2>&1 || true; rm -f "$env_file" "$marker_tmp"; }
-          trap cleanup EXIT
+          target_value_file="$(mktemp)"
           umask 077
           {
             printf 'POSTGRES_DB=%s\n' "$DATABASE_NAME"
@@ -292,28 +316,101 @@ jobs:
           target_value="$(sudo -n docker exec --env-file "$env_file" -e 'PGOPTIONS=-c default_transaction_read_only=on' "$container" psql -X -v ON_ERROR_STOP=1 -At -U "$DATABASE_USER" -d "$DATABASE_NAME" -c "$VERIFY_SQL")"
           [ -n "$target_value" ] || { echo "::error::verification_sql returned an empty target fingerprint" >&2; exit 1; }
           target_sha="$(printf '%s' "$target_value" | sha256sum | cut -d' ' -f1)"
-          [ "$target_sha" = "$SOURCE_FINGERPRINT_SHA" ] || { echo "::error::source and target verification fingerprints differ" >&2; exit 1; }
-          jq -n --arg service "$SERVICE_NAME" --arg source_major "$SOURCE_MAJOR" --arg target_major "$TARGET_MAJOR" --arg source_volume "$SOURCE_VOLUME" --arg target_volume "$TARGET_VOLUME" --arg dump_sha "$DUMP_SHA" --arg globals_sha "$GLOBALS_SHA" --arg verification_sha "$target_sha" --arg migrated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{service:$service,source_major:$source_major,target_major:$target_major,source_volume:$source_volume,target_volume:$target_volume,dump_sha256:$dump_sha,globals_sha256:$globals_sha,verification_sha256:$verification_sha,migrated_at:$migrated_at}' > "$marker_tmp"
+          printf '%s' "$target_value" > "$target_value_file"
+          {
+            echo "container=$container"
+            echo "env_file=$env_file"
+            echo "target_value_file=$target_value_file"
+            echo "target_major=$actual_target_major"
+            echo "verification_sha=$target_sha"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Write sanitized target verification diagnostics
+        id: target-diagnostics
+        if: steps.restore.outcome == 'success'
+        uses: optimizr-tech/optimizr-actions/.github/actions/postgres-migration-diagnostics@v1
+        with:
+          mode: component
+          input_file: ${{ steps.restore.outputs.target_value_file }}
+          side: target
+          overall_sha256: ${{ steps.restore.outputs.verification_sha }}
+          output_file: ${{ env.EVIDENCE_DIR }}/target-verification.json
+
+      - name: Compare sanitized verification diagnostics
+        id: diagnostic-comparison
+        if: steps.restore.outcome == 'success' && steps.target-diagnostics.outcome == 'success'
+        uses: optimizr-tech/optimizr-actions/.github/actions/postgres-migration-diagnostics@v1
+        with:
+          mode: comparison
+          source_file: ${{ env.EVIDENCE_DIR }}/source-verification.json
+          target_file: ${{ env.EVIDENCE_DIR }}/target-verification.json
+          output_file: ${{ env.EVIDENCE_DIR }}/diagnostic-manifest.json
+
+      - name: Compare verification diagnostics and write marker
+        if: steps.restore.outcome == 'success' && steps.target-diagnostics.outcome == 'success' && steps.diagnostic-comparison.outcome == 'success'
+        id: finalize
+        shell: bash
+        env:
+          CONTAINER: ${{ steps.restore.outputs.container }}
+          DUMP_SHA: ${{ steps.backup.outputs.dump_sha }}
+          GLOBALS_SHA: ${{ steps.backup.outputs.globals_sha }}
+          SOURCE_FINGERPRINT_SHA: ${{ steps.backup.outputs.source_fingerprint_sha }}
+          TARGET_FINGERPRINT_SHA: ${{ steps.restore.outputs.verification_sha }}
+        run: |
+          set -euo pipefail
+          if [ "$TARGET_FINGERPRINT_SHA" != "$SOURCE_FINGERPRINT_SHA" ]; then
+            echo "::error::source and target verification fingerprints differ (status=mismatch)" >&2
+            exit 1
+          fi
+          marker_tmp="$(mktemp)"
+          trap 'rm -f "$marker_tmp"' EXIT
+          jq -n --arg service "$SERVICE_NAME" --arg source_major "$SOURCE_MAJOR" --arg target_major "$TARGET_MAJOR" --arg source_volume "$SOURCE_VOLUME" --arg target_volume "$TARGET_VOLUME" --arg dump_sha "$DUMP_SHA" --arg globals_sha "$GLOBALS_SHA" --arg verification_sha "$TARGET_FINGERPRINT_SHA" --arg migrated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{service:$service,source_major:$source_major,target_major:$target_major,source_volume:$source_volume,target_volume:$target_volume,dump_sha256:$dump_sha,globals_sha256:$globals_sha,verification_sha256:$verification_sha,migrated_at:$migrated_at}' > "$marker_tmp"
           marker="${TARGET_MOUNT_PATH}/.optimizr-postgres-major-migration.json"
           marker_json="$(<"$marker_tmp")"
-          sudo -n docker exec -u 0 -e MARKER_JSON="$marker_json" "$container" sh -ec 'umask 077; printf "%s\n" "$MARKER_JSON" > "$1"; chown postgres:postgres "$1"' sh "$marker"
-          mkdir -p artifacts/postgres-major-migration
-          cp "$marker_tmp" artifacts/postgres-major-migration/manifest.json
-          echo "target_major=$actual_target_major" >> "$GITHUB_OUTPUT"
-          echo "verification_sha=$target_sha" >> "$GITHUB_OUTPUT"
+          sudo -n docker exec -u 0 -e MARKER_JSON="$marker_json" "$CONTAINER" sh -ec 'umask 077; printf "%s\n" "$MARKER_JSON" > "$1"; chown postgres:postgres "$1"' sh "$marker"
+          cp "$marker_tmp" "$EVIDENCE_DIR/manifest.json"
+
+      - name: Clean up isolated target container and temporary verification files
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          container="${{ steps.restore.outputs.container }}"
+          [ -n "$container" ] || container="optimizr-pg-major-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          sudo -n docker rm -f "$container" >/dev/null 2>&1 || true
+          for temporary_file in "${{ steps.restore.outputs.env_file }}" "${{ steps.restore.outputs.target_value_file }}"; do
+            [ -n "$temporary_file" ] && rm -f -- "$temporary_file"
+          done
+          exit 0
 
       - name: Rotate old migration backups
         if: always() && steps.backup.outputs.backup_dir != ''
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
-          sudo -n find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -mtime "+${RETAIN_DAYS}" -print -exec rm -rf -- {} +
+          set +e
+          find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -mtime "+${RETAIN_DAYS}" -print -exec rm -rf -- {} +
+          cleanup_status=$?
+          if [ "$cleanup_status" -ne 0 ]; then
+            if sudo -n true >/dev/null 2>&1; then
+              sudo -n find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -mtime "+${RETAIN_DAYS}" -print -exec rm -rf -- {} +
+              cleanup_status=$?
+            else
+              echo "::warning title=Backup retention cleanup::Runner cannot perform noninteractive cleanup; preserving backup evidence and continuing." >&2
+            fi
+          fi
+          if [ "$cleanup_status" -ne 0 ]; then
+            echo "::warning title=Backup retention cleanup::Cleanup failed; preserving backup evidence and continuing." >&2
+          fi
+          exit 0
 
       - name: Upload sanitized migration evidence
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: postgres-major-migration-${{ inputs.service_name }}-${{ github.run_id }}
           path: artifacts/postgres-major-migration
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
