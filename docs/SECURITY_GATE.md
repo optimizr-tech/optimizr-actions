@@ -142,6 +142,8 @@ The `security-gate` action preserves `result=passed|failed` for `v1` compatibili
 - `unfixed_vulnerability_count`;
 - `misconfiguration_count`;
 - `secret_count`.
+- `failure_reason`: empty for normal scan failures, or `missing_flock` when
+  runner provisioning lacks the required lock dependency.
 
 ## Exception policy
 
@@ -196,6 +198,7 @@ A self-hosted security runner must:
 - use read-only repository permissions for validation;
 - receive no production secrets in the security job;
 - provide Bash, Python 3, Git, Docker/Compose, `sha256sum`, `sed`, and passwordless `sudo docker` when the runner user is not in the Docker group;
+- provide `flock` from the `util-linux` package before the workflow is enabled; a missing dependency is a runner-provisioning failure, not a clean scan result;
 - clean workspace and temporary image archives after execution;
 - preferably be ephemeral or isolated from the production runner.
 
@@ -209,7 +212,11 @@ replace an executable while another job is scanning and produce Linux
 `ETXTBSY` (`Text file busy`). The per-job path is added to `PATH` by
 `aquasecurity/setup-trivy` and is disposable with the runner's temporary data.
 The repository-scoped vulnerability database cache remains separately protected
-by `flock`.
+by `flock`. This is a runner provisioning concern, not a scan classification.
+The composite emits `failure_reason=missing_flock` and fails closed
+with an actionable installation error when the command is absent. Provisioning
+must install `util-linux` (or select an image that includes it); consumers must
+not bypass the lock or classify this runner failure as scanner-clean.
 
 ## Failure modes
 

@@ -65,6 +65,19 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertNotIn("ALLOW_MISSING_TRIVY", content)
         self.assertNotIn("continue-on-error: true", content)
 
+    def test_missing_flock_is_an_actionable_runner_prerequisite_failure(self) -> None:
+        content = read(".github/actions/security-gate/action.yml")
+
+        self.assertIn("failure_reason:", content)
+        self.assertIn("failure_reason=missing_flock", content)
+        self.assertIn("Install util-linux", content)
+        self.assertIn("self-hosted runner", content)
+        self.assertIn("do not bypass the lock", content)
+
+        documentation = read("docs/SECURITY_GATE.md")
+        self.assertIn("`flock` from the `util-linux` package", documentation)
+        self.assertIn("runner provisioning", documentation)
+
     def test_filesystem_owns_configuration_analysis_and_image_owns_runtime_packages(self) -> None:
         documentation = read("docs/SECURITY_GATE.md")
 
