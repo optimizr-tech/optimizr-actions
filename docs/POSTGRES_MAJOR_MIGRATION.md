@@ -18,7 +18,9 @@ The reusable is intentionally **not a cutover workflow**. It never changes a con
 - Keeps database/global backups on the trusted host with mode `0600`; they are never uploaded as artifacts.
 - Restores globals and database into an isolated temporary target container.
 - Compares only SHA-256 fingerprints in logs; query results and credentials are not printed.
-- Writes a sanitized migration marker to the target volume and uploads only that marker as workflow evidence.
+- On a mismatch, writes `source-verification.json`, `target-verification.json` and `diagnostic-manifest.json` with component names and SHA-256 hashes only. A JSON object or tab-separated `component<TAB>value` result from `verification_sql` produces component-level entries; a scalar remains the `verification` component.
+- Keeps the target volume and host backup directory available when verification fails. Backup-retention cleanup is noninteractive and warning-only, and evidence upload is also warning-only so neither can replace the primary migration error.
+- Writes a sanitized migration marker to the target volume and uploads only sanitized evidence; database dumps, globals and raw verification values are never uploaded.
 - Preserves the source volume and does not perform a production cutover.
 
 ## Consumer with explicit Docker names
