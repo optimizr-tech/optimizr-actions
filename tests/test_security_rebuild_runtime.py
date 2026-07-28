@@ -3,10 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 import yaml
 
 from scripts.security_gate.rebuild import RebuildError, run_remediation
+from scripts.security_gate import rebuild
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -194,10 +196,38 @@ class SecurityRebuildRuntimeTests(unittest.TestCase):
         script = payload["runs"]["steps"][0]["run"]
 
         self.assertIn("scripts/security_gate/rebuild.py", script)
+        self.assertIn('--github-output "$GITHUB_OUTPUT"', script)
+        self.assertNotIn('>> "$GITHUB_OUTPUT"', script)
         self.assertIn('"$INPUT_REQUIRED_SERVICES"', script)
         self.assertNotIn("eval ", script)
         self.assertNotIn("bash -c", script)
         self.assertNotIn("${{ inputs.command", script)
+
+    def test_cli_keeps_multiline_docker_output_out_of_github_output(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output_path = Path(temporary) / "github-output"
+
+            def fake_remediation(**_kwargs: object) -> str:
+                print("#1 [internal] load local bake definitions")
+                print("#2 [api] exporting layers")
+                return "skipped"
+
+            with mock.patch.object(rebuild, "run_remediation", fake_remediation):
+                with mock.patch.dict("os.environ", {}, clear=True):
+                    exit_code = rebuild.main(
+                        [
+                            "--deploy-path",
+                            str(Path(temporary) / "optimizr/service"),
+                            "--github-output",
+                            str(output_path),
+                        ]
+                    )
+
+            self.assertEqual(0, exit_code)
+            self.assertEqual(
+                "optional_build_result=skipped\n",
+                output_path.read_text(encoding="utf-8"),
+            )
 
 
 if __name__ == "__main__":
