@@ -78,6 +78,57 @@ class SecurityRebuildRuntimeTests(unittest.TestCase):
             )
             self.assertTrue(all(cwd == deploy_path for _argv, cwd in calls))
 
+    def test_empty_service_lists_rebuild_all_buildable_services(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            allowed_root = Path(temporary) / "optimizr"
+            deploy_path = allowed_root / "service"
+            deploy_path.mkdir(parents=True)
+            (deploy_path / "docker-compose.yml").write_text(
+                "services:\n  api:\n    build: .\n", encoding="utf-8"
+            )
+            calls: list[list[str]] = []
+
+            def runner(argv: list[str], _cwd: Path) -> int:
+                calls.append(list(argv))
+                return 0
+
+            result = run_remediation(
+                deploy_path=deploy_path,
+                compose_file="docker-compose.yml",
+                build_all=False,
+                required_services="",
+                optional_services="",
+                no_cache=True,
+                allowed_root=allowed_root,
+                runner=runner,
+            )
+
+            self.assertEqual("skipped", result)
+            self.assertEqual(
+                [
+                    [
+                        "sudo",
+                        "docker",
+                        "compose",
+                        "-f",
+                        "docker-compose.yml",
+                        "pull",
+                        "--ignore-buildable",
+                    ],
+                    [
+                        "sudo",
+                        "docker",
+                        "compose",
+                        "-f",
+                        "docker-compose.yml",
+                        "build",
+                        "--pull",
+                        "--no-cache",
+                    ],
+                ],
+                calls,
+            )
+
     def test_optional_failure_is_non_blocking_and_explicit(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             allowed_root = Path(temporary) / "optimizr"
