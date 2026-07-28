@@ -52,9 +52,24 @@ class DockerPruneContractTests(unittest.TestCase):
                 self.assertIn("if: always()", workspace_step)
                 self.assertNotIn("!inputs.run_prune", workspace_step)
                 self.assertIn(
-                    'sudo find "$GITHUB_WORKSPACE" -mindepth 1 -delete',
+                    'workspace="${GITHUB_WORKSPACE:-}"',
                     workspace_step,
                 )
+                self.assertIn("realpath -e --", workspace_step)
+                self.assertIn('workspace_real" = "/"', workspace_step)
+                self.assertIn('path_depth" -lt 4', workspace_step)
+                self.assertIn(
+                    'find -- "$workspace_real" -mindepth 1 -delete',
+                    workspace_step,
+                )
+                self.assertIn(
+                    'sudo -n find -- "$workspace_real" -mindepth 1 -delete',
+                    workspace_step,
+                )
+                self.assertIn("sudo -n true", workspace_step)
+                self.assertNotIn('run: sudo find "$GITHUB_WORKSPACE"', workspace_step)
+                self.assertNotIn("sudo find ", workspace_step)
+                self.assertNotIn("rm -rf", workspace_step)
 
 
 if __name__ == "__main__":
