@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -12,6 +13,40 @@ IMAGE_ID = "sha256:" + "a" * 64
 
 
 class ImageTransportTests(unittest.TestCase):
+    def test_inspect_collects_stable_lineage_digests(self) -> None:
+        lineage_digest = "sha256:" + "b" * 64
+        published_digest = "sha256:" + "c" * 64
+
+        def runner(argv: list[str]) -> subprocess.CompletedProcess[str]:
+            return subprocess.CompletedProcess(
+                argv,
+                0,
+                json.dumps(
+                    {
+                        "Id": IMAGE_ID,
+                        "RepoDigests": ["registry.example/app@" + published_digest],
+                        "Config": {
+                            "Labels": {
+                                "org.opencontainers.image.base.digest": lineage_digest
+                            }
+                        },
+                    }
+                )
+                + "\n",
+                "",
+            )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            result = prepare_image_transport(
+                "service:latest",
+                mode="direct",
+                archive=Path(temporary) / "image.tar",
+                runner=runner,
+            )
+
+        self.assertEqual("ready", result.status)
+        self.assertEqual((lineage_digest, published_digest), result.lineage_digests)
+
     def test_direct_access_scans_the_local_image_without_export(self) -> None:
         calls: list[list[str]] = []
 
@@ -32,7 +67,7 @@ class ImageTransportTests(unittest.TestCase):
         self.assertEqual(IMAGE_ID, result.identity)
         self.assertEqual((), result.scan_args)
         self.assertEqual(
-            [["docker", "image", "inspect", "--format", "{{.Id}}", "service:latest"]],
+            [["docker", "image", "inspect", "--format", "{{json .}}", "service:latest"]],
             calls,
         )
 
@@ -67,7 +102,7 @@ class ImageTransportTests(unittest.TestCase):
         self.assertEqual(("--input", str(archive)), result.scan_args)
         self.assertEqual(
             [
-                ["docker", "image", "inspect", "--format", "{{.Id}}", "service:latest"],
+                ["docker", "image", "inspect", "--format", "{{json .}}", "service:latest"],
                 [
                     "sudo",
                     "-n",
@@ -75,7 +110,7 @@ class ImageTransportTests(unittest.TestCase):
                     "image",
                     "inspect",
                     "--format",
-                    "{{.Id}}",
+                    "{{json .}}",
                     "service:latest",
                 ],
                 ["sudo", "-n", "docker", "save", "service:latest", "-o", str(archive)],

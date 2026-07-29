@@ -80,10 +80,15 @@ on:
         type: string
         default: 24h
       timeout_minutes:
-        description: Maximum deployment job duration
+        description: Deprecated compatibility timeout; use deploy_timeout_minutes
         required: false
         type: number
-        default: 20
+        default: 30
+      deploy_timeout_minutes:
+        description: Maximum deployment job duration; zero keeps timeout_minutes for compatibility; allowed range is 30-120 minutes
+        required: false
+        type: number
+        default: 0
       security_require_image_scan:
         description: Require scanning built Compose images before rollout
         required: false
@@ -151,7 +156,7 @@ jobs:
       - self-hosted
       - Linux
       - ${{ inputs.runner_label }}
-    timeout-minutes: ${{ inputs.timeout_minutes }}
+    timeout-minutes: ${{ inputs.deploy_timeout_minutes != 0 && inputs.deploy_timeout_minutes || inputs.timeout_minutes }}
     environment:
       name: production
     env:
@@ -159,8 +164,19 @@ jobs:
       CONTAINER_NAME: ${{ inputs.container_name }}
       COMPOSE_FILE: ${{ inputs.compose_file }}
       HEALTH_TIMEOUT: ${{ inputs.health_timeout }}
+      DEPLOY_TIMEOUT_MINUTES: ${{ inputs.deploy_timeout_minutes != 0 && inputs.deploy_timeout_minutes || inputs.timeout_minutes }}
 
     steps:
+      - name: Validate effective deployment timeout
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! [[ "$DEPLOY_TIMEOUT_MINUTES" =~ ^[0-9]+$ ]] || (( DEPLOY_TIMEOUT_MINUTES < 30 || DEPLOY_TIMEOUT_MINUTES > 120 )); then
+            echo "::error::deploy_timeout_minutes allowed range is 30-120 minutes" >&2
+            exit 2
+          fi
+          echo "::notice title=Effective deployment timeout::Effective deployment timeout: ${DEPLOY_TIMEOUT_MINUTES} minutes (allowed range is 30-120 minutes)."
+
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
@@ -474,6 +490,7 @@ jobs:
           SECRET_COUNT: ${{ steps.security-final.outputs.secret_count }}
           INITIAL_FAILURE_REASON: ${{ steps.security-images-initial-gate.outputs.failure_reason }}
           FINAL_FAILURE_REASON: ${{ steps.security-images-final-gate.outputs.failure_reason }}
+          REBUILD_FAILURE_REASON: ${{ steps.security-rebuild.outputs.failure_reason }}
           REBUILD_RESULT: ${{ steps.security-final.outputs.rebuild_result }}
           IGNORE_UNFIXED: ${{ inputs.security_ignore_unfixed }}
         run: |
@@ -483,7 +500,7 @@ jobs:
           elif [ "$IGNORE_UNFIXED" = true ] && [ "$COMPATIBILITY_ALLOWED" = true ]; then
             echo "::warning title=Unremediated Base Image::Proceeding under the narrow ignore_unfixed compatibility policy for classification=$SECURITY_CLASSIFICATION rebuild=$REBUILD_RESULT."
           else
-            failure_reason="${FINAL_FAILURE_REASON:-${INITIAL_FAILURE_REASON:-none}}"
+            failure_reason="${FINAL_FAILURE_REASON:-${INITIAL_FAILURE_REASON:-${REBUILD_FAILURE_REASON:-none}}}"
             echo "::error::Image security gate blocked deployment: classification=${SECURITY_CLASSIFICATION} failure_reason=${failure_reason} rebuild=${REBUILD_RESULT} fixable=${FIXABLE_COUNT} unfixed=${UNFIXED_COUNT} misconfigurations=${MISCONFIGURATION_COUNT} secrets=${SECRET_COUNT}" >&2
             exit 1
           fi

@@ -22,6 +22,7 @@ class ImageTransport:
     status: str
     transport: str
     identity: str = ""
+    lineage_digests: tuple[str, ...] = ()
     scan_args: tuple[str, ...] = ()
     failure_reason: str = ""
 
@@ -46,15 +47,47 @@ def _inspect(
     target: str,
     prefix: Sequence[str],
     runner: CommandRunner,
-) -> tuple[str, str]:
-    argv = [*prefix, "docker", "image", "inspect", "--format", "{{.Id}}", target]
+) -> tuple[str, str, tuple[str, ...]]:
+    argv = [*prefix, "docker", "image", "inspect", "--format", "{{json .}}", target]
     result = _run(argv, runner)
     if result is None or result.returncode != 0:
-        return "", "inspect_failed"
-    identity = (result.stdout or "").strip().splitlines()[0] if result.stdout else ""
+        return "", "inspect_failed", ()
+    raw = (result.stdout or "").strip().splitlines()[0] if result.stdout else ""
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        # Keep compatibility with simple Docker-compatible runners that return
+        # only the old formatted image ID.
+        identity = raw
+        lineage_digests: tuple[str, ...] = ()
+    else:
+        if not isinstance(payload, dict):
+            return "", "inspect_invalid", ()
+        identity = str(payload.get("Id", "")).strip()
+        candidates: list[str] = []
+        config = payload.get("Config")
+        labels = config.get("Labels", {}) if isinstance(config, dict) else {}
+        if isinstance(labels, dict):
+            base_digest = labels.get("org.opencontainers.image.base.digest")
+            if isinstance(base_digest, str):
+                candidates.append(base_digest.strip())
+        repo_digests = payload.get("RepoDigests", [])
+        if isinstance(repo_digests, list):
+            for repo_digest in repo_digests:
+                if isinstance(repo_digest, str) and "@" in repo_digest:
+                    candidates.append(repo_digest.rsplit("@", 1)[1].strip())
+        lineage_digests = tuple(
+            sorted(
+                {
+                    digest.lower()
+                    for digest in candidates
+                    if _IMAGE_ID.fullmatch(digest)
+                }
+            )
+        )
     if not _IMAGE_ID.fullmatch(identity):
-        return "", "identity_invalid"
-    return identity, ""
+        return "", "identity_invalid", ()
+    return identity, "", lineage_digests
 
 
 def _failed(reason: str) -> ImageTransport:
@@ -84,12 +117,13 @@ def prepare_image_transport(
 
     identity = ""
     if mode in {"auto", "direct"}:
-        identity, inspect_error = _inspect(target, (), runner)
+        identity, inspect_error, lineage_digests = _inspect(target, (), runner)
         if identity:
             return ImageTransport(
                 status="ready",
                 transport="direct",
                 identity=identity,
+                lineage_digests=lineage_digests,
             )
         if mode == "direct":
             return _failed(
@@ -98,7 +132,7 @@ def prepare_image_transport(
                 else "docker_direct_inspect_failed"
             )
 
-    identity, inspect_error = _inspect(target, ("sudo", "-n"), runner)
+    identity, inspect_error, lineage_digests = _inspect(target, ("sudo", "-n"), runner)
     if not identity:
         if inspect_error == "identity_invalid":
             return _failed("docker_identity_invalid")
@@ -135,6 +169,7 @@ def prepare_image_transport(
         status="ready",
         transport="archive",
         identity=identity,
+        lineage_digests=lineage_digests,
         scan_args=("--input", str(archive)),
     )
 

@@ -70,6 +70,8 @@ The deployment job must depend on the applicable hosted or self-hosted job and m
 | `security_db_max_age_hours` | `30` | Maximum accepted database download age. |
 | `security_rebuild_retry_enabled` | `true` | Permit one deterministic pull, rebuild and rescan for actionable image findings. |
 | `security_rebuild_retry_no_cache` | `true` | Disable the build cache during the bounded remediation retry. |
+| `deploy_timeout_minutes` | `30` | Bounded deployment job timeout; accepted values are 30 through 120 minutes. The monorepo reusable keeps `timeout_minutes` as a compatibility alias when this is `0`. |
+| `security_rebuild_services` | empty | Self-hosted deploy only: whitespace-separated required Compose services for the remediation rebuild; empty preserves the all-buildable default. |
 
 The filesystem gate has no bypass input and always runs before the deploy workflow mutates the target environment. A consumer that intentionally deploys configuration without a Docker image may set `security_require_image_scan: false`; this is a visible policy exception and should be reviewed in the consumer pull request.
 
@@ -107,7 +109,9 @@ The deploy reusables capture the first image-gate outcome without promoting the 
 - its sanitized `classification` is exactly `actionable_vulnerability`;
 - `security_rebuild_retry_enabled` is `true`.
 
-The retry calls the reviewed `security-rebuild` composite once. It pulls referenced images, builds with `--pull`, optionally disables cache, resolves the rebuilt immutable image IDs, and invokes the same security gate again. The final enforcement step is ordered before every `docker compose up` command.
+The retry calls the reviewed `security-rebuild` composite once. It pulls referenced images, builds with `--pull`, optionally disables cache, resolves the rebuilt immutable image IDs, and invokes the same security gate again. The final enforcement step is ordered before every `docker compose up` command. The effective deployment timeout is printed in the job log and is bounded to 30-120 minutes; a rejected value fails before checkout. A rebuild command that reaches its bounded execution limit publishes the sanitized `failure_reason=security_rebuild_timeout` instead of leaving a generic cancellation diagnosis.
+
+The self-hosted reusable accepts `security_rebuild_services` to limit remediation to a reviewed set of required Compose services. An empty value retains the previous all-buildable behavior. The monorepo reusable uses its existing `services_build` and `services_build_optional` contract for the same explicit scope. Regardless of scope, a successful rebuild is never promotion evidence until the final scan completes and passes.
 
 A successful Compose rebuild step is evidence only that Docker accepted the command; it is not evidence that a dependency or image changed. Before promotion, the reusable validates every reference as exactly `sha256:` plus 64 hexadecimal characters, then compares the sorted sets of initial and remediated immutable image IDs. A malformed set produces `gate_error`; equal non-empty sets produce `rebuild_result=no_change`, retain the initial actionable classification, and fail closed without rollout. This makes immutable external-image retries explicit instead of reporting a command success as remediation.
 
@@ -193,7 +197,21 @@ Consumers continue to provide `expires` as `YYYY-MM-DD`; the generated Trivy doc
 }
 ```
 
-Required fields are `id`, `owner`, `statement`, `compensating_control`, `expires`, and a non-empty `targets` array. `paths` and `purls` are optional Trivy scopes. `*` may be used only when a repository-wide exception is deliberately approved. Expired or malformed entries fail the gate; they are never silently ignored.
+Required fields are `id`, `owner`, `statement`, `compensating_control`, `expires`, and either a non-empty `targets` array or a non-empty `lineage_digests` array. `paths` and `purls` are optional Trivy scopes for target-scoped exceptions. A lineage-scoped exception must include exact `purls`; it matches only when the current image exposes one of the reviewed full `sha256:` lineage digests through `org.opencontainers.image.base.digest` or a published `RepoDigest`. Mutable tags, partial digests and wildcard lineage values are rejected. Exact local image-ID exceptions remain backward compatible. `*` in `targets` may be used only when a repository-wide exception is deliberately approved. Expired or malformed entries fail the gate; they are never silently ignored.
+
+For a rebuilt image whose local ID changes, the reviewed exception can therefore retain the stable parent or published digest without matching unrelated images:
+
+```json
+{
+  "id": "CVE-2026-0001",
+  "owner": "platform-security",
+  "statement": "The reviewed rebuilt lineage carries a compensating control",
+  "compensating_control": "The affected package is constrained to the reviewed runtime scope",
+  "expires": "2026-08-19",
+  "lineage_digests": ["sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"],
+  "purls": ["pkg:golang/golang.org/x/text@v0.38.0"]
+}
+```
 
 ## Evidence
 
@@ -208,7 +226,7 @@ Each target produces:
 - a sanitized finding summary;
 - a sanitized evidence record.
 
-The evidence record contains the repository name, exact 40-character commit SHA, scan type, target, immutable image identity where applicable, Trivy version, database timestamps, report hashes, severity policy, result, and timestamp. It intentionally excludes environment values, credentials, host addresses, production configuration, vulnerability descriptions and source snippets.
+The evidence record contains the repository name, exact 40-character commit SHA, scan type, target, immutable image identity and reviewed lineage digests where applicable, Trivy version, database timestamps, report hashes, severity policy, result, and timestamp. It intentionally excludes environment values, credentials, host addresses, production configuration, vulnerability descriptions and source snippets.
 
 When deploy manifests are enabled, they also record only these remediation states: initial classification, whether rebuild was attempted, rebuild result and final classification. `security_rebuild_result` is `passed`, `failed`, `skipped`, or `no_change`; only `passed` means that changed immutable IDs passed the final security gate. Failed or unchanged remediation never replaces `last-successful.json`.
 
@@ -250,7 +268,7 @@ not bypass the lock or classify this runner failure as scanner-clean.
 
 ## Failure modes
 
-The gate fails closed when Trivy cannot be installed, the database cannot be refreshed, database metadata is missing or stale, an exception is malformed or expired, no required image is found, an image identity cannot be resolved, the configured Docker transport cannot prepare a local image, a report cannot be written, or an unexcepted finding meets the blocking severity. Transport failures are reported through the sanitized `failure_reason` output; raw Docker and sudo diagnostics are not copied to evidence.
+The gate fails closed when Trivy cannot be installed, the database cannot be refreshed, database metadata is missing or stale, an exception is malformed or expired, no required image is found, an image identity cannot be resolved, the configured Docker transport cannot prepare a local image, a report cannot be written, or an unexcepted finding meets the blocking severity. Transport and rebuild failures are reported through sanitized `failure_reason` outputs; raw Docker and sudo diagnostics are not copied to evidence. A deployment timeout is bounded independently from the rebuild command, and a rebuild cancellation is surfaced as `security_rebuild_timeout` when the retry limit is reached.
 
 An actionable initial image result may enter the one-attempt remediation path. Promotion still fails closed unless a changed set of rebuilt immutable image IDs passes the final gate. A missing image set, missing or malformed classification, unchanged image set, or failed final scan is treated as a non-promotable result; malformed data is reported as `gate_error`.
 

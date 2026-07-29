@@ -30,6 +30,9 @@ outputs:
   optional_build_result:
     description: "passed, failed, or skipped"
     value: ${{ steps.rebuild.outputs.optional_build_result }}
+  failure_reason:
+    description: "Sanitized reason when the bounded rebuild cannot complete"
+    value: ${{ steps.rebuild.outputs.failure_reason }}
 
 runs:
   using: composite

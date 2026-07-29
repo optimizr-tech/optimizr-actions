@@ -105,6 +105,29 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertIn("docker_mode:", standalone)
         self.assertIn("docker_mode: ${{ inputs.docker_mode }}", standalone)
 
+    def test_rebuild_timeout_and_scope_are_explicit_and_bounded(self) -> None:
+        self_hosted = read(".github/workflows/_vps-self-hosted-deploy.yml")
+        monorepo = read(".github/workflows/_vps-monorepo-deploy.yml")
+        rebuild_action = read(".github/actions/security-rebuild/action.yml")
+        rebuild_runtime = read("scripts/security_gate/rebuild.py")
+
+        for workflow in (self_hosted, monorepo):
+            self.assertIn("deploy_timeout_minutes:", workflow)
+            timeout_contract = (
+                "timeout-minutes: ${{ inputs.deploy_timeout_minutes != 0 && inputs.deploy_timeout_minutes || inputs.timeout_minutes }}"
+                if "      timeout_minutes:\n" in workflow
+                else "timeout-minutes: ${{ inputs.deploy_timeout_minutes }}"
+            )
+            self.assertIn(timeout_contract, workflow)
+            self.assertIn("Effective deployment timeout", workflow)
+            self.assertIn("allowed range is 30-120 minutes", workflow)
+
+        self.assertIn("security_rebuild_services:", self_hosted)
+        self.assertIn("build_all: ${{ inputs.security_rebuild_services == '' }}", self_hosted)
+        self.assertIn("required_services: ${{ inputs.security_rebuild_services }}", self_hosted)
+        self.assertIn("failure_reason:", rebuild_action)
+        self.assertIn("security_rebuild_timeout", rebuild_runtime)
+
     def test_filesystem_owns_configuration_analysis_and_image_owns_runtime_packages(self) -> None:
         documentation = read("docs/SECURITY_GATE.md")
 
