@@ -36,6 +36,7 @@ class SecurityGateDiagnosticOutputTests(unittest.TestCase):
                 self.assertIn("SECRET_COUNT:", content)
                 self.assertIn("INITIAL_FAILURE_REASON:", content)
                 self.assertIn("FINAL_FAILURE_REASON:", content)
+                self.assertIn("REBUILD_FAILURE_REASON:", content)
                 self.assertIn("classification=${SECURITY_CLASSIFICATION}", content)
                 self.assertIn("failure_reason=${failure_reason}", content)
                 self.assertIn("fixable=${FIXABLE_COUNT}", content)

@@ -236,20 +236,10 @@ runs:
           archive_token="$(printf '%s' "${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}-${GITHUB_JOB:-security}-${slug}" | sha256sum | cut -c1-24)"
           transport_metadata="${RUNNER_TEMP:-/tmp}/trivy-${archive_token}-transport.json"
 
-          exception_args=(
-            render-exceptions
-            --target "$target"
-            --output "$ignore_file"
-            --summary-output "$exception_summary"
-          )
-          if [ -n "$INPUT_EXCEPTIONS_FILE" ]; then
-            exception_args+=(--source "$INPUT_EXCEPTIONS_FILE")
-          fi
-          python3 "$evidence_tool" "${exception_args[@]}"
-
           command_name=filesystem
           target_args=("$target")
           identity=""
+          lineage_args=()
           if [ "$INPUT_SCAN_TYPE" = image ]; then
             command_name=image
             temporary_image="${RUNNER_TEMP:-/tmp}/trivy-${archive_token}.tar"
@@ -293,6 +283,18 @@ runs:
             print(json.load(stream).get("identity", ""))
         PY
             )"
+            while IFS= read -r lineage_digest; do
+              [ -n "$lineage_digest" ] && lineage_args+=(--lineage-digest "$lineage_digest")
+            done < <(python3 - "$transport_metadata" <<'PY'
+        import json
+        import sys
+
+        with open(sys.argv[1], encoding="utf-8") as stream:
+            payload = json.load(stream)
+        for digest in payload.get("lineage_digests", []) or []:
+            print(digest)
+        PY
+            )
             if [ "$transport" = archive ]; then
               target_args=(--input "$temporary_image")
             elif [ "$transport" = direct ]; then
@@ -305,6 +307,18 @@ runs:
             fi
             rm -f "$transport_metadata"
           fi
+
+          exception_args=(
+            render-exceptions
+            --target "$target"
+            --output "$ignore_file"
+            --summary-output "$exception_summary"
+            "${lineage_args[@]}"
+          )
+          if [ -n "$INPUT_EXCEPTIONS_FILE" ]; then
+            exception_args+=(--source "$INPUT_EXCEPTIONS_FILE")
+          fi
+          python3 "$evidence_tool" "${exception_args[@]}"
 
           report_args=(
             --cache-dir "$cache_dir"

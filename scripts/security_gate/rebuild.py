@@ -31,7 +31,9 @@ def _run(argv: Sequence[str], cwd: Path) -> int:
             check=False,
             timeout=_COMMAND_TIMEOUT,
         )
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    except subprocess.TimeoutExpired as exc:
+        raise RebuildError("security_rebuild_timeout") from exc
+    except OSError as exc:
         raise RebuildError(f"Docker command unavailable: {type(exc).__name__}") from exc
     return completed.returncode
 
@@ -165,6 +167,14 @@ def _publish_output(output_path: str | None, result: str) -> None:
         stream.write(f"optional_build_result={result}\n")
 
 
+def _publish_failure_reason(output_path: str | None, reason: str) -> None:
+    output = output_path or os.environ.get("GITHUB_OUTPUT")
+    if not output:
+        return
+    with Path(output).open("a", encoding="utf-8", newline="") as stream:
+        stream.write(f"failure_reason={reason}\n")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
@@ -179,6 +189,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         _publish_output(args.github_output, result)
         return 0
     except (OSError, RebuildError) as exc:
+        reason = "security_rebuild_timeout" if str(exc) == "security_rebuild_timeout" else "security_rebuild_failed"
+        _publish_failure_reason(args.github_output, reason)
         print(f"security rebuild error: {exc}", file=sys.stderr)
         return 2
 
