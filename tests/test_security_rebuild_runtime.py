@@ -229,6 +229,30 @@ class SecurityRebuildRuntimeTests(unittest.TestCase):
                 output_path.read_text(encoding="utf-8"),
             )
 
+    def test_rebuild_timeout_is_published_as_a_sanitized_failure_reason(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output_path = Path(temporary) / "github-output"
+
+            with mock.patch.object(
+                rebuild,
+                "run_remediation",
+                side_effect=RebuildError("security_rebuild_timeout"),
+            ):
+                exit_code = rebuild.main(
+                    [
+                        "--deploy-path",
+                        str(Path(temporary) / "optimizr/service"),
+                        "--github-output",
+                        str(output_path),
+                    ]
+                )
+
+            self.assertEqual(2, exit_code)
+            self.assertEqual(
+                "failure_reason=security_rebuild_timeout\n",
+                output_path.read_text(encoding="utf-8"),
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

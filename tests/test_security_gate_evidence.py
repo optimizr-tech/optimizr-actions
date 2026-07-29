@@ -268,6 +268,96 @@ class SecurityGateEvidenceTests(unittest.TestCase):
         rendered = json.loads(output.read_text(encoding="utf-8"))
         self.assertEqual([item["id"] for item in rendered["vulnerabilities"]], ["CVE-2026-1000"])
 
+    def test_lineage_exception_matches_rebuilt_image_with_a_new_local_id(self) -> None:
+        source = self._write_json(
+            "lineage.json",
+            {
+                "version": 1,
+                "vulnerabilities": [
+                    {
+                        "id": "CVE-2026-56852",
+                        "owner": "cdn-platform-security",
+                        "statement": "Reviewed inherited runtime finding",
+                        "compensating_control": "The affected service is internal-only",
+                        "expires": "2026-08-19",
+                        "lineage_digests": ["sha256:" + "b" * 64],
+                        "purls": ["pkg:golang/golang.org/x/text@v0.38.0"],
+                    }
+                ],
+            },
+        )
+        output = self.root / "lineage-output.yaml"
+
+        summary = evidence.render_exception_policy(
+            source,
+            target="sha256:" + "a" * 64,
+            lineage_digests=["sha256:" + "b" * 64],
+            output=output,
+            today=date(2026, 7, 19),
+        )
+
+        rendered = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual([item["id"] for item in rendered["vulnerabilities"]], ["CVE-2026-56852"])
+        self.assertEqual(summary["lineage_digests"], ["sha256:" + "b" * 64])
+
+    def test_lineage_exception_does_not_match_unrelated_image(self) -> None:
+        source = self._write_json(
+            "lineage.json",
+            {
+                "version": 1,
+                "vulnerabilities": [
+                    {
+                        "id": "CVE-2026-56852",
+                        "owner": "cdn-platform-security",
+                        "statement": "Reviewed inherited runtime finding",
+                        "compensating_control": "The affected service is internal-only",
+                        "expires": "2026-08-19",
+                        "lineage_digests": ["sha256:" + "b" * 64],
+                        "purls": ["pkg:golang/golang.org/x/text@v0.38.0"],
+                    }
+                ],
+            },
+        )
+        output = self.root / "unrelated-lineage-output.yaml"
+
+        evidence.render_exception_policy(
+            source,
+            target="sha256:" + "c" * 64,
+            lineage_digests=["sha256:" + "d" * 64],
+            output=output,
+            today=date(2026, 7, 19),
+        )
+
+        rendered = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(rendered["vulnerabilities"], [])
+
+    def test_lineage_exception_requires_an_exact_package_scope(self) -> None:
+        source = self._write_json(
+            "unscoped-lineage.json",
+            {
+                "version": 1,
+                "vulnerabilities": [
+                    {
+                        "id": "CVE-2026-56852",
+                        "owner": "cdn-platform-security",
+                        "statement": "Reviewed inherited runtime finding",
+                        "compensating_control": "The affected service is internal-only",
+                        "expires": "2026-08-19",
+                        "lineage_digests": ["sha256:" + "b" * 64],
+                    }
+                ],
+            },
+        )
+
+        with self.assertRaisesRegex(ValueError, "purls"):
+            evidence.render_exception_policy(
+                source,
+                target="sha256:" + "a" * 64,
+                lineage_digests=["sha256:" + "b" * 64],
+                output=self.root / "unscoped-lineage-output.yaml",
+                today=date(2026, 7, 19),
+            )
+
     def test_image_identity_prefers_repo_digest_then_image_id(self) -> None:
         with_digest = self._write_json(
             "image-digest.json",

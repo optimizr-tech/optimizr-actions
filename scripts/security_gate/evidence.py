@@ -8,10 +8,11 @@ import hashlib
 import json
 from pathlib import Path
 import re
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_IMAGE_DIGEST_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$", re.IGNORECASE)
 
 
 def _parse_datetime(value: Any, field: str) -> datetime:
@@ -108,12 +109,22 @@ def _string_list(entry: Mapping[str, Any], field: str, index: int) -> list[str]:
     return [item.strip() for item in value]
 
 
+def _digest_list(entry: Mapping[str, Any], field: str, index: int) -> list[str]:
+    values = _string_list(entry, field, index)
+    if any(not _IMAGE_DIGEST_PATTERN.fullmatch(value) for value in values):
+        raise ValueError(
+            f"vulnerabilities[{index}].{field} must contain full sha256 digests"
+        )
+    return sorted(set(value.lower() for value in values))
+
+
 def render_exception_policy(
     source: Path,
     *,
     target: str,
     output: Path,
     today: date | None = None,
+    lineage_digests: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Validate Optimizr exception metadata and render Trivy YAML as JSON."""
     if not source.is_file():
@@ -129,7 +140,11 @@ def render_exception_policy(
         raise ValueError("exception policy vulnerabilities must be an array")
 
     reference_date = today or datetime.now(timezone.utc).date()
+    normalized_lineage = sorted(set(digest.lower() for digest in lineage_digests))
+    if any(not _IMAGE_DIGEST_PATTERN.fullmatch(digest) for digest in normalized_lineage):
+        raise ValueError("lineage_digests must contain full sha256 digests")
     rendered: list[dict[str, Any]] = []
+    matched_lineage: set[str] = set()
     for index, item in enumerate(entries):
         if not isinstance(item, dict):
             raise ValueError(f"vulnerabilities[{index}] must be an object")
@@ -150,14 +165,21 @@ def render_exception_policy(
             )
 
         targets = _string_list(item, "targets", index)
-        if not targets:
+        exception_lineage = _digest_list(item, "lineage_digests", index)
+        if not targets and not exception_lineage:
             raise ValueError(
-                f"vulnerabilities[{index}].targets must scope the exception"
+                f"vulnerabilities[{index}] must scope the exception by targets or lineage_digests"
             )
         paths = _string_list(item, "paths", index)
         purls = _string_list(item, "purls", index)
-        if target not in targets and "*" not in targets:
+        if exception_lineage and not purls:
+            raise ValueError(
+                f"vulnerabilities[{index}].purls is required for lineage-scoped exceptions"
+            )
+        matching_lineage = set(exception_lineage) & set(normalized_lineage)
+        if target not in targets and "*" not in targets and not matching_lineage:
             continue
+        matched_lineage.update(matching_lineage)
 
         rendered_entry: dict[str, Any] = {
             "id": vulnerability_id,
@@ -179,6 +201,8 @@ def render_exception_policy(
         "policy_sha256": _sha256(source),
         "active_exceptions": len(rendered),
         "target": target,
+        "lineage_digests": normalized_lineage,
+        "matched_lineage_digests": sorted(matched_lineage),
         "status": "validated",
     }
 
@@ -288,6 +312,7 @@ def _command_render_exceptions(args: argparse.Namespace) -> int:
             args.source,
             target=args.target,
             output=args.output,
+            lineage_digests=args.lineage_digest,
         )
     else:
         _atomic_write_json(args.output, {"vulnerabilities": []})
@@ -296,6 +321,8 @@ def _command_render_exceptions(args: argparse.Namespace) -> int:
             "policy_sha256": "none",
             "active_exceptions": 0,
             "target": args.target,
+            "lineage_digests": args.lineage_digest,
+            "matched_lineage_digests": [],
             "status": "not-configured",
         }
     _atomic_write_json(args.summary_output, result)
@@ -350,6 +377,7 @@ def _build_parser() -> argparse.ArgumentParser:
     render.add_argument("--target", required=True)
     render.add_argument("--output", type=Path, required=True)
     render.add_argument("--summary-output", type=Path, required=True)
+    render.add_argument("--lineage-digest", action="append", default=[])
     render.set_defaults(handler=_command_render_exceptions)
 
     resolve = subparsers.add_parser("resolve-image")
