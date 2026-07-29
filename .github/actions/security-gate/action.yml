@@ -14,6 +14,10 @@ inputs:
     description: "Whitespace or newline separated image references/IDs for image scans"
     required: false
     default: ""
+  docker_mode:
+    description: "Local image access mode: auto, direct, or sudo"
+    required: false
+    default: "auto"
   severity:
     description: "Blocking severities"
     required: false
@@ -86,6 +90,7 @@ runs:
         INPUT_SCAN_TYPE: ${{ inputs.scan_type }}
         INPUT_SCAN_REF: ${{ inputs.scan_ref }}
         INPUT_IMAGE_REFS: ${{ inputs.image_refs }}
+        INPUT_DOCKER_MODE: ${{ inputs.docker_mode }}
         INPUT_SEVERITY: ${{ inputs.severity }}
         INPUT_IGNORE_UNFIXED: ${{ inputs.ignore_unfixed }}
         INPUT_EXCEPTIONS_FILE: ${{ inputs.exceptions_file }}
@@ -100,6 +105,7 @@ runs:
         report_tool="$action_root/scripts/security_gate/report.py"
         aggregate_tool="$action_root/scripts/security_gate/aggregate.py"
         baseline_tool="$action_root/scripts/security_gate/baseline.py"
+        transport_tool="$action_root/scripts/security_gate/image_transport.py"
         repository="${GITHUB_REPOSITORY:-local/unknown}"
         cache_namespace="$(printf '%s' "$repository" | sha256sum | cut -c1-24)"
         cache_root="${XDG_CACHE_HOME:-${HOME:-/tmp}/.cache}/optimizr-security-gate/${cache_namespace}"
@@ -142,6 +148,14 @@ runs:
           image) scanners="vuln,secret" ;;
           *)
             echo "::error::scan_type must be fs or image" >&2
+            exit 2
+            ;;
+        esac
+        case "$INPUT_DOCKER_MODE" in
+          auto|direct|sudo) ;;
+          *)
+            echo "::error::docker_mode must be auto, direct, or sudo" >&2
+            echo "failure_reason=docker_mode_invalid" >> "$GITHUB_OUTPUT"
             exit 2
             ;;
         esac
@@ -192,6 +206,17 @@ runs:
         aggregate_status=0
         scanner_error=0
         summary_paths=()
+        temporary_image=""
+        transport_metadata=""
+        cleanup_transport_artifacts() {
+          if [ -n "${temporary_image:-}" ]; then
+            rm -f -- "$temporary_image" 2>/dev/null || true
+          fi
+          if [ -n "${transport_metadata:-}" ]; then
+            rm -f -- "$transport_metadata" 2>/dev/null || true
+          fi
+        }
+        trap cleanup_transport_artifacts EXIT
 
         for target in "${targets[@]}"; do
           slug="$(printf '%s' "$target" | sha256sum | cut -c1-16)"
@@ -208,6 +233,8 @@ runs:
           finding_summary="${prefix}-summary.json"
           evidence_report="${prefix}-evidence.json"
           temporary_image=""
+          archive_token="$(printf '%s' "${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}-${GITHUB_JOB:-security}-${slug}" | sha256sum | cut -c1-24)"
+          transport_metadata="${RUNNER_TEMP:-/tmp}/trivy-${archive_token}-transport.json"
 
           exception_args=(
             render-exceptions
@@ -222,16 +249,61 @@ runs:
 
           command_name=filesystem
           target_args=("$target")
+          identity=""
           if [ "$INPUT_SCAN_TYPE" = image ]; then
             command_name=image
-            if ! docker image inspect "$target" >/dev/null 2>&1; then
-              if sudo -n docker image inspect "$target" >/dev/null 2>&1; then
-                temporary_image="${RUNNER_TEMP:-/tmp}/trivy-${slug}.tar"
-                sudo -n docker save "$target" -o "$temporary_image"
-                sudo -n chown "$(id -u):$(id -g)" "$temporary_image"
-                target_args=(--input "$temporary_image")
-              fi
+            temporary_image="${RUNNER_TEMP:-/tmp}/trivy-${archive_token}.tar"
+            if ! python3 "$transport_tool" \
+              --target "$target" \
+              --mode "$INPUT_DOCKER_MODE" \
+              --archive "$temporary_image" \
+              --output "$transport_metadata" \
+              --uid "$(id -u)" \
+              --gid "$(id -g)"; then
+              failure_reason="$(python3 - "$transport_metadata" 2>/dev/null <<'PY' || true
+        import json
+        import sys
+
+        try:
+            with open(sys.argv[1], encoding="utf-8") as stream:
+                payload = json.load(stream)
+        except (OSError, json.JSONDecodeError, IndexError):
+            payload = {}
+        print(payload.get("failure_reason") or "docker_transport_failed")
+        PY
+              )"
+              echo "failure_reason=${failure_reason}" >> "$GITHUB_OUTPUT"
+              echo "::error::image scan transport failed: ${failure_reason}" >&2
+              rm -f "$transport_metadata" "$temporary_image"
+              exit 2
             fi
+            transport="$(python3 - "$transport_metadata" <<'PY'
+        import json
+        import sys
+
+        with open(sys.argv[1], encoding="utf-8") as stream:
+            print(json.load(stream).get("transport", ""))
+        PY
+            )"
+            identity="$(python3 - "$transport_metadata" <<'PY'
+        import json
+        import sys
+
+        with open(sys.argv[1], encoding="utf-8") as stream:
+            print(json.load(stream).get("identity", ""))
+        PY
+            )"
+            if [ "$transport" = archive ]; then
+              target_args=(--input "$temporary_image")
+            elif [ "$transport" = direct ]; then
+              target_args=("$target")
+            else
+              echo "failure_reason=docker_transport_invalid" >> "$GITHUB_OUTPUT"
+              echo "::error::image scan transport returned an invalid mode" >&2
+              rm -f "$transport_metadata" "$temporary_image"
+              exit 2
+            fi
+            rm -f "$transport_metadata"
           fi
 
           report_args=(
@@ -332,20 +404,11 @@ runs:
             scanner_error=1
           fi
 
-          identity=""
-          if [ "$INPUT_SCAN_TYPE" = image ]; then
-            identity="$(python3 "$evidence_tool" resolve-image --report "$json_report" 2>/dev/null || true)"
-            if [ -z "$identity" ]; then
-              identity="$(docker image inspect --format '{{.Id}}' "$target" 2>/dev/null || true)"
-            fi
-            if [ -z "$identity" ]; then
-              identity="$(sudo -n docker image inspect --format '{{.Id}}' "$target" 2>/dev/null || true)"
-            fi
-            if [ -z "$identity" ]; then
-              echo "::error::image scan did not resolve an immutable identity for $target" >&2
-              scan_status=2
-              scanner_error=1
-            fi
+          if [ "$INPUT_SCAN_TYPE" = image ] && [ -z "$identity" ]; then
+            echo "::error::image scan did not resolve an immutable identity" >&2
+            echo "failure_reason=docker_identity_missing" >> "$GITHUB_OUTPUT"
+            scan_status=2
+            scanner_error=1
           fi
 
           result=passed
