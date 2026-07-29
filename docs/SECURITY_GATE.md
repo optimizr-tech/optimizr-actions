@@ -62,6 +62,7 @@ The deployment job must depend on the applicable hosted or self-hosted job and m
 | Input | Default | Meaning |
 |---|---:|---|
 | `security_require_image_scan` | `true` | Require at least one Compose image and scan it before rollout. |
+| `docker_mode` | `sudo` | Local image transport: `sudo` exports through non-interactive sudo, `direct` uses the runner's Docker access, and `auto` tries direct before the sudo archive fallback. |
 | `security_severity` | `HIGH,CRITICAL` | Severities that block deployment. |
 | `security_ignore_unfixed` | `false` | Deprecated compatibility input; only the retry action's narrow `compatibility_allowed=true` result can use it. |
 | `security_exceptions_file` | empty | Optional Optimizr exception-policy JSON path. |
@@ -73,6 +74,30 @@ The deployment job must depend on the applicable hosted or self-hosted job and m
 The filesystem gate has no bypass input and always runs before the deploy workflow mutates the target environment. A consumer that intentionally deploys configuration without a Docker image may set `security_require_image_scan: false`; this is a visible policy exception and should be reviewed in the consumer pull request.
 
 Before the initial image scan, both VPS deploy reusables pull every Compose service that declares an external `image:` while ignoring buildable services. This guarantees that digest-pinned sidecars and operational tools are locally available for immutable-ID discovery without replacing images built from the candidate source. A missing or unavailable declared image fails closed before rollout.
+
+### Self-correcting local image transport
+
+The image gate resolves the immutable Docker image ID before invoking Trivy. It
+never passes an inaccessible local `sha256` reference to Trivy and never waits
+for an interactive sudo ticket. The configured `docker_mode` determines the
+recovery path:
+
+1. `direct` inspects the image through the runner user's Docker access and scans
+   it without privilege escalation.
+2. `sudo` uses `sudo -n docker image inspect`, exports the image to a temporary
+   archive, changes the archive ownership for the runner, and scans it with
+   Trivy `--input`.
+3. `auto` preserves standalone-action compatibility by trying `direct` and
+   then the controlled `sudo` archive path.
+
+The VPS deploy reusables default to `sudo` because their Docker lifecycle is
+already controlled through non-interactive sudo. Archive transport retains the
+resolved immutable image ID in the evidence even though Trivy runs
+unprivileged. If inspection, export, archive ownership, or identity validation
+fails, the gate emits a short `failure_reason`, removes the temporary archive,
+and remains fail-closed. It does not expose command stderr, host paths, or
+credentials and it does not allow `security_ignore_unfixed=true` to approve a
+transport or scanner error.
 
 ## Bounded automatic remediation
 
@@ -141,9 +166,9 @@ The `security-gate` action preserves `result=passed|failed` for `v1` compatibili
 - `fixable_vulnerability_count`;
 - `unfixed_vulnerability_count`;
 - `misconfiguration_count`;
-- `secret_count`.
-- `failure_reason`: empty for normal scan failures, or `missing_flock` when
-  runner provisioning lacks the required lock dependency.
+- `secret_count`;
+- `failure_reason` (empty on success; otherwise a sanitized operational code,
+  such as `docker_save_failed` or `missing_flock`).
 
 ## Exception policy
 
@@ -197,12 +222,17 @@ A self-hosted security runner must:
 - be restricted by runner group and labels to approved repositories/workflows;
 - use read-only repository permissions for validation;
 - receive no production secrets in the security job;
-- provide Bash, Python 3, Git, Docker/Compose, `sha256sum`, `sed`, and passwordless `sudo docker` when the runner user is not in the Docker group;
+- provide Bash, Python 3, Git, Docker/Compose, `sha256sum`, `sed`, and passwordless `sudo docker` when `docker_mode` is `sudo` or `auto` and the runner user is not in the Docker group;
 - provide `flock` from the `util-linux` package before the workflow is enabled; a missing dependency is a runner-provisioning failure, not a clean scan result;
 - clean workspace and temporary image archives after execution;
 - preferably be ephemeral or isolated from the production runner.
 
-The action runs Trivy as the unprivileged runner user. When Docker is only available through passwordless sudo, it saves the candidate image to a temporary archive and scans that archive without running Trivy as root.
+The action runs Trivy as the unprivileged runner user. When Docker is only available through passwordless sudo, it saves the candidate image to a temporary archive and scans that archive without running Trivy as root. The archive is removed after each target, including transport failures.
+
+The `supply-chain-evidence` action follows the same rule for its temporary SBOM
+archive and inspect file: an exit trap removes them when either SBOM generation
+or provenance writing fails, so a failed workflow does not accumulate per-image
+artifacts in `runner.temp`.
 
 Every Optimizr action installs the controlled Trivy binary below a path unique
 to the workflow run, attempt, and job in `runner.temp`. Multiple runner services
@@ -220,7 +250,7 @@ not bypass the lock or classify this runner failure as scanner-clean.
 
 ## Failure modes
 
-The gate fails closed when Trivy cannot be installed, the database cannot be refreshed, database metadata is missing or stale, an exception is malformed or expired, no required image is found, an image identity cannot be resolved, a report cannot be written, or an unexcepted finding meets the blocking severity.
+The gate fails closed when Trivy cannot be installed, the database cannot be refreshed, database metadata is missing or stale, an exception is malformed or expired, no required image is found, an image identity cannot be resolved, the configured Docker transport cannot prepare a local image, a report cannot be written, or an unexcepted finding meets the blocking severity. Transport failures are reported through the sanitized `failure_reason` output; raw Docker and sudo diagnostics are not copied to evidence.
 
 An actionable initial image result may enter the one-attempt remediation path. Promotion still fails closed unless a changed set of rebuilt immutable image IDs passes the final gate. A missing image set, missing or malformed classification, unchanged image set, or failed final scan is treated as a non-promotable result; malformed data is reported as `gate_error`.
 

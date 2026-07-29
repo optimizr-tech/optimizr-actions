@@ -70,6 +70,11 @@ on:
         required: false
         type: boolean
         default: true
+      docker_mode:
+        description: Local image access mode for the security gate and manifest
+        required: false
+        type: string
+        default: sudo
       security_severity:
         description: Blocking Trivy severities
         required: false
@@ -315,6 +320,7 @@ jobs:
         with:
           scan_type: image
           image_refs: ${{ steps.security-images-initial.outputs.refs }}
+          docker_mode: ${{ inputs.docker_mode }}
           severity: ${{ inputs.security_severity }}
           ignore_unfixed: ${{ inputs.security_ignore_unfixed }}
           exceptions_file: ${{ inputs.security_exceptions_file }}
@@ -385,6 +391,7 @@ jobs:
         with:
           scan_type: image
           image_refs: ${{ steps.security-images-remediated.outputs.refs }}
+          docker_mode: ${{ inputs.docker_mode }}
           severity: ${{ inputs.security_severity }}
           ignore_unfixed: ${{ inputs.security_ignore_unfixed }}
           exceptions_file: ${{ inputs.security_exceptions_file }}
@@ -427,6 +434,8 @@ jobs:
           UNFIXED_COUNT: ${{ steps.security-final.outputs.unfixed_vulnerability_count }}
           MISCONFIGURATION_COUNT: ${{ steps.security-final.outputs.misconfiguration_count }}
           SECRET_COUNT: ${{ steps.security-final.outputs.secret_count }}
+          INITIAL_FAILURE_REASON: ${{ steps.security-images-initial-gate.outputs.failure_reason }}
+          FINAL_FAILURE_REASON: ${{ steps.security-images-final-gate.outputs.failure_reason }}
           REBUILD_RESULT: ${{ steps.security-final.outputs.rebuild_result }}
           IGNORE_UNFIXED: ${{ inputs.security_ignore_unfixed }}
         run: |
@@ -436,7 +445,8 @@ jobs:
           elif [ "$IGNORE_UNFIXED" = true ] && [ "$COMPATIBILITY_ALLOWED" = true ]; then
             echo "::warning title=Unremediated Base Image::Proceeding under the narrow ignore_unfixed compatibility policy for classification=$SECURITY_CLASSIFICATION rebuild=$REBUILD_RESULT."
           else
-            echo "::error::Image security gate blocked deployment: classification=${SECURITY_CLASSIFICATION} rebuild=${REBUILD_RESULT} fixable=${FIXABLE_COUNT} unfixed=${UNFIXED_COUNT} misconfigurations=${MISCONFIGURATION_COUNT} secrets=${SECRET_COUNT}" >&2
+            failure_reason="${FINAL_FAILURE_REASON:-${INITIAL_FAILURE_REASON:-none}}"
+            echo "::error::Image security gate blocked deployment: classification=${SECURITY_CLASSIFICATION} failure_reason=${failure_reason} rebuild=${REBUILD_RESULT} fixable=${FIXABLE_COUNT} unfixed=${UNFIXED_COUNT} misconfigurations=${MISCONFIGURATION_COUNT} secrets=${SECRET_COUNT}" >&2
             exit 1
           fi
 
@@ -566,7 +576,7 @@ jobs:
           deploy_path: ${{ env.DEPLOY_PATH }}
           compose_file: ${{ inputs.compose_file }}
           container_name: ${{ inputs.container_name }}
-          docker_mode: sudo
+          docker_mode: ${{ inputs.docker_mode }}
           status: ${{ job.status == 'success' && 'success' || 'failure' }}
           migration_result: ${{ inputs.deploy_manifest_migration_result }}
           optional_build_result: not-reported

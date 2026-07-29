@@ -78,6 +78,33 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertIn("`flock` from the `util-linux` package", documentation)
         self.assertIn("runner provisioning", documentation)
 
+    def test_image_gate_has_deterministic_docker_transport_recovery(self) -> None:
+        action = read(".github/actions/security-gate/action.yml")
+        transport = read("scripts/security_gate/image_transport.py")
+        deploy = read(".github/workflows/_vps-self-hosted-deploy.yml")
+        monorepo = read(".github/workflows/_vps-monorepo-deploy.yml")
+        standalone = read(".github/workflows/_security-gate.yml")
+
+        self.assertIn("docker_mode:", action)
+        self.assertIn('default: "auto"', action)
+        self.assertIn("auto|direct|sudo", action)
+        self.assertIn("scripts/security_gate/image_transport.py", action)
+        self.assertIn('["sudo", "-n", "docker", "save"', transport)
+        self.assertIn("--input", action)
+        self.assertIn("trap cleanup_transport_artifacts EXIT", action)
+        self.assertIn("rm -f -- \"$temporary_image\"", action)
+        self.assertIn("failure_reason:", action)
+        self.assertIn("docker_save_failed", transport)
+        self.assertIn("docker_archive_ownership_failed", transport)
+
+        for workflow in (deploy, monorepo):
+            self.assertIn("docker_mode:", workflow)
+            self.assertIn("default: sudo", workflow)
+            self.assertIn("docker_mode: ${{ inputs.docker_mode }}", workflow)
+
+        self.assertIn("docker_mode:", standalone)
+        self.assertIn("docker_mode: ${{ inputs.docker_mode }}", standalone)
+
     def test_filesystem_owns_configuration_analysis_and_image_owns_runtime_packages(self) -> None:
         documentation = read("docs/SECURITY_GATE.md")
 
