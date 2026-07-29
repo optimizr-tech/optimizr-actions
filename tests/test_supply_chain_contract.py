@@ -14,6 +14,9 @@ class SupplyChainContractTests(unittest.TestCase):
         self.assertNotIn("latest", text)
         self.assertIn('image_input=("$scan_identity")', text)
         self.assertIn("resolve-local", text)
+        self.assertIn("cleanup_target_artifacts", text)
+        self.assertIn("trap cleanup_target_artifacts EXIT", text)
+        self.assertIn('rm -f -- "$temporary_image"', text)
 
     def test_workflow_uploads_evidence_even_on_failure(self):
         text = (ROOT / ".github/workflows/_supply-chain-evidence.yml").read_text()

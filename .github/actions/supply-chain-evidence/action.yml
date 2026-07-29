@@ -41,6 +41,12 @@ runs:
         fi
         trivy_version="$(trivy --version | head -n 1)"
         workflow_ref="${GITHUB_WORKFLOW_REF:-${GITHUB_REPOSITORY}/unknown@${GITHUB_REF:-unknown}}"
+        cleanup_target_artifacts() {
+          if [ -n "${temporary_image:-}" ]; then
+            rm -f -- "$temporary_image" 2>/dev/null || true
+          fi
+          rm -f -- "$inspect_file" 2>/dev/null || true
+        }
         for target in "${targets[@]}"; do
           slug="$(printf '%s' "$target" | sha256sum | cut -c1-16)"
           target_dir="$EVIDENCE_DIR/$slug"
@@ -52,6 +58,7 @@ runs:
           temporary_image=""
           direct_docker=false
           mkdir -p "$target_dir"
+          trap cleanup_target_artifacts EXIT
           if docker image inspect "$target" > "$inspect_file" 2>/dev/null; then
             direct_docker=true
           elif sudo -n docker image inspect "$target" > "$inspect_file" 2>/dev/null; then
@@ -79,6 +86,6 @@ runs:
             --spdx "$spdx" \
             --tool-version "$trivy_version" \
             --output "$provenance"
-          rm -f "$temporary_image"
-          rm -f "$inspect_file"
+          cleanup_target_artifacts
+          trap - EXIT
         done

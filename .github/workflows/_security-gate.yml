@@ -23,6 +23,11 @@ on:
         required: false
         type: string
         default: ""
+      docker_mode:
+        description: "Local image access mode: auto, direct, or sudo"
+        required: false
+        type: string
+        default: auto
       severity:
         description: "Blocking severities"
         required: false
@@ -85,6 +90,7 @@ jobs:
           scan_type: ${{ inputs.scan_type }}
           scan_ref: ${{ inputs.scan_ref }}
           image_refs: ${{ inputs.image_refs }}
+          docker_mode: ${{ inputs.docker_mode }}
           severity: ${{ inputs.severity }}
           ignore_unfixed: ${{ inputs.ignore_unfixed }}
           exceptions_file: ${{ inputs.exceptions_file }}
