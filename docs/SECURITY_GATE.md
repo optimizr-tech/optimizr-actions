@@ -229,6 +229,11 @@ A self-hosted security runner must:
 
 The action runs Trivy as the unprivileged runner user. When Docker is only available through passwordless sudo, it saves the candidate image to a temporary archive and scans that archive without running Trivy as root. The archive is removed after each target, including transport failures.
 
+The `supply-chain-evidence` action follows the same rule for its temporary SBOM
+archive and inspect file: an exit trap removes them when either SBOM generation
+or provenance writing fails, so a failed workflow does not accumulate per-image
+artifacts in `runner.temp`.
+
 Every Optimizr action installs the controlled Trivy binary below a path unique
 to the workflow run, attempt, and job in `runner.temp`. Multiple runner services
 may share the same operating-system user, so the setup action's default
