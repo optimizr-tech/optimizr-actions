@@ -57,6 +57,8 @@ class ImageTransportTests(unittest.TestCase):
                 mode="auto",
                 archive=archive,
                 runner=runner,
+                uid=0,
+                gid=0,
             )
 
         self.assertEqual("ready", result.status)
