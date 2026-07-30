@@ -90,3 +90,64 @@ jobs:
             -w /repo \
             mikefarah/yq@sha256:76def1f56f456ecc1c3173ea275218ee17139bc2018c5a07887b15afd88ec03e \
             eval 'true' .github/actions/*/action.yml
+
+  apply-issue-109-lifecycle:
+    name: Apply reviewed lifecycle integration
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.number == 110 &&
+      github.actor == 'thalesfb' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'fix/issue-109-remediation-lifecycle'
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout lifecycle branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: fix/issue-109-remediation-lifecycle
+          fetch-depth: 0
+          persist-credentials: true
+          show-progress: false
+
+      - name: Apply exact lifecycle integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/maintenance/apply_issue_109_lifecycle.py
+          rm -f scripts/maintenance/apply_issue_109_lifecycle.py
+
+      - name: Validate lifecycle integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest \
+            tests.test_security_gate_remediation_lifecycle \
+            tests.test_security_gate_remediation_lifecycle_integration \
+            tests.test_security_gate_remediation_window -v
+          python3 -m py_compile \
+            scripts/security_gate/remediation_lifecycle.py \
+            scripts/security_gate/remediation_window.py
+          python3 - <<'PY'
+          from pathlib import Path
+          import yaml
+          yaml.safe_load(Path('.github/actions/security-gate/action.yml').read_text(encoding='utf-8'))
+          PY
+          git diff --check
+
+      - name: Commit lifecycle integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            .github/actions/security-gate/action.yml \
+            scripts/security_gate/remediation_window.py \
+            tests/test_security_gate_contract.py \
+            scripts/maintenance/apply_issue_109_lifecycle.py
+          git diff --cached --check
+          git commit -m 'fix(security): enforce immutable remediation lifecycle'
+          git push origin HEAD:fix/issue-109-remediation-lifecycle
