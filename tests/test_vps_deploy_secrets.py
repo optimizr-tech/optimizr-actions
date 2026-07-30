@@ -76,6 +76,31 @@ class VpsDeploySecretsTests(unittest.TestCase):
                 for exclusion in required_exclusions:
                     self.assertIn(exclusion, content)
 
+    def test_deploy_snapshots_are_bounded_by_new_optional_inputs(self) -> None:
+        required_inputs = (
+            "deploy_snapshot_enabled:",
+            "deploy_snapshot_retention_count:",
+            "deploy_snapshot_retention_days:",
+            "deploy_snapshot_max_total_bytes:",
+        )
+        for workflow in WORKFLOWS:
+            with self.subTest(workflow=workflow.name):
+                content = workflow.read_text(encoding="utf-8")
+                for required_input in required_inputs:
+                    self.assertIn(required_input, content)
+                self.assertIn("default: true", content)
+                self.assertIn("default: 10", content)
+                self.assertIn("default: 30", content)
+                self.assertIn("default: 2147483648", content)
+
+    def test_deploy_snapshots_skip_creation_when_rsync_detects_no_change(self) -> None:
+        for workflow in WORKFLOWS:
+            with self.subTest(workflow=workflow.name):
+                content = workflow.read_text(encoding="utf-8")
+                self.assertIn("--dry-run --itemize-changes --out-format='%i'", content)
+                self.assertIn("No deployable changes detected; skipping snapshot", content)
+                self.assertIn("Secret-free configuration snapshot created", content)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -20,6 +20,12 @@ attempt, including when Docker pruning is enabled. Backup rotation, persistent
 volume cleanup, and runner installation/version retention remain operational
 responsibilities of `optimizr-infra-ops`.
 
+The VPS deploy reusables also keep secret-free deploy snapshots bounded under
+`/opt/optimizr/backups/<service>/deploys`. The default policy skips snapshot
+creation when a dry run shows no deployable change, then retains the newest
+snapshot while applying count, age, and total-byte caps through additive
+inputs.
+
 Workspace cleanup validates the exact absolute workspace, refuses root or
 symlinked paths, runs first as the runner user, and only attempts `sudo -n` as
 a non-interactive fallback. An unavailable privilege escalation emits a
