@@ -57,6 +57,7 @@ runs:
         WORKSPACE: ${{ github.workspace }}
         HEAD_SHA: ${{ inputs.head_sha }}
         TRUSTED_REF: ${{ inputs.trusted_ref }}
+        VALIDATION_GITHUB_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
         candidate_sha="${HEAD_SHA:-$GITHUB_SHA}"
