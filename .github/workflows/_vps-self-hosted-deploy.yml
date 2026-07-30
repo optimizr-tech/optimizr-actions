@@ -110,6 +110,26 @@ on:
         required: false
         type: number
         default: 30
+      security_remediation_window_enabled:
+        description: Enable governed remediation-window evaluation
+        required: false
+        type: boolean
+        default: false
+      security_remediation_window_policy_file:
+        description: Repository-relative remediation-window policy JSON
+        required: false
+        type: string
+        default: ""
+      security_remediation_window_service_scope:
+        description: Declared service scope for remediation-window evaluation
+        required: false
+        type: string
+        default: ""
+      security_remediation_window_exposure_criticality:
+        description: Declared exposure/criticality for remediation-window evaluation
+        required: false
+        type: string
+        default: ""
       security_rebuild_retry_enabled:
         description: Retry actionable image vulnerabilities with one pull and rebuild
         required: false
@@ -399,6 +419,10 @@ jobs:
           ignore_unfixed: ${{ inputs.security_ignore_unfixed }}
           exceptions_file: ${{ inputs.security_exceptions_file }}
           baseline_file: ${{ inputs.security_baseline_file }}
+          remediation_window_enabled: ${{ inputs.security_remediation_window_enabled }}
+          remediation_window_policy_file: ${{ inputs.security_remediation_window_policy_file }}
+          remediation_window_service_scope: ${{ inputs.security_remediation_window_service_scope }}
+          remediation_window_exposure_criticality: ${{ inputs.security_remediation_window_exposure_criticality }}
           trivy_version: ${{ inputs.security_trivy_version }}
           db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
           evidence_dir: artifacts/security-gate/images-initial
@@ -471,6 +495,10 @@ jobs:
           ignore_unfixed: ${{ inputs.security_ignore_unfixed }}
           exceptions_file: ${{ inputs.security_exceptions_file }}
           baseline_file: ${{ inputs.security_baseline_file }}
+          remediation_window_enabled: ${{ inputs.security_remediation_window_enabled }}
+          remediation_window_policy_file: ${{ inputs.security_remediation_window_policy_file }}
+          remediation_window_service_scope: ${{ inputs.security_remediation_window_service_scope }}
+          remediation_window_exposure_criticality: ${{ inputs.security_remediation_window_exposure_criticality }}
           trivy_version: ${{ inputs.security_trivy_version }}
           db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
           evidence_dir: artifacts/security-gate/images-remediated
@@ -505,6 +533,10 @@ jobs:
           RETRY_PASSED: ${{ steps.security-final.outputs.passed }}
           COMPATIBILITY_ALLOWED: ${{ steps.security-final.outputs.compatibility_allowed }}
           SECURITY_CLASSIFICATION: ${{ steps.security-final.outputs.final_result }}
+          REMEDIATION_WINDOW_ALLOWED: ${{ steps.security-images-final-gate.outputs.remediation_window_allowed }}
+          REMEDIATION_WINDOW_UNCOVERED: ${{ steps.security-images-final-gate.outputs.remediation_window_uncovered }}
+          REMEDIATION_WINDOW_STATE: ${{ steps.security-images-final-gate.outputs.remediation_state }}
+          REMEDIATION_WINDOW_FAILURE_REASON: ${{ steps.security-images-final-gate.outputs.remediation_window_failure_reason }}
           FIXABLE_COUNT: ${{ steps.security-final.outputs.fixable_vulnerability_count }}
           UNFIXED_COUNT: ${{ steps.security-final.outputs.unfixed_vulnerability_count }}
           MISCONFIGURATION_COUNT: ${{ steps.security-final.outputs.misconfiguration_count }}
@@ -518,10 +550,15 @@ jobs:
           set -euo pipefail
           if [ "$RETRY_PASSED" = true ]; then
             echo "Security remediation check passed."
+          elif [ "$SECURITY_CLASSIFICATION" = actionable_vulnerability ] && \
+               [ "$REMEDIATION_WINDOW_ALLOWED" = true ] && \
+               [ "${REMEDIATION_WINDOW_UNCOVERED:-1}" = 0 ] && \
+               [ "${MISCONFIGURATION_COUNT:-0}" = 0 ] && [ "${SECRET_COUNT:-0}" = 0 ]; then
+            echo "::warning title=Governed remediation window::Proceeding with every blocking finding covered by an active reviewed window; state=${REMEDIATION_WINDOW_STATE:-active}."
           elif [ "$IGNORE_UNFIXED" = true ] && [ "$COMPATIBILITY_ALLOWED" = true ]; then
             echo "::warning title=Unremediated Base Image::Proceeding under the narrow ignore_unfixed compatibility policy for classification=$SECURITY_CLASSIFICATION rebuild=$REBUILD_RESULT."
           else
-            failure_reason="${FINAL_FAILURE_REASON:-${INITIAL_FAILURE_REASON:-${REBUILD_FAILURE_REASON:-none}}}"
+            failure_reason="${REMEDIATION_WINDOW_FAILURE_REASON:-${FINAL_FAILURE_REASON:-${INITIAL_FAILURE_REASON:-${REBUILD_FAILURE_REASON:-none}}}}"
             echo "::error::Image security gate blocked deployment: classification=${SECURITY_CLASSIFICATION} failure_reason=${failure_reason} rebuild=${REBUILD_RESULT} fixable=${FIXABLE_COUNT} unfixed=${UNFIXED_COUNT} misconfigurations=${MISCONFIGURATION_COUNT} secrets=${SECRET_COUNT}" >&2
             exit 1
           fi
@@ -660,4 +697,5 @@ jobs:
           security_rebuild_attempted: ${{ steps.security-final.outputs.rebuild_attempted || 'false' }}
           security_rebuild_result: ${{ steps.security-final.outputs.rebuild_result || 'skipped' }}
           security_final_result: ${{ steps.security-final.outputs.final_result || 'not-run' }}
+          security_remediation_window_state: ${{ steps.security-images-final-gate.outputs.remediation_state || 'not_applicable' }}
           retention: ${{ inputs.deploy_manifest_retention }}
