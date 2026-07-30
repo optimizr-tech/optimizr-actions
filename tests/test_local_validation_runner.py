@@ -98,6 +98,7 @@ class LocalValidationRunnerTests(unittest.TestCase):
             "docker": "Docker version 28",
             "docker-compose": "Docker Compose version v2.39.1",
             "uv": "uv 0.8.3",
+            "trivy": "Version: 0.70.0",
         }[tool]
 
     def test_success_runs_repository_entrypoint_and_redacts_argv(self) -> None:
@@ -124,6 +125,33 @@ class LocalValidationRunnerTests(unittest.TestCase):
         self.assertNotIn("argv", payload["command"])
         self.assertNotIn("environment", payload)
         self.assertEqual(0o600, stat.S_IMODE(evidence.stat().st_mode))
+
+    def test_accepts_trivy_as_a_required_tool_and_records_its_version(self) -> None:
+        preset = json.loads(self.preset_path.read_text(encoding="utf-8"))
+        preset["required_tools"].append("trivy")
+        self.preset_path.write_text(json.dumps(preset), encoding="utf-8")
+        self.write_entrypoint(self.metadata())
+        evidence = self.workspace / "artifacts" / "trivy.json"
+        with patch("scripts.local_validation.run._git", self.git_result), patch(
+            "scripts.local_validation.run._tool_version", self.tool_version
+        ):
+            payload = run_validation(
+                workspace=self.workspace,
+                preset_path=self.preset_path,
+                evidence_path=evidence,
+                command_args=[],
+                allow_dirty=False,
+            )
+
+        self.assertEqual("passed", payload["result"])
+        self.assertEqual("Version: 0.70.0", payload["tools"]["trivy"])
+
+    def test_rejects_unknown_required_tools(self) -> None:
+        preset = json.loads(self.preset_path.read_text(encoding="utf-8"))
+        preset["required_tools"].append("terraform")
+
+        with self.assertRaisesRegex(ValidationError, "required_tools"):
+            normalize_preset(preset)
 
     def test_fails_closed_for_missing_digest_and_required_check(self) -> None:
         metadata = self.metadata()
