@@ -6,14 +6,25 @@ on:
       - codex/issue-106-remediation-window-evaluator
     paths:
       - ".github/workflows/_apply-pr108-integration.yml"
+  pull_request:
+    branches:
+      - main
+    types:
+      - synchronize
+    paths:
+      - ".github/workflows/_apply-pr108-integration.yml"
 
 permissions:
   contents: write
 
 jobs:
   apply:
-    # Temporary branch-only workflow; removed immediately after the validated patch commit.
-    if: github.actor == 'thalesfb'
+    # Temporary same-repository PR workflow; removed immediately after the validated patch commit.
+    if: >-
+      github.actor == 'thalesfb' &&
+      (github.event_name == 'push' ||
+       (github.event.pull_request.head.repo.full_name == github.repository &&
+        github.event.pull_request.head.ref == 'codex/issue-106-remediation-window-evaluator'))
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout PR branch
