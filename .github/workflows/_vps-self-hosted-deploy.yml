@@ -140,6 +140,26 @@ on:
         required: false
         type: string
         default: not-reported
+      deploy_snapshot_enabled:
+        description: Create a secret-free deploy snapshot before synchronization
+        required: false
+        type: boolean
+        default: true
+      deploy_snapshot_retention_count:
+        description: Maximum deploy snapshots retained per service
+        required: false
+        type: number
+        default: 10
+      deploy_snapshot_retention_days:
+        description: Maximum age in days for deploy snapshots
+        required: false
+        type: number
+        default: 30
+      deploy_snapshot_max_total_bytes:
+        description: Maximum total bytes retained across deploy snapshots
+        required: false
+        type: number
+        default: 2147483648
 
 jobs:
   deploy:
@@ -216,7 +236,13 @@ jobs:
           fi
 
       - name: Backup and synchronize files
+        id: deploy-snapshot
         shell: bash
+        env:
+          SNAPSHOT_ENABLED: ${{ inputs.deploy_snapshot_enabled }}
+          SNAPSHOT_RETENTION_COUNT: ${{ inputs.deploy_snapshot_retention_count }}
+          SNAPSHOT_RETENTION_DAYS: ${{ inputs.deploy_snapshot_retention_days }}
+          SNAPSHOT_MAX_TOTAL_BYTES: ${{ inputs.deploy_snapshot_max_total_bytes }}
         run: |
           set -euo pipefail
           BACKUP_ROOT="/opt/optimizr/backups/${{ inputs.service_name }}/deploys"
@@ -232,27 +258,6 @@ jobs:
           )
           sudo chmod 750 "$BACKUP_ROOT"
 
-          if [ -d "$DEPLOY_PATH" ] && [ "$(ls -A "$DEPLOY_PATH" 2>/dev/null)" ]; then
-            backup_file="${BACKUP_ROOT}/$(date -u +%Y%m%dT%H%M%SZ).tar.gz"
-            if (
-              umask 077
-              tar \
-                --exclude='.env' --exclude='*/.env' \
-                --exclude='.env.*' --exclude='*/.env.*' \
-                --exclude='.secrets' --exclude='*/.secrets' \
-                --exclude='.secrets/*' --exclude='*/.secrets/*' \
-                --exclude='*.pem' --exclude='*.key' \
-                --exclude='*.p12' --exclude='*.pfx' \
-                -czf "$backup_file" -C "$DEPLOY_PATH" . 2>/dev/null
-            ); then
-              chmod 600 "$backup_file"
-              echo "Secret-free configuration backup created"
-            else
-              rm -f "$backup_file"
-              echo "::warning::Configuration backup failed; deployment continues"
-            fi
-          fi
-
           rsync_args=(
             -a --delete
             --exclude=.git
@@ -264,8 +269,56 @@ jobs:
           if [ -f "$GITHUB_WORKSPACE/.deployignore" ]; then
             rsync_args+=(--exclude-from="$GITHUB_WORKSPACE/.deployignore")
           fi
+          dry_run_output="$(mktemp)"
+          if ! rsync "${rsync_args[@]}" --dry-run --itemize-changes --out-format='%i' \
+            "$GITHUB_WORKSPACE/" "$DEPLOY_PATH/" >"$dry_run_output"; then
+            rm -f "$dry_run_output"
+            echo "::error::Deploy dry-run failed" >&2
+            exit 1
+          fi
+
+          snapshot_created=false
+          if [ -s "$dry_run_output" ]; then
+            if [ "$SNAPSHOT_ENABLED" = true ]; then
+              backup_file="${BACKUP_ROOT}/$(date -u +%Y%m%dT%H%M%SZ).tar.gz"
+              if (
+                umask 077
+                tar \
+                  --exclude='.env' --exclude='*/.env' \
+                  --exclude='.env.*' --exclude='*/.env.*' \
+                  --exclude='.secrets' --exclude='*/.secrets' \
+                  --exclude='.secrets/*' --exclude='*/.secrets/*' \
+                  --exclude='*.pem' --exclude='*.key' \
+                  --exclude='*.p12' --exclude='*.pfx' \
+                  -czf "$backup_file" -C "$DEPLOY_PATH" . 2>/dev/null
+              ); then
+                chmod 600 "$backup_file"
+                snapshot_created=true
+                echo "Secret-free configuration snapshot created"
+              else
+                rm -f "$backup_file"
+                echo "::warning::Configuration snapshot failed; deployment continues"
+              fi
+            else
+              echo "Secret-free configuration snapshot disabled"
+            fi
+          else
+            echo "No deployable changes detected; skipping snapshot"
+          fi
+          rm -f "$dry_run_output"
+
           rsync "${rsync_args[@]}" "$GITHUB_WORKSPACE/" "$DEPLOY_PATH/"
           find "$DEPLOY_PATH" -name '*.sh' -exec chmod +x {} \;
+          echo "snapshot_created=$snapshot_created" >> "$GITHUB_OUTPUT"
+
+      - name: Prune deploy snapshots
+        if: success() && steps.deploy-snapshot.outputs.snapshot_created == 'true'
+        uses: optimizr-tech/optimizr-actions/.github/actions/deploy-snapshot-retention@v1
+        with:
+          root: /opt/optimizr/backups/${{ inputs.service_name }}/deploys
+          max_count: ${{ inputs.deploy_snapshot_retention_count }}
+          max_age_days: ${{ inputs.deploy_snapshot_retention_days }}
+          max_total_bytes: ${{ inputs.deploy_snapshot_max_total_bytes }}
 
       - name: Ensure networks and volumes exist
         if: inputs.ensure_networks != '' || inputs.ensure_volumes != ''

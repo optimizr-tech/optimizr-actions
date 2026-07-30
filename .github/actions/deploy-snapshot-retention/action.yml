@@ -1,0 +1,34 @@
+name: deploy-snapshot-retention
+description: Prune secret-free deploy snapshots under a bounded root
+
+inputs:
+  root:
+    description: Absolute deploy snapshot root
+    required: true
+  max_count:
+    description: Maximum number of deploy snapshots to retain
+    required: true
+  max_age_days:
+    description: Maximum age in days for deploy snapshots
+    required: true
+  max_total_bytes:
+    description: Maximum total bytes for deploy snapshots
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Prune deploy snapshots
+      shell: bash
+      env:
+        ROOT: ${{ inputs.root }}
+        MAX_COUNT: ${{ inputs.max_count }}
+        MAX_AGE_DAYS: ${{ inputs.max_age_days }}
+        MAX_TOTAL_BYTES: ${{ inputs.max_total_bytes }}
+      run: |
+        set -euo pipefail
+        python3 "${GITHUB_ACTION_PATH}/prune.py" \
+          --root "$ROOT" \
+          --max-count "$MAX_COUNT" \
+          --max-age-days "$MAX_AGE_DAYS" \
+          --max-total-bytes "$MAX_TOTAL_BYTES"
