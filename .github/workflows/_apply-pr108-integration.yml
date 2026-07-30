@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   apply:
+    # Temporary branch-only workflow; removed immediately after the validated patch commit.
     if: github.actor == 'thalesfb'
     runs-on: ubuntu-24.04
     steps:
