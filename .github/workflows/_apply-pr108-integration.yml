@@ -75,14 +75,27 @@ jobs:
           from pathlib import Path
           import yaml
 
-          for path in (
+          for file_name in (
               ".github/actions/security-gate/action.yml",
               ".github/actions/record-deploy-manifest/action.yml",
               ".github/workflows/_security-gate.yml",
               ".github/workflows/_vps-self-hosted-deploy.yml",
               ".github/workflows/_vps-monorepo-deploy.yml",
           ):
-              yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+              path = Path(file_name)
+              text = path.read_text(encoding="utf-8")
+              try:
+                  yaml.safe_load(text)
+              except yaml.YAMLError as exc:
+                  print(f"YAML validation failed: {file_name}")
+                  mark = getattr(exc, "problem_mark", None)
+                  if mark is not None:
+                      lines = text.splitlines()
+                      start = max(0, mark.line - 8)
+                      end = min(len(lines), mark.line + 9)
+                      for number in range(start, end):
+                          print(f"{number + 1:04d}: {lines[number]}")
+                  raise
           PY
           python3 -m py_compile \
             scripts/security_gate/remediation_window.py \
