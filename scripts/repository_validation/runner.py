@@ -183,6 +183,7 @@ def run_validation(
 def _ephemeral_git_auth_env(github_token: str) -> dict[str, str]:
     """Return a subprocess-only Git config that authenticates without persistence."""
     env = os.environ.copy()
+    env.pop("VALIDATION_GITHUB_TOKEN", None)
     try:
         config_index = int(env.get("GIT_CONFIG_COUNT", "0"))
     except ValueError as exc:
