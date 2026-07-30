@@ -121,6 +121,9 @@ outputs:
   remediation_window_unmatched_count:
     description: "Findings without exact policy entries"
     value: ${{ steps.scan.outputs.remediation_window_unmatched_count }}
+  remediation_window_reintroduced_count:
+    description: "Observed findings whose reviewed lifecycle is resolved or reintroduced"
+    value: ${{ steps.scan.outputs.remediation_window_reintroduced_count }}
   remediation_window_due_soon_count:
     description: "Covered findings due within 72 hours"
     value: ${{ steps.scan.outputs.remediation_window_due_soon_count }}
@@ -201,6 +204,7 @@ runs:
           echo "remediation_window_rejected_count=0"
           echo "remediation_window_overdue_count=0"
           echo "remediation_window_unmatched_count=0"
+          echo "remediation_window_reintroduced_count=0"
           echo "remediation_window_due_soon_count=0"
           echo "nearest_deadline="
           echo "policy_digest="
