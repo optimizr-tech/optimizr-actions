@@ -58,6 +58,31 @@ on:
         required: false
         type: string
         default: artifacts/security-gate
+      remediation_window_enabled:
+        description: "Enable governed remediation-window evaluation"
+        required: false
+        type: boolean
+        default: false
+      remediation_window_policy_file:
+        description: "Repository-relative remediation-window policy JSON"
+        required: false
+        type: string
+        default: ""
+      remediation_window_service_scope:
+        description: "Declared service scope for remediation-window evaluation"
+        required: false
+        type: string
+        default: ""
+      remediation_window_exposure_criticality:
+        description: "Declared exposure/criticality for remediation-window evaluation"
+        required: false
+        type: string
+        default: ""
+      remediation_window_evaluated_at:
+        description: "RFC3339 UTC evaluation time for remediation-window evaluation"
+        required: false
+        type: string
+        default: ""
       artifact_name:
         description: "Uploaded evidence artifact name"
         required: false
@@ -77,6 +102,8 @@ jobs:
     name: Blocking security gate
     runs-on: ${{ fromJSON(inputs.runner_json) }}
     timeout-minutes: 30
+    outputs:
+      remediation_window_allowed: ${{ steps.security-gate.outputs.remediation_window_allowed }}
     steps:
       - name: Checkout exact candidate
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -85,6 +112,7 @@ jobs:
           persist-credentials: false
 
       - name: Run portable security gate
+        id: security-gate
         uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@v1
         with:
           scan_type: ${{ inputs.scan_type }}
@@ -97,6 +125,11 @@ jobs:
           trivy_version: ${{ inputs.trivy_version }}
           db_max_age_hours: ${{ inputs.db_max_age_hours }}
           evidence_dir: ${{ inputs.evidence_dir }}
+          remediation_window_enabled: ${{ inputs.remediation_window_enabled }}
+          remediation_window_policy_file: ${{ inputs.remediation_window_policy_file }}
+          remediation_window_service_scope: ${{ inputs.remediation_window_service_scope }}
+          remediation_window_exposure_criticality: ${{ inputs.remediation_window_exposure_criticality }}
+          remediation_window_evaluated_at: ${{ inputs.remediation_window_evaluated_at }}
 
       - name: Upload security evidence
         if: always()

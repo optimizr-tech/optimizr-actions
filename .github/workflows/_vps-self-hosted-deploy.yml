@@ -110,6 +110,31 @@ on:
         required: false
         type: number
         default: 30
+      security_remediation_window_enabled:
+        description: Enable governed remediation-window evaluation
+        required: false
+        type: boolean
+        default: false
+      security_remediation_window_policy_file:
+        description: Repository-relative remediation-window policy JSON
+        required: false
+        type: string
+        default: ""
+      security_remediation_window_service_scope:
+        description: Declared service scope for remediation-window evaluation
+        required: false
+        type: string
+        default: ""
+      security_remediation_window_exposure_criticality:
+        description: Declared exposure/criticality for remediation-window evaluation
+        required: false
+        type: string
+        default: ""
+      security_remediation_window_evaluated_at:
+        description: RFC3339 UTC evaluation time for remediation-window evaluation
+        required: false
+        type: string
+        default: ""
       security_rebuild_retry_enabled:
         description: Retry actionable image vulnerabilities with one pull and rebuild
         required: false
@@ -204,6 +229,11 @@ jobs:
           severity: ${{ inputs.security_severity }}
           ignore_unfixed: ${{ inputs.security_ignore_unfixed }}
           exceptions_file: ${{ inputs.security_exceptions_file }}
+          remediation_window_enabled: ${{ inputs.security_remediation_window_enabled }}
+          remediation_window_policy_file: ${{ inputs.security_remediation_window_policy_file }}
+          remediation_window_service_scope: ${{ inputs.security_remediation_window_service_scope }}
+          remediation_window_exposure_criticality: ${{ inputs.security_remediation_window_exposure_criticality }}
+          remediation_window_evaluated_at: ${{ inputs.security_remediation_window_evaluated_at }}
           trivy_version: ${{ inputs.security_trivy_version }}
           db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
           evidence_dir: artifacts/security-gate/filesystem
@@ -399,6 +429,11 @@ jobs:
           ignore_unfixed: ${{ inputs.security_ignore_unfixed }}
           exceptions_file: ${{ inputs.security_exceptions_file }}
           baseline_file: ${{ inputs.security_baseline_file }}
+          remediation_window_enabled: ${{ inputs.security_remediation_window_enabled }}
+          remediation_window_policy_file: ${{ inputs.security_remediation_window_policy_file }}
+          remediation_window_service_scope: ${{ inputs.security_remediation_window_service_scope }}
+          remediation_window_exposure_criticality: ${{ inputs.security_remediation_window_exposure_criticality }}
+          remediation_window_evaluated_at: ${{ inputs.security_remediation_window_evaluated_at }}
           trivy_version: ${{ inputs.security_trivy_version }}
           db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
           evidence_dir: artifacts/security-gate/images-initial
@@ -471,6 +506,11 @@ jobs:
           ignore_unfixed: ${{ inputs.security_ignore_unfixed }}
           exceptions_file: ${{ inputs.security_exceptions_file }}
           baseline_file: ${{ inputs.security_baseline_file }}
+          remediation_window_enabled: ${{ inputs.security_remediation_window_enabled }}
+          remediation_window_policy_file: ${{ inputs.security_remediation_window_policy_file }}
+          remediation_window_service_scope: ${{ inputs.security_remediation_window_service_scope }}
+          remediation_window_exposure_criticality: ${{ inputs.security_remediation_window_exposure_criticality }}
+          remediation_window_evaluated_at: ${{ inputs.security_remediation_window_evaluated_at }}
           trivy_version: ${{ inputs.security_trivy_version }}
           db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
           evidence_dir: artifacts/security-gate/images-remediated
@@ -505,6 +545,7 @@ jobs:
           RETRY_PASSED: ${{ steps.security-final.outputs.passed }}
           COMPATIBILITY_ALLOWED: ${{ steps.security-final.outputs.compatibility_allowed }}
           SECURITY_CLASSIFICATION: ${{ steps.security-final.outputs.final_result }}
+          REMEDIATION_WINDOW_ALLOWED: ${{ steps.security-images-final-gate.outputs.remediation_window_allowed }}
           FIXABLE_COUNT: ${{ steps.security-final.outputs.fixable_vulnerability_count }}
           UNFIXED_COUNT: ${{ steps.security-final.outputs.unfixed_vulnerability_count }}
           MISCONFIGURATION_COUNT: ${{ steps.security-final.outputs.misconfiguration_count }}

@@ -47,7 +47,13 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertIn("render-exceptions", content)
         self.assertIn("scripts/security_gate/report.py", content)
         self.assertIn("scripts/security_gate/aggregate.py", content)
+        self.assertIn("scripts/security_gate/remediation_window.py", content)
         self.assertIn("classification:", content)
+        self.assertIn("remediation_window_allowed:", content)
+        self.assertIn("remediation_state:", content)
+        self.assertIn("nearest_deadline:", content)
+        self.assertIn("policy_digest:", content)
+        self.assertIn("evaluator_version:", content)
         self.assertIn("fixable_vulnerability_count:", content)
         self.assertIn("unfixed_vulnerability_count:", content)
         self.assertIn("misconfiguration_count:", content)
@@ -64,6 +70,25 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertIn("vulnerabilities without an available fix remain visible", content)
         self.assertNotIn("ALLOW_MISSING_TRIVY", content)
         self.assertNotIn("continue-on-error: true", content)
+
+    def test_remediation_window_contract_is_exposed_additively(self) -> None:
+        action = read(".github/actions/security-gate/action.yml")
+        workflow = read(".github/workflows/_security-gate.yml")
+        self_hosted = read(".github/workflows/_vps-self-hosted-deploy.yml")
+        monorepo = read(".github/workflows/_vps-monorepo-deploy.yml")
+
+        for content in (action, workflow, self_hosted, monorepo):
+            self.assertIn("remediation_window_enabled", content)
+            self.assertIn("remediation_window_policy_file", content)
+            self.assertIn("remediation_window_service_scope", content)
+            self.assertIn("remediation_window_exposure_criticality", content)
+            self.assertIn("remediation_window_evaluated_at", content)
+
+        self.assertIn("remediation_window_allowed", action)
+        self.assertIn("remediation_state", action)
+        self.assertIn("remediation_window_allowed", workflow)
+        self.assertIn("remediation_window_allowed", self_hosted)
+        self.assertIn("remediation_window_allowed", monorepo)
 
     def test_missing_flock_is_an_actionable_runner_prerequisite_failure(self) -> None:
         content = read(".github/actions/security-gate/action.yml")

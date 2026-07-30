@@ -46,6 +46,26 @@ inputs:
     description: "Directory for reports and sanitized evidence"
     required: false
     default: "artifacts/security-gate"
+  remediation_window_enabled:
+    description: "Enable governed remediation-window evaluation"
+    required: false
+    default: "false"
+  remediation_window_policy_file:
+    description: "Repository-relative remediation-window policy JSON"
+    required: false
+    default: ""
+  remediation_window_service_scope:
+    description: "Declared service scope for remediation-window evaluation"
+    required: false
+    default: ""
+  remediation_window_exposure_criticality:
+    description: "Declared exposure/criticality for remediation-window evaluation"
+    required: false
+    default: ""
+  remediation_window_evaluated_at:
+    description: "RFC3339 UTC evaluation time for remediation-window evaluation"
+    required: false
+    default: ""
 
 outputs:
   evidence_dir:
@@ -72,6 +92,33 @@ outputs:
   secret_count:
     description: "Number of detected secrets"
     value: ${{ steps.scan.outputs.secret_count }}
+  remediation_window_allowed:
+    description: "Whether the exact finding matched an active remediation window"
+    value: ${{ steps.scan.outputs.remediation_window_allowed }}
+  remediation_state:
+    description: "Remediation-window state: not_applicable, blocked, or active"
+    value: ${{ steps.scan.outputs.remediation_state }}
+  remediation_window_decision:
+    description: "Remediation-window decision: not_applicable, blocked, or allowed_window"
+    value: ${{ steps.scan.outputs.remediation_window_decision }}
+  remediation_window_classification:
+    description: "Classification attached to the evaluated remediation window"
+    value: ${{ steps.scan.outputs.remediation_window_classification }}
+  remediation_window_count:
+    description: "Number of exact window matches found"
+    value: ${{ steps.scan.outputs.remediation_window_count }}
+  nearest_deadline:
+    description: "Nearest reviewed remediation deadline among exact matches"
+    value: ${{ steps.scan.outputs.nearest_deadline }}
+  policy_digest:
+    description: "SHA256 digest of the evaluated remediation policy"
+    value: ${{ steps.scan.outputs.policy_digest }}
+  evaluator_version:
+    description: "Remediation-window evaluator version"
+    value: ${{ steps.scan.outputs.evaluator_version }}
+  remediation_window_failure_reason:
+    description: "Sanitized reason when remediation-window evaluation is unavailable"
+    value: ${{ steps.scan.outputs.remediation_window_failure_reason }}
 
 runs:
   using: composite
@@ -97,6 +144,11 @@ runs:
         INPUT_BASELINE_FILE: ${{ inputs.baseline_file }}
         INPUT_DB_MAX_AGE_HOURS: ${{ inputs.db_max_age_hours }}
         INPUT_EVIDENCE_DIR: ${{ inputs.evidence_dir }}
+        INPUT_REMEDIATION_WINDOW_ENABLED: ${{ inputs.remediation_window_enabled }}
+        INPUT_REMEDIATION_WINDOW_POLICY_FILE: ${{ inputs.remediation_window_policy_file }}
+        INPUT_REMEDIATION_WINDOW_SERVICE_SCOPE: ${{ inputs.remediation_window_service_scope }}
+        INPUT_REMEDIATION_WINDOW_EXPOSURE_CRITICALITY: ${{ inputs.remediation_window_exposure_criticality }}
+        INPUT_REMEDIATION_WINDOW_EVALUATED_AT: ${{ inputs.remediation_window_evaluated_at }}
       run: |
         set -euo pipefail
 
@@ -105,6 +157,7 @@ runs:
         report_tool="$action_root/scripts/security_gate/report.py"
         aggregate_tool="$action_root/scripts/security_gate/aggregate.py"
         baseline_tool="$action_root/scripts/security_gate/baseline.py"
+        remediation_window_tool="$action_root/scripts/security_gate/remediation_window.py"
         transport_tool="$action_root/scripts/security_gate/image_transport.py"
         repository="${GITHUB_REPOSITORY:-local/unknown}"
         cache_namespace="$(printf '%s' "$repository" | sha256sum | cut -c1-24)"
@@ -121,6 +174,15 @@ runs:
           echo "unfixed_vulnerability_count=0"
           echo "misconfiguration_count=0"
           echo "secret_count=0"
+          echo "remediation_window_allowed=false"
+          echo "remediation_state=not_applicable"
+          echo "remediation_window_decision=not_applicable"
+          echo "remediation_window_classification="
+          echo "remediation_window_count=0"
+          echo "nearest_deadline="
+          echo "policy_digest="
+          echo "evaluator_version=1"
+          echo "remediation_window_failure_reason="
         } >> "$GITHUB_OUTPUT"
 
         for path in "$cache_root" "$cache_dir"; do
@@ -166,6 +228,13 @@ runs:
             exit 2
             ;;
         esac
+        case "$INPUT_REMEDIATION_WINDOW_ENABLED" in
+          true|false) ;;
+          *)
+            echo "::error::remediation_window_enabled must be true or false" >&2
+            exit 2
+            ;;
+        esac
         if [ "$INPUT_IGNORE_UNFIXED" = false ]; then
           echo "::notice title=Security policy updated::ignore_unfixed=false is deprecated; vulnerabilities without an available fix remain visible but do not block deployment."
         fi
@@ -206,6 +275,13 @@ runs:
         aggregate_status=0
         scanner_error=0
         summary_paths=()
+        remediation_window_count=0
+        remediation_window_nearest_deadline=""
+        remediation_window_policy_digest=""
+        remediation_window_classification=""
+        remediation_window_decision="not_applicable"
+        remediation_state="not_applicable"
+        remediation_window_failure_reason=""
         temporary_image=""
         transport_metadata=""
         cleanup_transport_artifacts() {
@@ -305,7 +381,6 @@ runs:
               rm -f "$transport_metadata" "$temporary_image"
               exit 2
             fi
-            rm -f "$transport_metadata"
           fi
 
           exception_args=(
@@ -414,6 +489,162 @@ runs:
           summary_paths+=("$finding_summary")
           echo "::endgroup::"
 
+          window_summary="${prefix}-remediation-window.json"
+          window_observation="${prefix}-remediation-window-observation.json"
+          if [ "$INPUT_REMEDIATION_WINDOW_ENABLED" = true ]; then
+            if [ "$INPUT_SCAN_TYPE" = image ] && [ "$scan_status" -eq 1 ] && [ -n "$INPUT_REMEDIATION_WINDOW_POLICY_FILE" ] && [ -n "$INPUT_REMEDIATION_WINDOW_SERVICE_SCOPE" ] && [ -n "$INPUT_REMEDIATION_WINDOW_EXPOSURE_CRITICALITY" ]; then
+              python3 - "$window_observation" "$enforced_json_report" "$INPUT_REMEDIATION_WINDOW_SERVICE_SCOPE" "$INPUT_REMEDIATION_WINDOW_EXPOSURE_CRITICALITY" "$head_sha" "$identity" "$transport_metadata" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+output = Path(sys.argv[1])
+report_path = Path(sys.argv[2])
+service_scope = sys.argv[3].strip()
+exposure_criticality = sys.argv[4].strip()
+source_sha = sys.argv[5].strip()
+image_identity = sys.argv[6].strip()
+transport_metadata = Path(sys.argv[7])
+
+try:
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    transport = json.loads(transport_metadata.read_text(encoding="utf-8"))
+except (OSError, json.JSONDecodeError):
+    report = {}
+    transport = {}
+
+lineage_digests = sorted(
+    {
+        str(digest).strip().lower()
+        for digest in transport.get("lineage_digests", [])
+        if isinstance(digest, str) and str(digest).strip()
+    }
+)
+results = report.get("Results", []) if isinstance(report, dict) else []
+observation = None
+if isinstance(results, list):
+    for result in results:
+        vulnerabilities = result.get("Vulnerabilities", []) if isinstance(result, dict) else []
+        if not isinstance(vulnerabilities, list):
+            continue
+        for finding in vulnerabilities:
+            if not isinstance(finding, dict):
+                continue
+            purl = ""
+            identifier = finding.get("PkgIdentifier")
+            if isinstance(identifier, dict):
+                purl = str(identifier.get("PURL") or "").strip()
+            if not purl:
+                purl = str(finding.get("PURL") or "").strip()
+            if not purl:
+                continue
+            observation = {
+                "service_scope": service_scope,
+                "exposure_criticality": exposure_criticality,
+                "classification": "actionable_vulnerability",
+                "advisory_id": str(finding.get("VulnerabilityID") or "").strip(),
+                "package_purl": purl,
+                "installed_version": str(finding.get("InstalledVersion") or "").strip(),
+                "fixed_version": str(finding.get("FixedVersion") or "").strip(),
+                "image_lineage_digests": lineage_digests,
+                "source_sha": source_sha,
+                "image_identity": image_identity,
+                "fixed_image_verified": False,
+            }
+            break
+        if observation:
+            break
+
+if observation is None:
+    if output.exists():
+        output.unlink()
+else:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(observation, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+              if [ -s "$window_observation" ]; then
+                set +e
+                python3 "$remediation_window_tool" \
+                  --policy "$INPUT_REMEDIATION_WINDOW_POLICY_FILE" \
+                  --observation "$window_observation" \
+                  --output "$window_summary" \
+                  --enabled true \
+                  --evaluation-time "$INPUT_REMEDIATION_WINDOW_EVALUATED_AT" \
+                  --exposure-criticality "$INPUT_REMEDIATION_WINDOW_EXPOSURE_CRITICALITY" \
+                  --fixed-image-verified false
+                window_eval_status=$?
+                set -e
+                if [ "$window_eval_status" -ne 0 ]; then
+                  remediation_window_failure_reason="window_evaluation_failed"
+                fi
+              fi
+            fi
+            if [ ! -f "$window_summary" ]; then
+              python3 - "$window_summary" "$scan_status" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+output = Path(sys.argv[1])
+scan_status = int(sys.argv[2])
+state = "not_applicable" if scan_status in (0, 1) else "blocked"
+classification = "actionable_vulnerability" if scan_status == 1 else ("clean" if scan_status == 0 else "gate_error")
+payload = {
+    "classification": classification,
+    "decision": "not_applicable",
+    "evaluator_version": "1",
+    "failure_reason": "window_unavailable" if scan_status > 1 else "window_not_applicable",
+    "matching_entry_count": 0,
+    "nearest_deadline": "",
+    "policy_digest": "",
+    "remediation_state": state,
+    "remediation_window_allowed": False,
+}
+output.parent.mkdir(parents=True, exist_ok=True)
+output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+            fi
+            while IFS='=' read -r key value; do
+              case "$key" in
+                remediation_window_allowed) remediation_window_allowed="$value" ;;
+                remediation_state) remediation_state="$value" ;;
+                remediation_window_decision) remediation_window_decision="$value" ;;
+                remediation_window_classification) remediation_window_classification="$value" ;;
+                remediation_window_count) remediation_window_count="$((remediation_window_count + value))" ;;
+                nearest_deadline)
+                  if [ -z "$remediation_window_nearest_deadline" ]; then
+                    remediation_window_nearest_deadline="$value"
+                  elif [ -n "$value" ] && [[ "$value" < "$remediation_window_nearest_deadline" ]]; then
+                    remediation_window_nearest_deadline="$value"
+                  fi
+                  ;;
+                policy_digest) remediation_window_policy_digest="$value" ;;
+                evaluator_version) remediation_window_evaluator_version="$value" ;;
+                remediation_window_failure_reason) remediation_window_failure_reason="$value" ;;
+              esac
+            done < <(python3 - "$window_summary" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    payload = json.load(stream)
+fields = {
+    "remediation_window_allowed": "true" if payload.get("remediation_window_allowed") else "false",
+    "remediation_state": payload.get("remediation_state", ""),
+    "remediation_window_decision": payload.get("decision", ""),
+    "remediation_window_classification": payload.get("classification", ""),
+    "remediation_window_count": str(payload.get("matching_entry_count", 0)),
+    "nearest_deadline": payload.get("nearest_deadline", ""),
+    "policy_digest": payload.get("policy_digest", ""),
+    "evaluator_version": payload.get("evaluator_version", ""),
+    "remediation_window_failure_reason": payload.get("failure_reason", ""),
+}
+for key, value in fields.items():
+    print(f"{key}={value}")
+PY
+            )
+          fi
+
           if [ "$scan_status" -gt 1 ]; then
             scanner_error=1
           fi
@@ -450,6 +681,7 @@ runs:
             --report "baseline=$baseline_summary"
             --report "sarif=$sarif_report"
             --report "summary=$finding_summary"
+            --report "remediation_window=$window_summary"
             --result "$result"
             --ignore-unfixed
           )
@@ -473,4 +705,13 @@ runs:
         else
           echo "result=failed" >> "$GITHUB_OUTPUT"
         fi
+        echo "remediation_window_allowed=$remediation_window_allowed" >> "$GITHUB_OUTPUT"
+        echo "remediation_state=$remediation_state" >> "$GITHUB_OUTPUT"
+        echo "remediation_window_decision=$remediation_window_decision" >> "$GITHUB_OUTPUT"
+        echo "remediation_window_classification=$remediation_window_classification" >> "$GITHUB_OUTPUT"
+        echo "remediation_window_count=$remediation_window_count" >> "$GITHUB_OUTPUT"
+        echo "nearest_deadline=$remediation_window_nearest_deadline" >> "$GITHUB_OUTPUT"
+        echo "policy_digest=$remediation_window_policy_digest" >> "$GITHUB_OUTPUT"
+        echo "evaluator_version=$remediation_window_evaluator_version" >> "$GITHUB_OUTPUT"
+        echo "remediation_window_failure_reason=$remediation_window_failure_reason" >> "$GITHUB_OUTPUT"
         exit "$aggregate_status"
