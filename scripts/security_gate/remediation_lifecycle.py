@@ -48,6 +48,15 @@ def normalize_lifecycle(
     if status not in _ALLOWED_ENTRY_STATUSES:
         raise RemediationLifecycleError("policy entry status is not allowed")
 
+    initial_reviewed_at = _parse_utc(
+        _required_text(entry, "reviewed_at", label="policy entry"),
+        label="policy entry.reviewed_at",
+    )
+    if initial_reviewed_at > reference:
+        raise RemediationLifecycleError(
+            "policy entry reviewed_at must not be in the future"
+        )
+
     raw_history = entry.get("history")
     if raw_history is None:
         if status != "active":
@@ -66,7 +75,7 @@ def normalize_lifecycle(
 
     tracked_deadline = original_deadline
     tracked_status = "active"
-    previous_reviewed_at: datetime | None = None
+    previous_reviewed_at = initial_reviewed_at
     history: list[dict[str, str]] = []
     for index, revision in enumerate(raw_history):
         if not isinstance(revision, Mapping):
@@ -104,9 +113,9 @@ def normalize_lifecycle(
             raise RemediationLifecycleError(
                 "policy entry history reviewed_at must not be in the future"
             )
-        if previous_reviewed_at is not None and reviewed_at <= previous_reviewed_at:
+        if reviewed_at <= previous_reviewed_at:
             raise RemediationLifecycleError(
-                "policy entry history reviews must be strictly chronological"
+                "policy entry history reviews must follow the initial review and remain strictly chronological"
             )
 
         if action == "extended":
