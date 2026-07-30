@@ -51,6 +51,7 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertIn("classification:", content)
         self.assertIn("remediation_window_allowed:", content)
         self.assertIn("remediation_state:", content)
+        self.assertIn("remediation_window_reintroduced_count:", content)
         self.assertIn("nearest_deadline:", content)
         self.assertIn("policy_digest:", content)
         self.assertIn("evaluator_version:", content)
