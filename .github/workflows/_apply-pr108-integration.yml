@@ -45,6 +45,21 @@ jobs:
           printf '%s  %s\n' \
             '1a1c3e0e35ee977faca3195e3db635bd37fda6af542fa91deeba313d4bcc9464' \
             "$patch_script" | sha256sum --check --strict
+          python3 - "$patch_script" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          content = path.read_text(encoding="utf-8")
+          old = '''    stale_final_outputs = \'\'\'        echo "remediation_window_allowed=$remediation_window_allowed"\\n        echo "remediation_state=$remediation_state"\\n        echo "remediation_window_decision=$remediation_window_decision"\\n        echo "remediation_window_classification=$remediation_window_classification"\\n        echo "remediation_window_count=$remediation_window_count"\\n        echo "nearest_deadline=$remediation_window_nearest_deadline"\\n        echo "policy_digest=$remediation_window_policy_digest"\\n        echo "evaluator_version=$remediation_window_evaluator_version"\\n        echo "remediation_window_failure_reason=$remediation_window_failure_reason"\\n\'\'\'\n'''
+          new = '''    stale_final_outputs = \'\'\'        echo "remediation_window_allowed=$remediation_window_allowed" >> "$GITHUB_OUTPUT"\\n        echo "remediation_state=$remediation_state" >> "$GITHUB_OUTPUT"\\n        echo "remediation_window_decision=$remediation_window_decision" >> "$GITHUB_OUTPUT"\\n        echo "remediation_window_classification=$remediation_window_classification" >> "$GITHUB_OUTPUT"\\n        echo "remediation_window_count=$remediation_window_count" >> "$GITHUB_OUTPUT"\\n        echo "nearest_deadline=$remediation_window_nearest_deadline" >> "$GITHUB_OUTPUT"\\n        echo "policy_digest=$remediation_window_policy_digest" >> "$GITHUB_OUTPUT"\\n        echo "evaluator_version=$remediation_window_evaluator_version" >> "$GITHUB_OUTPUT"\\n        echo "remediation_window_failure_reason=$remediation_window_failure_reason" >> "$GITHUB_OUTPUT"\\n\'\'\'\n'''
+          if content.count(old) != 1:
+              raise SystemExit(f"expected one stale-output matcher, found {content.count(old)}")
+          path.write_text(content.replace(old, new, 1), encoding="utf-8")
+          PY
+          printf '%s  %s\n' \
+            '144df27d6ae21888c05596b3d7fadeea6b89370ba09fe926416c70350597e015' \
+            "$patch_script" | sha256sum --check --strict
           python3 -m py_compile "$patch_script"
           python3 "$patch_script"
           rm -f "$patch_script"
