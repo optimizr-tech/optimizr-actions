@@ -21,6 +21,16 @@ from scripts.security_gate.classifications import (  # noqa: E402
 
 _REBUILD_RESULTS = {"passed", "failed", "skipped", "no_change"}
 _STATUSES = {"success", "failure"}
+_REMEDIATION_WINDOW_STATES = {
+    "not_applicable",
+    "blocked",
+    "pending_review",
+    "active",
+    "due_soon",
+    "overdue",
+    "resolved",
+    "reintroduced",
+}
 
 
 class RemediationError(ValueError):
@@ -66,6 +76,7 @@ def decorate_manifest(
     rebuild_attempted: bool,
     rebuild_result: str,
     final_result: str,
+    remediation_window_state: str = "not_applicable",
 ) -> None:
     """Persist only enum/boolean remediation state in deploy evidence."""
     if status not in _STATUSES:
@@ -83,6 +94,8 @@ def decorate_manifest(
         raise RemediationError("an unattempted rebuild must be skipped")
     if rebuild_attempted and rebuild_result == "skipped":
         raise RemediationError("an attempted rebuild cannot be skipped")
+    if remediation_window_state not in _REMEDIATION_WINDOW_STATES:
+        raise RemediationError("remediation window state is not allowed")
 
     payload = _load_manifest(manifest)
     payload.update(
@@ -91,6 +104,7 @@ def decorate_manifest(
             "security_rebuild_attempted": rebuild_attempted,
             "security_rebuild_result": rebuild_result,
             "security_final_result": final_result,
+            "security_remediation_window_state": remediation_window_state,
         }
     )
     _atomic_write(manifest, payload)
@@ -124,6 +138,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--final-result", choices=sorted(SECURITY_CLASSIFICATION_INPUTS), required=True
     )
+    parser.add_argument(
+        "--remediation-window-state",
+        choices=sorted(_REMEDIATION_WINDOW_STATES),
+        default="not_applicable",
+    )
     return parser
 
 
@@ -137,6 +156,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         rebuild_attempted=args.rebuild_attempted,
         rebuild_result=args.rebuild_result,
         final_result=args.final_result,
+        remediation_window_state=args.remediation_window_state,
     )
     return 0
 

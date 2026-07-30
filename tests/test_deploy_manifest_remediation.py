@@ -67,6 +67,7 @@ class DeployManifestRemediationTests(unittest.TestCase):
             self.assertTrue(result["security_rebuild_attempted"])
             self.assertEqual("passed", result["security_rebuild_result"])
             self.assertEqual("clean", result["security_final_result"])
+            self.assertEqual("not_applicable", result["security_remediation_window_state"])
             self.assertEqual(result, json.loads(last_successful.read_text(encoding="utf-8")))
             serialized = json.dumps(result).lower()
             self.assertNotIn("cve-", serialized)

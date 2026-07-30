@@ -47,6 +47,10 @@ inputs:
     description: Canonical security classification; gate_error is accepted as a legacy alias
     required: false
     default: not-run
+  security_remediation_window_state:
+    description: Sanitized aggregate remediation-window state
+    required: false
+    default: not_applicable
   retention:
     description: Immutable manifest files to retain
     required: false
@@ -77,6 +81,7 @@ runs:
         INPUT_SECURITY_REBUILD_ATTEMPTED: ${{ inputs.security_rebuild_attempted }}
         INPUT_SECURITY_REBUILD_RESULT: ${{ inputs.security_rebuild_result }}
         INPUT_SECURITY_FINAL_RESULT: ${{ inputs.security_final_result }}
+        INPUT_SECURITY_REMEDIATION_WINDOW_STATE: ${{ inputs.security_remediation_window_state }}
         INPUT_RETENTION: ${{ inputs.retention }}
       run: |
         set -euo pipefail
@@ -105,4 +110,5 @@ runs:
           --initial-result "$INPUT_SECURITY_INITIAL_RESULT" \
           --rebuild-attempted "$INPUT_SECURITY_REBUILD_ATTEMPTED" \
           --rebuild-result "$INPUT_SECURITY_REBUILD_RESULT" \
-          --final-result "$INPUT_SECURITY_FINAL_RESULT"
+          --final-result "$INPUT_SECURITY_FINAL_RESULT" \
+          --remediation-window-state "$INPUT_SECURITY_REMEDIATION_WINDOW_STATE"

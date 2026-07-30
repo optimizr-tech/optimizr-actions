@@ -46,6 +46,22 @@ inputs:
     description: "Directory for reports and sanitized evidence"
     required: false
     default: "artifacts/security-gate"
+  remediation_window_enabled:
+    description: "Enable governed remediation-window evaluation"
+    required: false
+    default: "false"
+  remediation_window_policy_file:
+    description: "Repository-relative remediation-window policy JSON"
+    required: false
+    default: ""
+  remediation_window_service_scope:
+    description: "Declared service scope for remediation-window evaluation"
+    required: false
+    default: ""
+  remediation_window_exposure_criticality:
+    description: "Declared exposure/criticality for remediation-window evaluation"
+    required: false
+    default: ""
 
 outputs:
   evidence_dir:
@@ -72,6 +88,54 @@ outputs:
   secret_count:
     description: "Number of detected secrets"
     value: ${{ steps.scan.outputs.secret_count }}
+  remediation_window_allowed:
+    description: "Whether every blocking image finding is covered by an active governed window"
+    value: ${{ steps.scan.outputs.remediation_window_allowed }}
+  remediation_state:
+    description: "Aggregate remediation-window state"
+    value: ${{ steps.scan.outputs.remediation_state }}
+  remediation_window_decision:
+    description: "not_applicable, blocked, or allowed_window"
+    value: ${{ steps.scan.outputs.remediation_window_decision }}
+  remediation_window_classification:
+    description: "Classification attached to the aggregate decision"
+    value: ${{ steps.scan.outputs.remediation_window_classification }}
+  remediation_window_count:
+    description: "Number of exact matching policy entries"
+    value: ${{ steps.scan.outputs.remediation_window_count }}
+  remediation_window_blocking_total:
+    description: "Total unique blocking findings evaluated"
+    value: ${{ steps.scan.outputs.remediation_window_blocking_total }}
+  remediation_window_covered:
+    description: "Blocking findings covered by active windows"
+    value: ${{ steps.scan.outputs.remediation_window_covered }}
+  remediation_window_uncovered:
+    description: "Blocking findings not covered by active windows"
+    value: ${{ steps.scan.outputs.remediation_window_uncovered }}
+  remediation_window_rejected_count:
+    description: "Findings rejected by risk or validation policy"
+    value: ${{ steps.scan.outputs.remediation_window_rejected_count }}
+  remediation_window_overdue_count:
+    description: "Findings with overdue policy entries"
+    value: ${{ steps.scan.outputs.remediation_window_overdue_count }}
+  remediation_window_unmatched_count:
+    description: "Findings without exact policy entries"
+    value: ${{ steps.scan.outputs.remediation_window_unmatched_count }}
+  remediation_window_due_soon_count:
+    description: "Covered findings due within 72 hours"
+    value: ${{ steps.scan.outputs.remediation_window_due_soon_count }}
+  nearest_deadline:
+    description: "Nearest reviewed remediation deadline"
+    value: ${{ steps.scan.outputs.nearest_deadline }}
+  policy_digest:
+    description: "SHA256 digest of the evaluated remediation policy"
+    value: ${{ steps.scan.outputs.policy_digest }}
+  evaluator_version:
+    description: "Remediation-window evaluator version"
+    value: ${{ steps.scan.outputs.evaluator_version }}
+  remediation_window_failure_reason:
+    description: "Sanitized remediation-window failure reason"
+    value: ${{ steps.scan.outputs.remediation_window_failure_reason }}
 
 runs:
   using: composite
@@ -97,6 +161,10 @@ runs:
         INPUT_BASELINE_FILE: ${{ inputs.baseline_file }}
         INPUT_DB_MAX_AGE_HOURS: ${{ inputs.db_max_age_hours }}
         INPUT_EVIDENCE_DIR: ${{ inputs.evidence_dir }}
+        INPUT_REMEDIATION_WINDOW_ENABLED: ${{ inputs.remediation_window_enabled }}
+        INPUT_REMEDIATION_WINDOW_POLICY_FILE: ${{ inputs.remediation_window_policy_file }}
+        INPUT_REMEDIATION_WINDOW_SERVICE_SCOPE: ${{ inputs.remediation_window_service_scope }}
+        INPUT_REMEDIATION_WINDOW_EXPOSURE_CRITICALITY: ${{ inputs.remediation_window_exposure_criticality }}
       run: |
         set -euo pipefail
 
@@ -105,6 +173,7 @@ runs:
         report_tool="$action_root/scripts/security_gate/report.py"
         aggregate_tool="$action_root/scripts/security_gate/aggregate.py"
         baseline_tool="$action_root/scripts/security_gate/baseline.py"
+        remediation_window_tool="$action_root/scripts/security_gate/remediation_window.py"
         transport_tool="$action_root/scripts/security_gate/image_transport.py"
         repository="${GITHUB_REPOSITORY:-local/unknown}"
         cache_namespace="$(printf '%s' "$repository" | sha256sum | cut -c1-24)"
@@ -121,6 +190,22 @@ runs:
           echo "unfixed_vulnerability_count=0"
           echo "misconfiguration_count=0"
           echo "secret_count=0"
+          echo "remediation_window_allowed=false"
+          echo "remediation_state=not_applicable"
+          echo "remediation_window_decision=not_applicable"
+          echo "remediation_window_classification="
+          echo "remediation_window_count=0"
+          echo "remediation_window_blocking_total=0"
+          echo "remediation_window_covered=0"
+          echo "remediation_window_uncovered=0"
+          echo "remediation_window_rejected_count=0"
+          echo "remediation_window_overdue_count=0"
+          echo "remediation_window_unmatched_count=0"
+          echo "remediation_window_due_soon_count=0"
+          echo "nearest_deadline="
+          echo "policy_digest="
+          echo "evaluator_version=2"
+          echo "remediation_window_failure_reason="
         } >> "$GITHUB_OUTPUT"
 
         for path in "$cache_root" "$cache_dir"; do
@@ -166,6 +251,13 @@ runs:
             exit 2
             ;;
         esac
+        case "$INPUT_REMEDIATION_WINDOW_ENABLED" in
+          true|false) ;;
+          *)
+            echo "::error::remediation_window_enabled must be true or false" >&2
+            exit 2
+            ;;
+        esac
         if [ "$INPUT_IGNORE_UNFIXED" = false ]; then
           echo "::notice title=Security policy updated::ignore_unfixed=false is deprecated; vulnerabilities without an available fix remain visible but do not block deployment."
         fi
@@ -206,6 +298,8 @@ runs:
         aggregate_status=0
         scanner_error=0
         summary_paths=()
+        remediation_observation_paths=()
+        remediation_summary="$evidence_dir/remediation-window-summary.json"
         temporary_image=""
         transport_metadata=""
         cleanup_transport_artifacts() {
@@ -305,7 +399,6 @@ runs:
               rm -f "$transport_metadata" "$temporary_image"
               exit 2
             fi
-            rm -f "$transport_metadata"
           fi
 
           exception_args=(
@@ -414,6 +507,30 @@ runs:
           summary_paths+=("$finding_summary")
           echo "::endgroup::"
 
+          window_observation="${prefix}-remediation-window-observations.json"
+          printf '%s\n' '{"schema_version":1,"observations":[]}' > "$window_observation"
+          if [ "$INPUT_REMEDIATION_WINDOW_ENABLED" = true ] && [ "$INPUT_SCAN_TYPE" = image ] && [ "$scan_status" -eq 1 ]; then
+            if [ -z "$INPUT_REMEDIATION_WINDOW_SERVICE_SCOPE" ] || [ -z "$INPUT_REMEDIATION_WINDOW_EXPOSURE_CRITICALITY" ]; then
+              echo "::error::remediation window service scope and exposure/criticality are required" >&2
+              echo "remediation_window_failure_reason=window_context_missing" >> "$GITHUB_OUTPUT"
+              scan_status=2
+              scanner_error=1
+            elif ! python3 "$remediation_window_tool" collect \
+              --report "$enforced_json_report" \
+              --transport-metadata "$transport_metadata" \
+              --output "$window_observation" \
+              --service-scope "$INPUT_REMEDIATION_WINDOW_SERVICE_SCOPE" \
+              --exposure-criticality "$INPUT_REMEDIATION_WINDOW_EXPOSURE_CRITICALITY" \
+              --source-sha "$head_sha" \
+              --image-identity "$identity"; then
+              echo "::error::failed to collect remediation-window observations" >&2
+              echo "remediation_window_failure_reason=window_observation_failed" >> "$GITHUB_OUTPUT"
+              scan_status=2
+              scanner_error=1
+            fi
+          fi
+          remediation_observation_paths+=("$window_observation")
+
           if [ "$scan_status" -gt 1 ]; then
             scanner_error=1
           fi
@@ -450,12 +567,42 @@ runs:
             --report "baseline=$baseline_summary"
             --report "sarif=$sarif_report"
             --report "summary=$finding_summary"
+            --report "remediation_observations=$window_observation"
             --result "$result"
             --ignore-unfixed
           )
           python3 "$evidence_tool" "${evidence_args[@]}"
-          rm -f "$temporary_image"
+          rm -f "$temporary_image" "$transport_metadata"
         done
+
+        remediation_eval_args=(
+          evaluate
+          --workspace "${GITHUB_WORKSPACE:-$PWD}"
+          --output "$remediation_summary"
+          --github-output "$GITHUB_OUTPUT"
+          --enabled "$INPUT_REMEDIATION_WINDOW_ENABLED"
+        )
+        if [ "$INPUT_REMEDIATION_WINDOW_ENABLED" = true ]; then
+          if [ "$INPUT_SCAN_TYPE" != image ] || [ -z "$INPUT_REMEDIATION_WINDOW_POLICY_FILE" ]; then
+            echo "::error::enabled remediation windows require an image scan and repository policy" >&2
+            echo "remediation_window_failure_reason=window_policy_unavailable" >> "$GITHUB_OUTPUT"
+            scanner_error=1
+            aggregate_status=1
+          else
+            remediation_eval_args+=(--policy "$INPUT_REMEDIATION_WINDOW_POLICY_FILE")
+            for observation_path in "${remediation_observation_paths[@]}"; do
+              remediation_eval_args+=(--observations "$observation_path")
+            done
+          fi
+        fi
+        if [ "$scanner_error" -eq 0 ] || [ "$INPUT_REMEDIATION_WINDOW_ENABLED" = false ]; then
+          if ! python3 "$remediation_window_tool" "${remediation_eval_args[@]}"; then
+            echo "::error::remediation-window evaluation failed closed" >&2
+            echo "remediation_window_failure_reason=window_evaluation_failed" >> "$GITHUB_OUTPUT"
+            scanner_error=1
+            aggregate_status=1
+          fi
+        fi
 
         aggregate_args=()
         for summary_path in "${summary_paths[@]}"; do
