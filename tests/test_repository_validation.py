@@ -1,9 +1,11 @@
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -13,6 +15,7 @@ from repository_validation.runner import (  # noqa: E402
     parse_args_json,
     resolve_script,
     run_validation,
+    verify_trusted_candidate,
 )
 
 
@@ -72,6 +75,46 @@ class RepositoryValidationTests(unittest.TestCase):
             self.assertEqual(payload["result"]["exit_code"], 0)
             self.assertNotIn("environment", payload)
             self.assertNotIn("secret-value", evidence.read_text())
+
+    def test_trusted_candidate_fetch_uses_ephemeral_token_without_argv_or_persistence(self):
+        calls: list[tuple[list[str], dict[str, object]]] = []
+
+        def fake_run(argv, **kwargs):
+            calls.append((list(argv), dict(kwargs)))
+            return subprocess.CompletedProcess(argv, 0)
+
+        with tempfile.TemporaryDirectory() as tmp, patch(
+            "repository_validation.runner.subprocess.run", side_effect=fake_run
+        ):
+            verify_trusted_candidate(
+                Path(tmp),
+                "a" * 40,
+                "refs/heads/main",
+                github_token="private-token-value",
+            )
+
+        self.assertEqual(len(calls), 2)
+        fetch_argv, fetch_kwargs = calls[0]
+        self.assertEqual(
+            fetch_argv,
+            ["git", "fetch", "--no-tags", "origin", "refs/heads/main"],
+        )
+        self.assertNotIn("private-token-value", " ".join(fetch_argv))
+        fetch_env = fetch_kwargs["env"]
+        self.assertIsInstance(fetch_env, dict)
+        self.assertEqual(fetch_env["GIT_CONFIG_COUNT"], "1")
+        self.assertEqual(
+            fetch_env["GIT_CONFIG_KEY_0"],
+            "http.https://github.com/.extraheader",
+        )
+        self.assertTrue(
+            str(fetch_env["GIT_CONFIG_VALUE_0"]).startswith("AUTHORIZATION: basic ")
+        )
+        self.assertNotIn("private-token-value", str(fetch_env["GIT_CONFIG_VALUE_0"]))
+
+        merge_argv, merge_kwargs = calls[1]
+        self.assertEqual(merge_argv[:3], ["git", "merge-base", "--is-ancestor"])
+        self.assertNotIn("env", merge_kwargs)
 
 
 if __name__ == "__main__":
