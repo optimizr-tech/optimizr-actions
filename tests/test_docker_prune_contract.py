@@ -38,6 +38,12 @@ class DockerPruneContractTests(unittest.TestCase):
                     "docker-prune-safe@v1",
                     content,
                 )
+                self.assertIn(
+                    "uses: optimizr-tech/optimizr-actions/.github/actions/"
+                    "deploy-snapshot-retention@v1",
+                    content,
+                )
+                self.assertIn("deploy_snapshot_retention_count:", content)
                 self.assertNotIn("docker container prune", content)
                 self.assertNotIn("docker image prune", content)
                 self.assertNotIn("docker builder prune", content)
