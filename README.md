@@ -53,7 +53,7 @@ The portable [`security-gate`](.github/actions/security-gate/action.yml) action 
 
 Actionable image findings may enter one bounded pull, rebuild and rescan cycle through [`security-rebuild`](.github/actions/security-rebuild/action.yml). The final security enforcement remains before rollout, and failed remediation leaves the currently running known-good stack unchanged.
 
-Inputs, exception policy, sanitized classification outputs, remediation evidence, runner requirements, billing-outage operation, migration, and rollback are documented in [`docs/SECURITY_GATE.md`](docs/SECURITY_GATE.md). The proposed cross-repository remediation-window contract is in [`docs/superpowers/specs/2026-07-30-security-remediation-windows-design.md`](docs/superpowers/specs/2026-07-30-security-remediation-windows-design.md); it is design-only until reviewed.
+Inputs, exception policy, sanitized classification outputs, remediation evidence, runner requirements, billing-outage operation, migration, and rollback are documented in [`docs/SECURITY_GATE.md`](docs/SECURITY_GATE.md).
 
 Repository dependency changes remain owned by Dependabot. The governed native auto-merge reusable and consumer template are documented in [`docs/DEPENDABOT_SECURITY_AUTOMERGE.md`](docs/DEPENDABOT_SECURITY_AUTOMERGE.md). The workflow enables auto-merge only for verified eligible updates and relies on protected-branch checks before GitHub performs the merge.
 
