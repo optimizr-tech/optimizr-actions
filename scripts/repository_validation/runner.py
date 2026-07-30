@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 from datetime import datetime, timezone
 import json
@@ -179,13 +180,45 @@ def run_validation(
     return exit_code
 
 
-def verify_trusted_candidate(workspace: Path, candidate_sha: str, trusted_ref: str) -> None:
+def _ephemeral_git_auth_env(github_token: str) -> dict[str, str]:
+    """Return a subprocess-only Git config that authenticates without persistence."""
+    env = os.environ.copy()
+    env.pop("VALIDATION_GITHUB_TOKEN", None)
+    try:
+        config_index = int(env.get("GIT_CONFIG_COUNT", "0"))
+    except ValueError as exc:
+        raise ValidationError("GIT_CONFIG_COUNT must be an integer") from exc
+    if config_index < 0 or config_index > 64:
+        raise ValidationError("GIT_CONFIG_COUNT is outside the supported range")
+
+    basic_credential = base64.b64encode(
+        f"x-access-token:{github_token}".encode("utf-8")
+    ).decode("ascii")
+    env["GIT_CONFIG_COUNT"] = str(config_index + 1)
+    env[f"GIT_CONFIG_KEY_{config_index}"] = "http.https://github.com/.extraheader"
+    env[f"GIT_CONFIG_VALUE_{config_index}"] = f"AUTHORIZATION: basic {basic_credential}"
+    return env
+
+
+def verify_trusted_candidate(
+    workspace: Path,
+    candidate_sha: str,
+    trusted_ref: str,
+    *,
+    github_token: str = "",
+) -> None:
     if not SHA_RE.fullmatch(candidate_sha):
         raise ValidationError("candidate_sha must be a lowercase 40-character commit SHA")
     if not trusted_ref.startswith("refs/heads/"):
         raise ValidationError("trusted_ref must be a full branch ref")
     remote_ref = "origin/" + trusted_ref.removeprefix("refs/heads/")
-    subprocess.run(["git", "fetch", "--no-tags", "origin", trusted_ref], cwd=workspace, check=True)
+    fetch_kwargs: dict[str, Any] = {"cwd": workspace, "check": True}
+    if github_token:
+        fetch_kwargs["env"] = _ephemeral_git_auth_env(github_token)
+    subprocess.run(
+        ["git", "fetch", "--no-tags", "origin", trusted_ref],
+        **fetch_kwargs,
+    )
     result = subprocess.run(
         ["git", "merge-base", "--is-ancestor", candidate_sha, remote_ref],
         cwd=workspace,
@@ -219,7 +252,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         if args.command == "check-trust":
-            verify_trusted_candidate(Path(args.workspace), args.candidate_sha, args.trusted_ref)
+            verify_trusted_candidate(
+                Path(args.workspace),
+                args.candidate_sha,
+                args.trusted_ref,
+                github_token=os.environ.get("VALIDATION_GITHUB_TOKEN", ""),
+            )
             return 0
         status = run_validation(
             workspace=Path(args.workspace),
