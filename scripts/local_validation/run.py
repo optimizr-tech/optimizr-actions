@@ -21,7 +21,7 @@ _ID_RE = re.compile(r"^[a-z][a-z0-9-]{0,79}$")
 _SERVICE_RE = re.compile(r"^[a-z][a-z0-9._-]{0,79}$")
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _ALLOWED_INTERPRETERS = {"python", "bash"}
-_ALLOWED_TOOLS = {"python", "git", "docker", "docker-compose", "uv"}
+_ALLOWED_TOOLS = {"python", "git", "docker", "docker-compose", "uv", "trivy"}
 _ALLOWED_RESULTS = {"passed", "failed", "skipped"}
 _SECRET_PATTERNS = (
     re.compile(r"(?i)(password|passwd|secret|token|authorization|cookie|private[_ .-]?key)\s*[:=]"),
@@ -121,7 +121,7 @@ def normalize_preset(raw: Any) -> dict[str, Any]:
     ):
         raise ValidationError(
             "required_tools must be a non-empty subset of python, git, docker, "
-            "docker-compose and uv"
+            "docker-compose, uv and trivy"
         )
     required_tools = list(dict.fromkeys(required_tools))
 
