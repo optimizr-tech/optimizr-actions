@@ -590,6 +590,67 @@ def observations_from_trivy_report(
     return [observations[key] for key in sorted(observations)]
 
 
+def _load_transport_lineage(path: Path) -> list[str]:
+    payload = _load_json(path, "transport metadata")
+    return list(
+        _normalize_digest_list(
+            list(payload.get("lineage_digests") or []),
+            label="transport_metadata.lineage_digests",
+        )
+    )
+
+
+def write_observations_file(path: Path, observations: Sequence[Mapping[str, Any]]) -> None:
+    payload = {
+        "schema_version": 1,
+        "observations": [dict(item) for item in observations],
+    }
+    _atomic_write(path, payload)
+
+
+def load_observation_files(paths: Sequence[Path]) -> list[Mapping[str, Any]]:
+    observations: list[Mapping[str, Any]] = []
+    for index, path in enumerate(paths):
+        payload = _load_json(path, f"observations[{index}]")
+        raw = payload.get("observations")
+        if not isinstance(raw, list):
+            raise RemediationWindowError(f"observations[{index}].observations must be an array")
+        for item in raw:
+            if not isinstance(item, Mapping):
+                raise RemediationWindowError(f"observations[{index}] entries must be objects")
+            observations.append(item)
+    return observations
+
+
+def _write_github_output(path: Path, result: Mapping[str, Any]) -> None:
+    if path.is_symlink():
+        raise RemediationWindowError("github output must not be a symlink")
+    fields = {
+        "remediation_window_allowed": "true" if result.get("remediation_window_allowed") else "false",
+        "remediation_state": result.get("remediation_state", "not_applicable"),
+        "remediation_window_decision": result.get("decision", "not_applicable"),
+        "remediation_window_classification": result.get("classification", ""),
+        "remediation_window_count": str(result.get("matching_entry_count", 0)),
+        "remediation_window_blocking_total": str(result.get("blocking_total", 0)),
+        "remediation_window_covered": str(result.get("window_covered", 0)),
+        "remediation_window_uncovered": str(result.get("uncovered_blocking_findings", 0)),
+        "remediation_window_rejected_count": str(result.get("rejected_count", 0)),
+        "remediation_window_overdue_count": str(result.get("overdue_count", 0)),
+        "remediation_window_unmatched_count": str(result.get("unmatched_count", 0)),
+        "remediation_window_due_soon_count": str(result.get("due_soon_count", 0)),
+        "nearest_deadline": result.get("nearest_deadline", ""),
+        "policy_digest": result.get("policy_digest", ""),
+        "evaluator_version": result.get("evaluator_version", ""),
+        "remediation_window_failure_reason": result.get("failure_reason", ""),
+    }
+    with path.open("a", encoding="utf-8") as stream:
+        for key, value in fields.items():
+            text = str(value)
+            if "\n" in text or "\r" in text:
+                raise RemediationWindowError(f"github output field {key} contains a newline")
+            stream.write(f"{key}={text}\n")
+
+
 def _atomic_write(path: Path, payload: Mapping[str, Any]) -> None:
     if path.is_symlink():
         raise RemediationWindowError("output must not be a symlink")
@@ -611,41 +672,66 @@ def _boolean(raw: str) -> bool:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--workspace", type=Path, required=True)
-    parser.add_argument("--policy", required=True, help="Repository-relative policy path")
-    parser.add_argument("--observations", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--enabled", type=_boolean, required=True)
-    parser.add_argument("--evaluation-time")
-    parser.add_argument("--test-mode", action="store_true")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    collect = subparsers.add_parser("collect")
+    collect.add_argument("--report", type=Path, required=True)
+    collect.add_argument("--transport-metadata", type=Path, required=True)
+    collect.add_argument("--output", type=Path, required=True)
+    collect.add_argument("--service-scope", required=True)
+    collect.add_argument("--exposure-criticality", required=True)
+    collect.add_argument("--source-sha", required=True)
+    collect.add_argument("--image-identity", required=True)
+    collect.add_argument("--fixed-image-verified", type=_boolean, default=False)
+    collect.add_argument("--known-exploited-id", action="append", default=[])
+
+    evaluate = subparsers.add_parser("evaluate")
+    evaluate.add_argument("--workspace", type=Path, required=True)
+    evaluate.add_argument("--policy", default="", help="Repository-relative policy path")
+    evaluate.add_argument("--observations", type=Path, action="append", default=[])
+    evaluate.add_argument("--output", type=Path, required=True)
+    evaluate.add_argument("--github-output", type=Path)
+    evaluate.add_argument("--enabled", type=_boolean, required=True)
+    evaluate.add_argument("--evaluation-time")
+    evaluate.add_argument("--test-mode", action="store_true")
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
     try:
+        args = _parser().parse_args(argv)
+        if args.command == "collect":
+            lineage = _load_transport_lineage(args.transport_metadata)
+            observations = observations_from_trivy_report(
+                args.report,
+                service_scope=args.service_scope,
+                exposure_criticality=args.exposure_criticality,
+                source_sha=args.source_sha,
+                image_identity=args.image_identity,
+                image_lineage_digests=lineage,
+                fixed_image_verified=args.fixed_image_verified,
+                known_exploited_ids=args.known_exploited_id,
+            )
+            write_observations_file(args.output, observations)
+            return 0
+
         if args.evaluation_time and not args.test_mode:
             raise RemediationWindowError("evaluation-time override is allowed only in test mode")
         if not args.enabled:
             result = evaluate_remediation_windows(
-                policy_path=None,
-                observations=[],
-                enabled=False,
+                policy_path=None, observations=[], enabled=False,
                 evaluation_time=args.evaluation_time,
             )
         else:
             policy = resolve_policy_path(args.workspace, args.policy)
-            payload = _load_json(args.observations, "observations")
-            raw_observations = payload.get("observations")
-            if not isinstance(raw_observations, list):
-                raise RemediationWindowError("observations field must be an array")
+            observations = load_observation_files(args.observations)
             result = evaluate_remediation_windows(
-                policy_path=policy,
-                observations=raw_observations,
-                enabled=True,
+                policy_path=policy, observations=observations, enabled=True,
                 evaluation_time=args.evaluation_time,
             )
         _atomic_write(args.output, result)
+        if args.github_output:
+            _write_github_output(args.github_output, result)
         return 0
     except (RemediationWindowError, OSError, KeyError) as exc:
         print(f"security remediation-window error: {exc}", file=sys.stderr)

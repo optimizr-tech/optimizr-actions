@@ -404,6 +404,73 @@ class SecurityGateRemediationWindowTests(unittest.TestCase):
         self.assertEqual(2, len(observations))
         self.assertEqual({"CVE-2026-0001", "CVE-2026-0002"}, {o["advisory_id"] for o in observations})
 
+    def test_cli_collects_multiple_image_reports_before_one_evaluation(self) -> None:
+        digest_a = "sha256:" + "a" * 64
+        digest_b = "sha256:" + "b" * 64
+        policy = self._policy([
+            self._entry(entry_id="rw-1", advisory="CVE-2026-0001",
+                package="pkg:deb/debian/openssl@1.2.3", installed="1.2.3",
+                fixed="1.2.4", digest=digest_a),
+            self._entry(entry_id="rw-2", advisory="CVE-2026-0002",
+                package="pkg:apk/alpine/libssl@3.0", installed="3.0",
+                fixed="3.1", digest=digest_b),
+        ])
+        observation_files = []
+        for index, (digest, advisory, purl, installed, fixed) in enumerate((
+            (digest_a, "CVE-2026-0001", "pkg:deb/debian/openssl@1.2.3", "1.2.3", "1.2.4"),
+            (digest_b, "CVE-2026-0002", "pkg:apk/alpine/libssl@3.0", "3.0", "3.1"),
+        )):
+            report = self.root / f"report-{index}.json"
+            report.write_text(json.dumps({"Results": [{"Vulnerabilities": [{
+                "VulnerabilityID": advisory, "Severity": "HIGH",
+                "PkgIdentifier": {"PURL": purl},
+                "InstalledVersion": installed, "FixedVersion": fixed,
+            }]}]}), encoding="utf-8")
+            transport = self.root / f"transport-{index}.json"
+            transport.write_text(json.dumps({"lineage_digests": [digest]}), encoding="utf-8")
+            observations = self.root / f"observations-{index}.json"
+            status = self.module.main([
+                "collect", "--report", str(report),
+                "--transport-metadata", str(transport),
+                "--output", str(observations),
+                "--service-scope", "monitoring",
+                "--exposure-criticality", "internal",
+                "--source-sha", "c" * 40,
+                "--image-identity", "sha256:" + chr(ord("d") + index) * 64,
+            ])
+            self.assertEqual(0, status)
+            observation_files.append(observations)
+
+        output = self.root / "summary.json"
+        github_output = self.root / "github-output.txt"
+        args = [
+            "evaluate", "--workspace", str(self.workspace),
+            "--policy", str(policy.relative_to(self.workspace)),
+            "--output", str(output), "--github-output", str(github_output),
+            "--enabled", "true",
+            "--evaluation-time", "2026-07-31T00:00:00Z", "--test-mode",
+        ]
+        for path in observation_files:
+            args.extend(["--observations", str(path)])
+        self.assertEqual(0, self.module.main(args))
+        result = json.loads(output.read_text(encoding="utf-8"))
+        self.assertTrue(result["remediation_window_allowed"])
+        self.assertEqual(2, result["blocking_total"])
+        self.assertEqual(0, result["uncovered_blocking_findings"])
+        outputs = github_output.read_text(encoding="utf-8")
+        self.assertIn("remediation_window_allowed=true", outputs)
+        self.assertIn("remediation_window_uncovered=0", outputs)
+
+    def test_cli_rejects_evaluation_time_override_outside_test_mode(self) -> None:
+        output = self.root / "summary.json"
+        status = self.module.main([
+            "evaluate", "--workspace", str(self.workspace),
+            "--output", str(output), "--enabled", "false",
+            "--evaluation-time", "2026-07-31T00:00:00Z",
+        ])
+        self.assertEqual(2, status)
+        self.assertFalse(output.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

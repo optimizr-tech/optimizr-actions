@@ -82,9 +82,10 @@ class SecurityGateContractTests(unittest.TestCase):
             self.assertIn("remediation_window_policy_file", content)
             self.assertIn("remediation_window_service_scope", content)
             self.assertIn("remediation_window_exposure_criticality", content)
-            self.assertIn("remediation_window_evaluated_at", content)
+            self.assertNotIn("remediation_window_evaluated_at", content)
 
         self.assertIn("remediation_window_allowed", action)
+        self.assertIn("remediation_window_uncovered", action)
         self.assertIn("remediation_state", action)
         self.assertIn("remediation_window_allowed", workflow)
         self.assertIn("remediation_window_allowed", self_hosted)
