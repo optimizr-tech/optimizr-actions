@@ -118,12 +118,22 @@ jobs:
           set -euo pipefail
           cat scripts/maintenance/pr108_patch.b64.part* > /tmp/pr108_patch.b64
           sha256sum /tmp/pr108_patch.b64
+          LC_ALL=C grep -n '[^A-Za-z0-9+/=[:space:]]' /tmp/pr108_patch.b64 || true
           base64 --decode /tmp/pr108_patch.b64 > /tmp/pr108_patch.py
           printf '%s  %s\n' \
             '1a1c3e0e35ee977faca3195e3db635bd37fda6af542fa91deeba313d4bcc9464' \
             '/tmp/pr108_patch.py' | sha256sum --check --strict
           python3 -m py_compile /tmp/pr108_patch.py
           python3 /tmp/pr108_patch.py
+
+      - name: Upload patch transport diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: pr108-patch-transport-${{ github.run_id }}
+          path: /tmp/pr108_patch.b64
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Validate changed contracts
         shell: bash
