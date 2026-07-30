@@ -11,6 +11,19 @@ import re
 import sys
 from typing import Any, Iterable, Mapping, Sequence
 
+import importlib.util
+
+_LIFECYCLE_PATH = Path(__file__).with_name("remediation_lifecycle.py")
+_LIFECYCLE_SPEC = importlib.util.spec_from_file_location(
+    "security_gate_remediation_lifecycle", _LIFECYCLE_PATH
+)
+if _LIFECYCLE_SPEC is None or _LIFECYCLE_SPEC.loader is None:
+    raise RuntimeError("cannot load remediation lifecycle module")
+_LIFECYCLE_MODULE = importlib.util.module_from_spec(_LIFECYCLE_SPEC)
+_LIFECYCLE_SPEC.loader.exec_module(_LIFECYCLE_MODULE)
+RemediationLifecycleError = _LIFECYCLE_MODULE.RemediationLifecycleError
+normalize_lifecycle = _LIFECYCLE_MODULE.normalize_lifecycle
+
 _SHA256_DIGEST = re.compile(r"sha256:[0-9a-fA-F]{64}\Z")
 _GIT_SHA = re.compile(r"[0-9a-fA-F]{40}\Z")
 _RFC3339_Z = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\Z")
@@ -19,7 +32,7 @@ _ALLOWED_CLASSIFICATION = "actionable_vulnerability"
 _BLOCKED_CRITICAL_EXPOSURES = {"internet-facing", "privileged-boundary"}
 _MAX_WINDOW_DAYS = {"CRITICAL": 7, "HIGH": 30}
 _DUE_SOON = timedelta(hours=72)
-_EVALUATOR_VERSION = "2"
+_EVALUATOR_VERSION = "3"
 
 
 class RemediationWindowError(ValueError):
@@ -142,50 +155,6 @@ def _policy_digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _validate_history(entry: Mapping[str, Any], *, first_seen: datetime) -> list[dict[str, str]]:
-    raw = entry.get("history")
-    if raw is None:
-        return []
-    if not isinstance(raw, list) or not raw:
-        raise RemediationWindowError("policy entry history must be a non-empty array")
-    history: list[dict[str, str]] = []
-    previous_deadline: datetime | None = None
-    for index, revision in enumerate(raw):
-        if not isinstance(revision, Mapping):
-            raise RemediationWindowError(f"policy entry history[{index}] must be an object")
-        revision_first = _parse_rfc3339_utc(
-            _required_text(revision, "first_seen_at", label=f"history[{index}]"),
-            label=f"history[{index}].first_seen_at",
-        )
-        deadline = _parse_rfc3339_utc(
-            _required_text(revision, "deadline_at", label=f"history[{index}]"),
-            label=f"history[{index}].deadline_at",
-        )
-        reviewed_at = _parse_rfc3339_utc(
-            _required_text(revision, "reviewed_at", label=f"history[{index}]"),
-            label=f"history[{index}].reviewed_at",
-        )
-        reviewed_by = _required_text(revision, "reviewed_by", label=f"history[{index}]")
-        reason = _required_text(revision, "reason", label=f"history[{index}]")
-        if revision_first != first_seen:
-            raise RemediationWindowError("policy entry history must preserve first_seen_at")
-        if deadline <= first_seen:
-            raise RemediationWindowError("policy entry history deadline must follow first_seen_at")
-        if previous_deadline is not None and deadline < previous_deadline:
-            raise RemediationWindowError("policy entry history deadlines must be monotonic")
-        previous_deadline = deadline
-        history.append(
-            {
-                "first_seen_at": _format_utc(revision_first),
-                "deadline_at": _format_utc(deadline),
-                "reviewed_at": _format_utc(reviewed_at),
-                "reviewed_by": reviewed_by,
-                "reason": reason,
-            }
-        )
-    return history
-
-
 def load_policy(path: Path, *, reference_time: str | None = None) -> dict[str, Any]:
     payload = _load_json(path, "policy")
     if payload.get("version") != 1:
@@ -233,9 +202,16 @@ def load_policy(path: Path, *, reference_time: str | None = None) -> dict[str, A
             raise RemediationWindowError("policy reviewed_at must not be in the future")
         if deadline <= first_seen:
             raise RemediationWindowError("policy deadline_at must be after first_seen_at")
-        status = _required_text(raw, "status", label=label)
-        if status != "active":
-            raise RemediationWindowError("policy entries must be active to authorize a window")
+        try:
+            lifecycle = normalize_lifecycle(
+                raw,
+                first_seen=first_seen,
+                original_deadline=deadline,
+                reference=reference,
+            )
+        except RemediationLifecycleError as exc:
+            raise RemediationWindowError(str(exc)) from exc
+        status = lifecycle["status"]
 
         entries.append(
             {
@@ -243,7 +219,8 @@ def load_policy(path: Path, *, reference_time: str | None = None) -> dict[str, A
                 "fingerprint": fingerprint,
                 "reason": _required_text(raw, "reason", label=label),
                 "first_seen_at": _format_utc(first_seen),
-                "deadline_at": _format_utc(deadline),
+                "original_deadline_at": lifecycle["original_deadline_at"],
+                "deadline_at": lifecycle["effective_deadline_at"],
                 "owner": _required_text(raw, "owner", label=label),
                 "reviewer": _required_text(raw, "reviewer", label=label),
                 "statement": _required_text(raw, "statement", label=label),
@@ -251,7 +228,8 @@ def load_policy(path: Path, *, reference_time: str | None = None) -> dict[str, A
                 "reviewed_at": _format_utc(reviewed_at),
                 "reviewed_by": _required_text(raw, "reviewed_by", label=label),
                 "status": status,
-                "history": _validate_history(raw, first_seen=first_seen),
+                "history": lifecycle["history"],
+                "revision_count": lifecycle["revision_count"],
             }
         )
         seen_ids.add(entry_id)
@@ -323,7 +301,11 @@ def _finding_result(
         "state": state,
         "failure_reason": failure_reason,
         "policy_entry_id": entry["id"] if entry else "",
+        "policy_entry_status": entry["status"] if entry else "",
+        "first_seen_at": entry["first_seen_at"] if entry else "",
+        "original_deadline_at": entry["original_deadline_at"] if entry else "",
         "deadline_at": entry["deadline_at"] if entry else "",
+        "revision_count": entry["revision_count"] if entry else 0,
     }
 
 
@@ -348,6 +330,13 @@ def _evaluate_one(
     entry = entries_by_fingerprint.get(_fingerprint_key(observation))
     if entry is None:
         return _finding_result(observation, state="unmatched", failure_reason="policy_entry_not_found")
+    if entry["status"] != "active":
+        return _finding_result(
+            observation,
+            state="reintroduced",
+            failure_reason="finding_reintroduced",
+            entry=entry,
+        )
 
     first_seen = _parse_rfc3339_utc(entry["first_seen_at"], label="policy.first_seen_at")
     deadline = _parse_rfc3339_utc(entry["deadline_at"], label="policy.deadline_at")
@@ -380,6 +369,7 @@ def _empty_result() -> dict[str, Any]:
         "rejected_count": 0,
         "overdue_count": 0,
         "unmatched_count": 0,
+        "reintroduced_count": 0,
         "due_soon_count": 0,
         "matching_entry_count": 0,
         "nearest_deadline": "",
@@ -431,7 +421,11 @@ def evaluate_remediation_windows(
                     "state": "rejected",
                     "failure_reason": str(exc),
                     "policy_entry_id": "",
+                    "policy_entry_status": "",
+                    "first_seen_at": "",
+                    "original_deadline_at": "",
                     "deadline_at": "",
+                    "revision_count": 0,
                 }
             )
             continue
@@ -468,6 +462,9 @@ def evaluate_remediation_windows(
     result["rejected_count"] = sum(item["state"] == "rejected" for item in findings)
     result["overdue_count"] = sum(item["state"] == "overdue" for item in findings)
     result["unmatched_count"] = sum(item["state"] == "unmatched" for item in findings)
+    result["reintroduced_count"] = sum(
+        item["state"] == "reintroduced" for item in findings
+    )
     result["due_soon_count"] = sum(item["state"] == "due_soon" for item in findings)
     result["matching_entry_count"] = sum(bool(item["policy_entry_id"]) for item in findings)
     result["uncovered_blocking_findings"] = result["blocking_total"] - result["window_covered"]
@@ -483,7 +480,10 @@ def evaluate_remediation_windows(
         return result
 
     result["decision"] = "blocked"
-    if result["overdue_count"]:
+    if result["reintroduced_count"]:
+        result["remediation_state"] = "reintroduced"
+        result["failure_reason"] = "finding_reintroduced"
+    elif result["overdue_count"]:
         result["remediation_state"] = "overdue"
         result["failure_reason"] = "window_overdue"
     elif result["rejected_count"]:
@@ -637,6 +637,9 @@ def _write_github_output(path: Path, result: Mapping[str, Any]) -> None:
         "remediation_window_rejected_count": str(result.get("rejected_count", 0)),
         "remediation_window_overdue_count": str(result.get("overdue_count", 0)),
         "remediation_window_unmatched_count": str(result.get("unmatched_count", 0)),
+        "remediation_window_reintroduced_count": str(
+            result.get("reintroduced_count", 0)
+        ),
         "remediation_window_due_soon_count": str(result.get("due_soon_count", 0)),
         "nearest_deadline": result.get("nearest_deadline", ""),
         "policy_digest": result.get("policy_digest", ""),
