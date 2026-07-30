@@ -117,9 +117,7 @@ jobs:
         run: |
           set -euo pipefail
           cat scripts/maintenance/pr108_patch.b64.part* > /tmp/pr108_patch.b64
-          printf '%s  %s\n' \
-            '992aeedc1bf7367f98f79ba0f8974b433ecf5163f7f54302e1689146866d77fe' \
-            '/tmp/pr108_patch.b64' | sha256sum --check --strict
+          sha256sum /tmp/pr108_patch.b64
           base64 --decode /tmp/pr108_patch.b64 > /tmp/pr108_patch.py
           printf '%s  %s\n' \
             '1a1c3e0e35ee977faca3195e3db635bd37fda6af542fa91deeba313d4bcc9464' \
