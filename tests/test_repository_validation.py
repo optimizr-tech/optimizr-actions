@@ -83,7 +83,11 @@ class RepositoryValidationTests(unittest.TestCase):
             calls.append((list(argv), dict(kwargs)))
             return subprocess.CompletedProcess(argv, 0)
 
-        with tempfile.TemporaryDirectory() as tmp, patch(
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(
+            os.environ,
+            {"VALIDATION_GITHUB_TOKEN": "private-token-value"},
+            clear=False,
+        ), patch(
             "repository_validation.runner.subprocess.run", side_effect=fake_run
         ):
             verify_trusted_candidate(
@@ -102,6 +106,7 @@ class RepositoryValidationTests(unittest.TestCase):
         self.assertNotIn("private-token-value", " ".join(fetch_argv))
         fetch_env = fetch_kwargs["env"]
         self.assertIsInstance(fetch_env, dict)
+        self.assertNotIn("VALIDATION_GITHUB_TOKEN", fetch_env)
         self.assertEqual(fetch_env["GIT_CONFIG_COUNT"], "1")
         self.assertEqual(
             fetch_env["GIT_CONFIG_KEY_0"],
