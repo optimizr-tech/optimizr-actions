@@ -176,6 +176,7 @@ jobs:
         shell: bash
         env:
           PROFILE: ${{ inputs.profile }}
+          IMAGE_REFS: ${{ inputs.image_refs }}
           PROFILE_RESULT: ${{ needs.profile.result }}
           STATIC_RESULT: ${{ needs.static-lint.result }}
           FILESYSTEM_RESULT: ${{ needs.filesystem-security.result }}
@@ -201,19 +202,49 @@ jobs:
           }
           if any(value not in allowed_results for value in jobs.values()):
               raise SystemExit("unexpected job result")
-          failed = [name for name, result in jobs.items() if result in {"failure", "cancelled"}]
+
+          profile = os.environ["PROFILE"]
+          required = {"profile", "static_lint", "filesystem_security"}
+          if profile in {"python", "node", "monorepo"}:
+              required.update({"dependency_policy", "sast"})
+          if profile in {"compose", "infra", "monorepo"} and os.environ["IMAGE_REFS"].strip():
+              required.add("supply_chain")
+
+          failed = sorted(
+              name for name, result in jobs.items()
+              if result in {"failure", "cancelled"}
+          )
+          unexpectedly_skipped = sorted(
+              name for name in required if jobs[name] == "skipped"
+          )
+          required_not_success = sorted(
+              name for name in required if jobs[name] != "success"
+          )
+          blocking = sorted(set(failed + required_not_success))
+          expected_skipped = sorted(
+              name for name, result in jobs.items()
+              if result == "skipped" and name not in required
+          )
           payload = {
-              "schema_version": 1,
-              "profile": os.environ["PROFILE"],
+              "schema_version": 2,
+              "profile": profile,
               "jobs": jobs,
-              "result": "failed" if failed else "passed",
+              "required_jobs": sorted(required),
+              "expected_skipped": expected_skipped,
+              "unexpectedly_skipped": unexpectedly_skipped,
+              "result": "failed" if blocking else "passed",
           }
           Path("artifacts/security-suite/summary.json").write_text(
               json.dumps(payload, indent=2, sort_keys=True) + "\n",
               encoding="utf-8",
           )
-          if failed:
-              raise SystemExit("security suite failed: " + ", ".join(failed))
+          if unexpectedly_skipped:
+              raise SystemExit(
+                  "security suite required jobs unexpectedly skipped: "
+                  + ", ".join(unexpectedly_skipped)
+              )
+          if blocking:
+              raise SystemExit("security suite failed: " + ", ".join(blocking))
           PY
       - name: Upload suite summary
         if: always()
