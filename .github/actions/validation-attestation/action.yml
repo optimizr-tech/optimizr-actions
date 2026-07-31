@@ -1,0 +1,70 @@
+name: Exact-SHA validation attestation
+description: Create sanitized evidence for one complete validation result
+inputs:
+  repository:
+    required: true
+  candidate_sha:
+    required: true
+  context_sha:
+    required: true
+  validation_path:
+    required: true
+  required_checks_json:
+    required: true
+  results_json:
+    required: true
+  workflow_repository:
+    required: true
+  workflow_ref:
+    required: true
+  workflow_sha:
+    required: true
+  run_id:
+    required: true
+  evidence_path:
+    required: false
+    default: artifacts/validation-gate/attestation.json
+outputs:
+  result:
+    value: ${{ steps.attest.outputs.result }}
+  validated_sha:
+    value: ${{ steps.attest.outputs.validated_sha }}
+  validation_path:
+    value: ${{ steps.attest.outputs.validation_path }}
+  evidence_digest:
+    value: ${{ steps.attest.outputs.evidence_digest }}
+  actions_workflow_sha:
+    value: ${{ steps.attest.outputs.actions_workflow_sha }}
+  evidence_path:
+    value: ${{ steps.attest.outputs.evidence_path }}
+runs:
+  using: composite
+  steps:
+    - id: attest
+      shell: bash
+      env:
+        REPOSITORY: ${{ inputs.repository }}
+        CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        CONTEXT_SHA: ${{ inputs.context_sha }}
+        VALIDATION_PATH: ${{ inputs.validation_path }}
+        REQUIRED_CHECKS_JSON: ${{ inputs.required_checks_json }}
+        RESULTS_JSON: ${{ inputs.results_json }}
+        WORKFLOW_REPOSITORY: ${{ inputs.workflow_repository }}
+        WORKFLOW_REF: ${{ inputs.workflow_ref }}
+        WORKFLOW_SHA: ${{ inputs.workflow_sha }}
+        RUN_ID: ${{ inputs.run_id }}
+        EVIDENCE_PATH: ${{ inputs.evidence_path }}
+      run: |
+        python3 "$GITHUB_ACTION_PATH/../../../scripts/validation_attestation/attestation.py" \
+          --repository "$REPOSITORY" \
+          --candidate-sha "$CANDIDATE_SHA" \
+          --context-sha "$CONTEXT_SHA" \
+          --validation-path "$VALIDATION_PATH" \
+          --required-checks-json "$REQUIRED_CHECKS_JSON" \
+          --results-json "$RESULTS_JSON" \
+          --workflow-repository "$WORKFLOW_REPOSITORY" \
+          --workflow-ref "$WORKFLOW_REF" \
+          --workflow-sha "$WORKFLOW_SHA" \
+          --run-id "$RUN_ID" \
+          --evidence "$EVIDENCE_PATH" \
+          --github-output "$GITHUB_OUTPUT"
