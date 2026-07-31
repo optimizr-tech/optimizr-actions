@@ -61,4 +61,5 @@
 - [x] Run the 7 focused unittest cases.
 - [x] Parse all changed workflow YAML.
 - [ ] Run the complete Linux suite and actionlint in the PR workflow.
+- [ ] Confirm the exact stacked PR head passes remote validation after base synchronization.
 - [ ] Exercise hosted and trusted-main consumer canaries after publication.
