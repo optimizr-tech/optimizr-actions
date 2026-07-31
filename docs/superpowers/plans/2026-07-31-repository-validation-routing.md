@@ -45,3 +45,4 @@
 - [x] Run the focused unittest suite and confirm all tests pass.
 - [x] Parse all three changed workflow/template YAML files.
 - [ ] Run the complete Linux repository suite, actionlint, and composite metadata validation in the PR workflow.
+- [ ] Confirm the exact stacked PR head passes remote validation after base synchronization.
