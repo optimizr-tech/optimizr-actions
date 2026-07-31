@@ -28,6 +28,13 @@ class RemediationLifecycleTests(unittest.TestCase):
         self.original_deadline = datetime(2026, 8, 6, 12, tzinfo=timezone.utc)
         self.reference = datetime(2026, 8, 1, 12, tzinfo=timezone.utc)
 
+    def _entry(self, status: str, history: list[dict[str, str]]) -> dict[str, object]:
+        return {
+            "status": status,
+            "reviewed_at": "2026-07-30T18:00:00Z",
+            "history": history,
+        }
+
     def _revision(
         self,
         action: str,
@@ -48,9 +55,9 @@ class RemediationLifecycleTests(unittest.TestCase):
 
     def test_extension_preserves_original_deadline_and_first_seen(self) -> None:
         result = self.module.normalize_lifecycle(
-            {
-                "status": "active",
-                "history": [
+            self._entry(
+                "active",
+                [
                     self._revision(
                         "extended",
                         previous="2026-08-06T12:00:00Z",
@@ -58,7 +65,7 @@ class RemediationLifecycleTests(unittest.TestCase):
                         reviewed="2026-07-31T00:00:00Z",
                     )
                 ],
-            },
+            ),
             first_seen=self.first_seen,
             original_deadline=self.original_deadline,
             reference=self.reference,
@@ -81,7 +88,7 @@ class RemediationLifecycleTests(unittest.TestCase):
         revision["first_seen_at"] = "2026-07-31T12:00:00Z"
         with self.assertRaisesRegex(ValueError, "preserve first_seen_at"):
             self.module.normalize_lifecycle(
-                {"status": "active", "history": [revision]},
+                self._entry("active", [revision]),
                 first_seen=self.first_seen,
                 original_deadline=self.original_deadline,
                 reference=self.reference,
@@ -91,7 +98,7 @@ class RemediationLifecycleTests(unittest.TestCase):
         revision["previous_deadline_at"] = "2026-08-07T12:00:00Z"
         with self.assertRaisesRegex(ValueError, "previous deadline"):
             self.module.normalize_lifecycle(
-                {"status": "active", "history": [revision]},
+                self._entry("active", [revision]),
                 first_seen=self.first_seen,
                 original_deadline=self.original_deadline,
                 reference=self.reference,
@@ -111,7 +118,7 @@ class RemediationLifecycleTests(unittest.TestCase):
             reviewed="2026-08-01T00:00:00Z",
         )
         result = self.module.normalize_lifecycle(
-            {"status": "reintroduced", "history": [resolved, reintroduced]},
+            self._entry("reintroduced", [resolved, reintroduced]),
             first_seen=self.first_seen,
             original_deadline=self.original_deadline,
             reference=self.reference,
@@ -124,7 +131,7 @@ class RemediationLifecycleTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "follow resolved"):
             self.module.normalize_lifecycle(
-                {"status": "reintroduced", "history": [reintroduced]},
+                self._entry("reintroduced", [reintroduced]),
                 first_seen=self.first_seen,
                 original_deadline=self.original_deadline,
                 reference=self.reference,
