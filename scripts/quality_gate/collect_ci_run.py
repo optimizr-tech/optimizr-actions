@@ -1,10 +1,11 @@
-"""Download the successful CI artifact set for an exact commit SHA."""
+"""Resolve or download successful CI runs without third-party dependencies."""
 
 from __future__ import annotations
 
 import argparse
 import io
 import json
+import os
 from pathlib import Path, PurePosixPath
 import shutil
 from typing import Any
@@ -39,6 +40,29 @@ def _json(url: str, token: str) -> dict[str, Any]:
     return payload
 
 
+def latest_main(repository: str, workflow_file: str, token: str) -> dict[str, object] | None:
+    runs = _json(
+        f"{API}/repos/{repository}/actions/workflows/{workflow_file}/runs"
+        "?branch=main&status=completed&per_page=100",
+        token,
+    ).get("workflow_runs", [])
+    candidates = [
+        run
+        for run in runs
+        if isinstance(run, dict)
+        and run.get("conclusion") == "success"
+        and run.get("head_branch") == "main"
+    ]
+    if not candidates:
+        return None
+    run = max(candidates, key=lambda item: int(item.get("run_number", 0)))
+    return {
+        "run_id": int(run["id"]),
+        "head_sha": str(run.get("head_sha", "")),
+        "workflow_file": workflow_file,
+    }
+
+
 def _safe_extract(archive: bytes, destination: Path) -> None:
     destination.mkdir(parents=True, exist_ok=True)
     root = destination.resolve()
@@ -69,7 +93,7 @@ def collect(
 ) -> None:
     runs = _json(
         f"{API}/repos/{repository}/actions/workflows/{workflow_file}/runs"
-        f"?event=pull_request&head_sha={head_sha}&status=completed&per_page=100",
+        f"?head_sha={head_sha}&status=completed&per_page=100",
         token,
     ).get("workflow_runs", [])
     candidates = [
@@ -101,45 +125,36 @@ def collect(
         archive = _request(
             f"{API}/repos/{repository}/actions/artifacts/{artifact_id}/zip",
             token,
-            accept="application/vnd.github+json",
         )
         _safe_extract(archive, destination / artifact_name)
-    (destination / "ci-run.json").write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "repository": repository,
-                "workflow_file": workflow_file,
-                "head_sha": head_sha,
-                "run_id": run_id,
-                "artifact_count": len(active),
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--repository", required=True)
-    parser.add_argument("--workflow-file", default="ci.yml")
-    parser.add_argument("--head-sha", required=True)
-    parser.add_argument("--token-file", type=Path, required=True)
-    parser.add_argument("--destination", type=Path, required=True)
+    parser.add_argument("command", choices=("latest-main", "download"))
+    parser.add_argument("--repository", default=os.environ.get("GITHUB_REPOSITORY", ""))
+    parser.add_argument("--workflow", default="ci.yml")
+    parser.add_argument("--head-sha")
+    parser.add_argument("--destination", type=Path)
+    parser.add_argument("--token-file", type=Path)
     args = parser.parse_args(argv)
-    token = args.token_file.read_text(encoding="utf-8").strip()
-    if not token:
-        raise ValueError("GitHub token is empty")
-    collect(
-        args.repository,
-        args.workflow_file,
-        args.head_sha,
-        token,
-        args.destination,
+
+    if not args.repository:
+        raise ValueError("repository is required")
+    token = (
+        args.token_file.read_text(encoding="utf-8").strip()
+        if args.token_file
+        else os.environ.get("GH_TOKEN", "").strip()
     )
+    if not token:
+        raise ValueError("GitHub token is required")
+
+    if args.command == "latest-main":
+        print(json.dumps(latest_main(args.repository, args.workflow, token)))
+        return 0
+    if not args.head_sha or args.destination is None:
+        raise ValueError("download requires --head-sha and --destination")
+    collect(args.repository, args.workflow, args.head_sha, token, args.destination)
     return 0
 
 
