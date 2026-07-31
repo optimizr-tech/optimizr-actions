@@ -16,13 +16,13 @@ on:
         type: string
         default: .quality-gate/thresholds.json
       post_comment:
-        description: "Post PR comment using gh api"
+        description: "Post PR comment using GitHub API"
         required: false
         type: boolean
         default: true
     secrets:
       OPTIMIZR_INFRA_OPS_READ_TOKEN:
-        description: Org PAT for sparse checkout of scripts/quality_gate
+        description: Deprecated compatibility secret; no longer read
         required: false
 
 permissions:
@@ -36,13 +36,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Checkout
+      - name: Checkout caller
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-
-      - name: Setup quality-gate scripts
-        uses: optimizr-tech/optimizr-infra-ops/.github/actions/quality-gate-scripts@v1
         with:
-          infra_ops_read_token: ${{ secrets.OPTIMIZR_INFRA_OPS_READ_TOKEN }}
+          persist-credentials: false
+
+      - name: Checkout exact quality-gate implementation
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .optimizr-actions-source
+          persist-credentials: false
 
       - name: Setup Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
@@ -71,6 +76,7 @@ jobs:
       - name: Compare and optionally comment
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PYTHONPATH: ${{ github.workspace }}/.optimizr-actions-source
         run: |
           set -euo pipefail
           args=(--current artifacts/current --thresholds "${{ inputs.thresholds_path }}")
@@ -79,11 +85,11 @@ jobs:
           fi
 
           if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ inputs.post_comment }}" = "true" ]; then
-            PYTHONPATH="${{ github.workspace }}/_qg" python -m scripts.quality_gate.legacy_metrics "${args[@]}" \
+            python -m scripts.quality_gate.legacy_metrics "${args[@]}" \
               --repo "${{ github.repository }}" \
               --pr "${{ github.event.pull_request.number }}" \
               --head-sha "${GITHUB_SHA}" \
               --post
           else
-            PYTHONPATH="${{ github.workspace }}/_qg" python -m scripts.quality_gate.legacy_metrics "${args[@]}" --head-sha "${GITHUB_SHA}"
+            python -m scripts.quality_gate.legacy_metrics "${args[@]}" --head-sha "${GITHUB_SHA}"
           fi
