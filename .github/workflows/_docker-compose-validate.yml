@@ -9,6 +9,16 @@ name: _docker-compose-validate
 on:
   workflow_call:
     inputs:
+      runner_json:
+        description: JSON runner labels; use ubuntu-latest or a governed self-hosted label set
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      self_hosted_mode:
+        description: none, trusted-main, or ephemeral-pr
+        required: false
+        type: string
+        default: none
       compose_files:
         description: "Compose files a validar standalone (espaço-separado, um -f cada)"
         required: false
@@ -32,33 +42,61 @@ on:
         type: boolean
         default: false
       skip:
-        description: "Skip validation (e.g. when no GitHub-hosted runner billing available)"
+        description: Explicit optional caller skip; never derive this from a billing marker
         required: false
         type: boolean
         default: false
 
 jobs:
   validate:
-    # Defense in depth: callers may forget to forward a skip flag. A push whose
-    # head commit is explicitly marked [skip-tests] must never allocate a hosted
-    # runner. Manual runs and pull requests still execute normally.
-    if: >-
-      !inputs.skip &&
-      (github.event_name != 'push' ||
-       !contains(github.event.head_commit.message, '[skip-tests]'))
-    runs-on: ubuntu-latest
+    if: ${{ !inputs.skip }}
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
     timeout-minutes: ${{ inputs.build_image && 15 || 10 }}
     permissions:
       contents: read
-      # buildx GHA cache backend (CI_CACHE_STANDARDS §3.2).
       actions: write
     steps:
+      - name: Validate runner trust contract
+        shell: bash
+        env:
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          SELF_HOSTED_MODE: ${{ inputs.self_hosted_mode }}
+          ALLOW_TRUSTED_MAIN: "true"
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if not isinstance(labels, list) or not labels or any(not isinstance(v, str) or not v for v in labels):
+              raise SystemExit("runner_json must be a non-empty JSON string array")
+          mode = os.environ["SELF_HOSTED_MODE"]
+          if "self-hosted" not in labels:
+              if labels != ["ubuntu-latest"] or mode != "none":
+                  raise SystemExit('hosted validation must use ["ubuntu-latest"] with mode=none')
+              raise SystemExit(0)
+          if "Linux" not in labels:
+              raise SystemExit("self-hosted validation requires the Linux label")
+          if mode == "trusted-main":
+              if os.environ["ALLOW_TRUSTED_MAIN"] != "true":
+                  raise SystemExit("trusted-main is not allowed for this workflow")
+              if os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"} or os.environ["EVENT_REF"] != "refs/heads/main":
+                  raise SystemExit("trusted-main requires push/workflow_dispatch on refs/heads/main")
+          elif mode == "ephemeral-pr":
+              if os.environ["EVENT_NAME"] != "pull_request" or "ephemeral" not in labels:
+                  raise SystemExit("ephemeral-pr requires pull_request and an ephemeral runner label")
+          else:
+              raise SystemExit("self-hosted validation requires mode trusted-main or ephemeral-pr")
+          PY
+
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
         if: inputs.build_image
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5
 
       - name: Validate docker-compose files
         run: |
@@ -118,7 +156,7 @@ jobs:
 
       - name: Build Docker image (sanity check)
         if: inputs.build_image
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf
         with:
           context: .
           push: false

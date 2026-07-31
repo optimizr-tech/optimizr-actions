@@ -1,11 +1,20 @@
 name: _validate-pr
 
-# Concurrency: caller workflow only (CI_STANDARDS §8.1).
 # Explicit metadata inputs override the caller pull_request event when provided.
 
 on:
   workflow_call:
     inputs:
+      runner_json:
+        description: JSON runner labels; self-hosted PR validation must be ephemeral
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      self_hosted_mode:
+        description: none or ephemeral-pr
+        required: false
+        type: string
+        default: none
       run_self_tests:
         description: "Run validator regression tests"
         required: false
@@ -39,13 +48,47 @@ permissions:
 jobs:
   validate-pr:
     name: PR title + commits
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
     timeout-minutes: 5
     steps:
+      - name: Validate runner trust contract
+        shell: bash
+        env:
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          SELF_HOSTED_MODE: ${{ inputs.self_hosted_mode }}
+          ALLOW_TRUSTED_MAIN: "false"
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if not isinstance(labels, list) or not labels or any(not isinstance(v, str) or not v for v in labels):
+              raise SystemExit("runner_json must be a non-empty JSON string array")
+          mode = os.environ["SELF_HOSTED_MODE"]
+          if "self-hosted" not in labels:
+              if labels != ["ubuntu-latest"] or mode != "none":
+                  raise SystemExit('hosted validation must use ["ubuntu-latest"] with mode=none')
+              raise SystemExit(0)
+          if "Linux" not in labels:
+              raise SystemExit("self-hosted validation requires the Linux label")
+          if mode == "trusted-main":
+              if os.environ["ALLOW_TRUSTED_MAIN"] != "true":
+                  raise SystemExit("trusted-main is not allowed for this workflow")
+              if os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"} or os.environ["EVENT_REF"] != "refs/heads/main":
+                  raise SystemExit("trusted-main requires push/workflow_dispatch on refs/heads/main")
+          elif mode == "ephemeral-pr":
+              if os.environ["EVENT_NAME"] != "pull_request" or "ephemeral" not in labels:
+                  raise SystemExit("ephemeral-pr requires pull_request and an ephemeral runner label")
+          else:
+              raise SystemExit("self-hosted validation requires mode ephemeral-pr")
+          PY
+
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Self-test validators
         if: inputs.run_self_tests
@@ -92,6 +135,4 @@ jobs:
             echo "Unable to resolve pull request base/head SHAs"
             exit 1
           fi
-          bash scripts/git-hooks/validate-pr-commits.sh \
-            "$BASE_SHA" \
-            "$HEAD_SHA"
+          bash scripts/git-hooks/validate-pr-commits.sh "$BASE_SHA" "$HEAD_SHA"
