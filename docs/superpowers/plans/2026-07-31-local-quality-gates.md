@@ -71,3 +71,5 @@
 - [ ] Run the complete public repository validation workflow.
 - [ ] Validate all workflow/composite YAML and actionlint.
 - [ ] Record the successful run on the pull request before review.
+
+The cumulative branch is temporarily validated through a pull request targeting `main`; its focused stacked base is restored only after the exact head completes the public validation workflow.
