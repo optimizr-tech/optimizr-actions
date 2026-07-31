@@ -61,4 +61,5 @@
 - [x] Run 6 focused unit/contract tests.
 - [x] Parse reusable and composite YAML.
 - [ ] Run full Linux suite, actionlint, and metadata validation in PR checks.
+- [ ] Confirm the exact stacked PR head passes remote validation after base synchronization.
 - [ ] Migrate canary consumers through issues after publication.
