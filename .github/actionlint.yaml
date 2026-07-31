@@ -12,3 +12,12 @@ paths:
   .github/workflows/_validation-gate.yml:
     ignore:
       - 'property "workflow_(repository|ref|sha)" is not defined in object type .+'
+  .github/workflows/_quality-gate-baseline.yml:
+    ignore:
+      - 'property "workflow_(repository|sha)" is not defined in object type .+'
+  .github/workflows/_quality-gate-pr.yml:
+    ignore:
+      - 'property "workflow_(repository|sha)" is not defined in object type .+'
+  .github/workflows/_quality-gate.yml:
+    ignore:
+      - 'property "workflow_(repository|sha)" is not defined in object type .+'
