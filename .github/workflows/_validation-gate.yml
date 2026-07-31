@@ -1,0 +1,201 @@
+name: _validation-gate
+on:
+  workflow_call:
+    inputs:
+      runner_json:
+        description: JSON labels for the selected validation infrastructure
+        type: string
+        required: false
+        default: '["ubuntu-latest"]'
+      validation_path:
+        description: hosted, self-hosted, or reviewed-emergency
+        type: string
+        required: false
+        default: hosted
+      environment_name:
+        description: Protected environment used only for reviewed-emergency
+        type: string
+        required: false
+        default: validation-emergency
+      candidate_sha:
+        description: Exact caller commit; must equal github.sha
+        type: string
+        required: true
+      script_path:
+        description: Repository-owned validation entrypoint
+        type: string
+        required: true
+      args_json:
+        description: JSON array of literal repository-validation arguments
+        type: string
+        required: false
+        default: "[]"
+      security_profile:
+        description: python, node, compose, infra, or monorepo
+        type: string
+        required: false
+        default: infra
+      dependency_working_directory:
+        description: Confined project directory for dependency policy
+        type: string
+        required: false
+        default: "."
+      dependency_policy_file:
+        description: Optional dependency policy file
+        type: string
+        required: false
+        default: ""
+      sast_baseline_file:
+        description: Optional SAST baseline file
+        type: string
+        required: false
+        default: ""
+      image_refs:
+        description: Optional local images requiring supply-chain evidence
+        type: string
+        required: false
+        default: ""
+      retention_days:
+        description: Attestation retention
+        type: number
+        required: false
+        default: 30
+    outputs:
+      result:
+        description: passed only when all required validation completed
+        value: ${{ jobs.attest.outputs.result }}
+      validated_sha:
+        description: Exact validated consumer commit
+        value: ${{ jobs.attest.outputs.validated_sha }}
+      validation_path:
+        description: Selected hosted or governed self-hosted path
+        value: ${{ jobs.attest.outputs.validation_path }}
+      evidence_digest:
+        description: SHA-256 digest of the canonical attestation
+        value: ${{ jobs.attest.outputs.evidence_digest }}
+      actions_workflow_sha:
+        description: Exact optimizr-actions revision resolved from @v1
+        value: ${{ jobs.attest.outputs.actions_workflow_sha }}
+permissions:
+  contents: read
+jobs:
+  preflight:
+    if: inputs.validation_path != 'reviewed-emergency'
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: 5
+    steps:
+      - name: Validate exact SHA and runner path
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          CONTEXT_SHA: ${{ github.sha }}
+          VALIDATION_PATH: ${{ inputs.validation_path }}
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          if os.environ["CANDIDATE_SHA"] != os.environ["CONTEXT_SHA"]:
+              raise SystemExit("candidate SHA must equal github.sha")
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          path = os.environ["VALIDATION_PATH"]
+          if path == "hosted":
+              if labels != ["ubuntu-latest"]:
+                  raise SystemExit("hosted validation requires ubuntu-latest")
+          elif path == "self-hosted":
+              if "self-hosted" not in labels or "Linux" not in labels:
+                  raise SystemExit("self-hosted validation requires self-hosted and Linux labels")
+              if os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"} or os.environ["EVENT_REF"] != "refs/heads/main":
+                  raise SystemExit("persistent self-hosted validation requires trusted main")
+          else:
+              raise SystemExit("validation_path must be hosted, self-hosted, or reviewed-emergency")
+          PY
+
+  emergency-preflight:
+    if: inputs.validation_path == 'reviewed-emergency'
+    environment: ${{ inputs.environment_name }}
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: 5
+    steps:
+      - name: Validate reviewed emergency path
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          CONTEXT_SHA: ${{ github.sha }}
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          if os.environ["CANDIDATE_SHA"] != os.environ["CONTEXT_SHA"]:
+              raise SystemExit("candidate SHA must equal github.sha")
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if "self-hosted" not in labels or "Linux" not in labels:
+              raise SystemExit("reviewed emergency requires self-hosted Linux")
+          if os.environ["EVENT_NAME"] != "workflow_dispatch" or os.environ["EVENT_REF"] != "refs/heads/main":
+              raise SystemExit("reviewed emergency requires protected dispatch on main")
+          PY
+
+  repository-validation:
+    needs: [preflight, emergency-preflight]
+    if: always() && (needs.preflight.result == 'success' || needs.emergency-preflight.result == 'success')
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_repository-validation.yml@v1
+    with:
+      runner_json: ${{ inputs.runner_json }}
+      script_path: ${{ inputs.script_path }}
+      args_json: ${{ inputs.args_json }}
+      candidate_sha: ${{ inputs.candidate_sha }}
+      require_trusted_ref: ${{ inputs.validation_path != 'hosted' }}
+      artifact_name: validation-gate-repository
+      retention_days: ${{ inputs.retention_days }}
+
+  security-suite:
+    needs: [preflight, emergency-preflight]
+    if: always() && (needs.preflight.result == 'success' || needs.emergency-preflight.result == 'success')
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_security-suite.yml@v1
+    with:
+      runner_json: ${{ inputs.runner_json }}
+      profile: ${{ inputs.security_profile }}
+      dependency_working_directory: ${{ inputs.dependency_working_directory }}
+      dependency_policy_file: ${{ inputs.dependency_policy_file }}
+      sast_baseline_file: ${{ inputs.sast_baseline_file }}
+      image_refs: ${{ inputs.image_refs }}
+      retention_days: ${{ inputs.retention_days }}
+
+  attest:
+    name: Exact-SHA validation attestation
+    needs: [preflight, emergency-preflight, repository-validation, security-suite]
+    if: always()
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: 5
+    outputs:
+      result: ${{ steps.attestation.outputs.result }}
+      validated_sha: ${{ steps.attestation.outputs.validated_sha }}
+      validation_path: ${{ steps.attestation.outputs.validation_path }}
+      evidence_digest: ${{ steps.attestation.outputs.evidence_digest }}
+      actions_workflow_sha: ${{ steps.attestation.outputs.actions_workflow_sha }}
+    steps:
+      - name: Create canonical attestation
+        id: attestation
+        uses: optimizr-tech/optimizr-actions/.github/actions/validation-attestation@v1
+        with:
+          repository: ${{ github.repository }}
+          candidate_sha: ${{ inputs.candidate_sha }}
+          context_sha: ${{ github.sha }}
+          validation_path: ${{ inputs.validation_path }}
+          required_checks_json: '["repository_validation","security_suite"]'
+          results_json: '{"repository_validation":"${{ needs.repository-validation.result }}","security_suite":"${{ needs.security-suite.result }}"}'
+          workflow_repository: ${{ job.workflow_repository }}
+          workflow_ref: ${{ job.workflow_ref }}
+          workflow_sha: ${{ job.workflow_sha }}
+          run_id: ${{ github.run_id }}
+      - name: Upload exact-SHA attestation
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: validation-attestation-${{ inputs.candidate_sha }}
+          path: artifacts/validation-gate
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}
