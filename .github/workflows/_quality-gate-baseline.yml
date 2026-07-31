@@ -11,7 +11,7 @@ on:
         required: true
         type: string
       infra_ops_ref:
-        description: optimizr-infra-ops ref for scripts
+        description: Deprecated compatibility input; quality-gate code is owned by optimizr-actions
         required: false
         type: string
         default: v1
@@ -22,7 +22,7 @@ on:
         default: 90
     secrets:
       OPTIMIZR_INFRA_OPS_READ_TOKEN:
-        description: Org PAT for sparse checkout of scripts/quality_gate
+        description: Deprecated compatibility secret; no longer read
         required: false
 
 permissions:
@@ -37,12 +37,21 @@ jobs:
     steps:
       - name: Checkout caller
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-
-      - name: Setup quality-gate scripts
-        uses: optimizr-tech/optimizr-infra-ops/.github/actions/quality-gate-scripts@v1
         with:
-          infra_ops_ref: ${{ inputs.infra_ops_ref }}
-          infra_ops_read_token: ${{ secrets.OPTIMIZR_INFRA_OPS_READ_TOKEN }}
+          persist-credentials: false
+
+      - name: Checkout exact quality-gate implementation
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .optimizr-actions-source
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.12"
 
       - name: Download artifacts (python-backend)
         if: inputs.preset == 'python-backend'
@@ -58,7 +67,7 @@ jobs:
 
       - name: Build baseline JSON
         env:
-          PYTHONPATH: ${{ github.workspace }}/_qg
+          PYTHONPATH: ${{ github.workspace }}/.optimizr-actions-source
         run: |
           set -euo pipefail
           python -m scripts.quality_gate.run \
