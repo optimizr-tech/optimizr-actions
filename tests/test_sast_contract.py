@@ -25,6 +25,13 @@ class SastContractTests(unittest.TestCase):
         self.assertIn("fromJSON(inputs.runner_json)", text)
         self.assertIn("if: always()", text)
 
+    def test_typescript_command_rule_does_not_match_arbitrary_method_names(self):
+        text = (ROOT / "rules/sast/typescript.yml").read_text()
+        self.assertIn("child_process.exec(...)", text)
+        self.assertIn("child_process.execSync(...)", text)
+        self.assertNotIn("$CP.exec(...)", text)
+        self.assertNotIn("$CP.execSync(...)", text)
+
 
 if __name__ == "__main__":
     unittest.main()
