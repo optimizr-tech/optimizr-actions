@@ -66,16 +66,21 @@ runs:
             python-uv)
               python3 -m pip install --disable-pip-version-check --user 'uv==0.8.3'
               export PATH="$HOME/.local/bin:$PATH"
-              python_requirement="$(python3 - <<'PY'
+              python_version="$(python3 - <<'PY'
         from pathlib import Path
+        import re
         import tomllib
 
         project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8")).get("project", {})
-        print(project.get("requires-python") or "")
+        requirement = project.get("requires-python") or ""
+        match = re.search(r"(?:^|,)\s*>=\s*([0-9]+(?:\.[0-9]+){0,2})", requirement)
+        if requirement and match is None:
+            raise SystemExit("requires-python must declare a minimum Python version")
+        print(match.group(1) if match else "")
         PY
         )"
-              if [ -n "$python_requirement" ]; then
-                uv python install "$python_requirement"
+              if [ -n "$python_version" ]; then
+                uv python install "$python_version"
               else
                 uv python install
               fi
