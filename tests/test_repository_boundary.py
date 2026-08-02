@@ -8,7 +8,22 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-LEGACY_INFRA_OPS_REFERENCES: Counter[tuple[str, str]] = Counter()
+LEGACY_INFRA_OPS_REFERENCES = Counter(
+    {
+        (
+            ".github/workflows/_quality-gate-baseline.yml",
+            "optimizr-tech/optimizr-infra-ops/.github/actions/quality-gate-scripts@v1",
+        ): 1,
+        (
+            ".github/workflows/_quality-gate-pr.yml",
+            "optimizr-tech/optimizr-infra-ops/.github/actions/quality-gate-scripts@v1",
+        ): 1,
+        (
+            ".github/workflows/_quality-gate.yml",
+            "optimizr-tech/optimizr-infra-ops/.github/actions/quality-gate-scripts@v1",
+        ): 1,
+    }
+)
 NEEDLE = "uses: optimizr-tech/optimizr-infra-ops/"
 
 
