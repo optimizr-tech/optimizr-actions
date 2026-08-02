@@ -45,6 +45,16 @@ on:
         type: string
         required: false
         default: ""
+      node_version:
+        description: Controlled Node.js version used by dependency policy
+        type: string
+        required: false
+        default: "24"
+      npm_version:
+        description: Controlled npm version used by package-lock validation
+        type: string
+        required: false
+        default: "11"
       sast_baseline_file:
         description: Optional SAST baseline file
         type: string
@@ -160,6 +170,8 @@ jobs:
       profile: ${{ inputs.security_profile }}
       dependency_working_directory: ${{ inputs.dependency_working_directory }}
       dependency_policy_file: ${{ inputs.dependency_policy_file }}
+      node_version: ${{ inputs.node_version }}
+      npm_version: ${{ inputs.npm_version }}
       sast_baseline_file: ${{ inputs.sast_baseline_file }}
       image_refs: ${{ inputs.image_refs }}
       retention_days: ${{ inputs.retention_days }}
