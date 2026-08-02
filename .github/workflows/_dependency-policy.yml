@@ -22,6 +22,16 @@ on:
         required: false
         type: string
         default: v0.70.0
+      node_version:
+        description: Controlled Node.js version used for Node lock validation
+        required: false
+        type: string
+        default: "24"
+      npm_version:
+        description: Controlled npm version used for package-lock validation
+        required: false
+        type: string
+        default: "11"
       artifact_name:
         description: Evidence artifact name
         required: false
@@ -51,6 +61,8 @@ jobs:
           working_directory: ${{ inputs.working_directory }}
           policy_file: ${{ inputs.policy_file }}
           trivy_version: ${{ inputs.trivy_version }}
+          node_version: ${{ inputs.node_version }}
+          npm_version: ${{ inputs.npm_version }}
       - name: Upload dependency evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
