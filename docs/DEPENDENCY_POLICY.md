@@ -16,9 +16,9 @@ fails closed.
 For Node projects, the organization defaults are Node 24 and npm 11. The
 versions are explicit reusable inputs and can be overridden only by a reviewed
 consumer contract. npm projects are validated with the immutable command
-`npm ci --ignore-scripts --no-audit --no-fund`; the gate never regenerates
-`package-lock.json`. Engine incompatibility, an npm installation failure, or a
-stale lockfile fails closed before vulnerability and license evaluation.
+`npm ci --ignore-scripts --no-audit --no-fund`; the gate never regenerates `package-lock.json`.
+Engine incompatibility, an npm installation failure, or a stale lockfile fails
+closed before vulnerability and license evaluation.
 
 The project may live at the repository root or in a repository-relative `working_directory`. The action resolves the directory with `realpath`, rejects traversal and symlinks, runs package-manager validation from that directory, and keeps evidence under the repository artifact path.
 
