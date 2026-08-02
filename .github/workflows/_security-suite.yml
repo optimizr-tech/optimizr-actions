@@ -47,6 +47,16 @@ on:
         required: false
         type: string
         default: v0.70.0
+      node_version:
+        description: Controlled Node.js version used by dependency policy
+        required: false
+        type: string
+        default: "24"
+      npm_version:
+        description: Controlled npm version used by package-lock validation
+        required: false
+        type: string
+        default: "11"
       retention_days:
         description: Evidence retention period
         required: false
@@ -145,6 +155,8 @@ jobs:
       working_directory: ${{ inputs.dependency_working_directory }}
       policy_file: ${{ inputs.dependency_policy_file }}
       trivy_version: ${{ inputs.trivy_version }}
+      node_version: ${{ inputs.node_version }}
+      npm_version: ${{ inputs.npm_version }}
       artifact_name: security-suite-dependencies
       retention_days: ${{ inputs.retention_days }}
 
