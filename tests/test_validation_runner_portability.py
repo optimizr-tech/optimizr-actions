@@ -10,6 +10,7 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
         "_trivy-scan.yml",
         "_commitlint.yml",
         "_validate-pr.yml",
+        "_python-uv-test.yml",
     )
 
     def test_reusables_accept_governed_runner_selection(self):
@@ -36,10 +37,28 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
                 self.assertIn('"ephemeral" not in labels', text)
 
     def test_explicit_optional_skip_remains_caller_controlled(self):
-        for name in ("_docker-compose-validate.yml", "_trivy-scan.yml"):
+        for name in (
+            "_docker-compose-validate.yml",
+            "_trivy-scan.yml",
+            "_python-uv-test.yml",
+        ):
             text = (ROOT / ".github/workflows" / name).read_text()
             with self.subTest(workflow=name):
-                self.assertIn("if: ${{ !inputs.skip }}", text)
+                self.assertIn("!inputs.skip", text)
+
+    def test_python_uv_uses_actions_owned_composite(self):
+        text = (ROOT / ".github/workflows/_python-uv-test.yml").read_text()
+        self.assertNotIn(
+            "optimizr-infra-ops/.github/actions/python-uv-test-steps",
+            text,
+        )
+        self.assertEqual(
+            text.count(
+                "optimizr-tech/optimizr-actions/.github/actions/"
+                "python-uv-test-steps@v1"
+            ),
+            2,
+        )
 
 
 if __name__ == "__main__":

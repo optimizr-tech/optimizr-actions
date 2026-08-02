@@ -11,10 +11,6 @@ ROOT = Path(__file__).resolve().parents[1]
 LEGACY_INFRA_OPS_REFERENCES = Counter(
     {
         (
-            ".github/workflows/_python-uv-test.yml",
-            "optimizr-tech/optimizr-infra-ops/.github/actions/python-uv-test-steps@v1",
-        ): 2,
-        (
             ".github/workflows/_quality-gate-baseline.yml",
             "optimizr-tech/optimizr-infra-ops/.github/actions/quality-gate-scripts@v1",
         ): 1,

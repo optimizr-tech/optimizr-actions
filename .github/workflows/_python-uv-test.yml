@@ -9,6 +9,16 @@ name: _python-uv-test
 on:
   workflow_call:
     inputs:
+      runner_json:
+        description: JSON runner labels; use ubuntu-latest or a governed self-hosted label set
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      self_hosted_mode:
+        description: none, trusted-main, or ephemeral-pr
+        required: false
+        type: string
+        default: none
       python_version:
         description: "Versão Python"
         required: false
@@ -105,26 +115,54 @@ on:
         type: number
         default: 10
       skip:
-        description: "Skip hosted Python validation (billing emergency or caller policy)"
+        description: Explicit optional caller skip; never derive this from a billing marker
         required: false
         type: boolean
         default: false
 
 jobs:
   test:
-    if: >-
-      !inputs.skip &&
-      inputs.integration_preset == '' &&
-      (github.event_name != 'push' ||
-       !contains(github.event.head_commit.message, '[skip-tests]'))
-    runs-on: ubuntu-latest
+    if: ${{ !inputs.skip && inputs.integration_preset == '' }}
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
     steps:
+      - name: Validate runner trust contract
+        shell: bash
+        env:
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          SELF_HOSTED_MODE: ${{ inputs.self_hosted_mode }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if not isinstance(labels, list) or not labels or any(not isinstance(v, str) or not v for v in labels):
+              raise SystemExit("runner_json must be a non-empty JSON string array")
+          mode = os.environ["SELF_HOSTED_MODE"]
+          if "self-hosted" not in labels:
+              if labels != ["ubuntu-latest"] or mode != "none":
+                  raise SystemExit('hosted validation must use ["ubuntu-latest"] with mode=none')
+              raise SystemExit(0)
+          if "Linux" not in labels:
+              raise SystemExit("self-hosted validation requires the Linux label")
+          if mode == "trusted-main":
+              if os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"} or os.environ["EVENT_REF"] != "refs/heads/main":
+                  raise SystemExit("trusted-main requires push/workflow_dispatch on refs/heads/main")
+          elif mode == "ephemeral-pr":
+              if os.environ["EVENT_NAME"] != "pull_request" or "ephemeral" not in labels:
+                  raise SystemExit("ephemeral-pr requires pull_request and an ephemeral runner label")
+          else:
+              raise SystemExit("self-hosted validation requires mode trusted-main or ephemeral-pr")
+          PY
+
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Python test steps
-        uses: optimizr-tech/optimizr-infra-ops/.github/actions/python-uv-test-steps@v1
+        uses: optimizr-tech/optimizr-actions/.github/actions/python-uv-test-steps@v1
         with:
           python_version: ${{ inputs.python_version }}
           sync_all_extras: ${{ inputs.sync_all_extras }}
@@ -145,12 +183,8 @@ jobs:
           upload_artifact_paths: ${{ inputs.upload_artifact_paths }}
 
   test-integration:
-    if: >-
-      !inputs.skip &&
-      inputs.integration_preset == 'serve' &&
-      (github.event_name != 'push' ||
-       !contains(github.event.head_commit.message, '[skip-tests]'))
-    runs-on: ubuntu-latest
+    if: ${{ !inputs.skip && inputs.integration_preset == 'serve' }}
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
 
     services:
@@ -187,11 +221,43 @@ jobs:
           --health-retries 5
 
     steps:
+      - name: Validate runner trust contract
+        shell: bash
+        env:
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          SELF_HOSTED_MODE: ${{ inputs.self_hosted_mode }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if not isinstance(labels, list) or not labels or any(not isinstance(v, str) or not v for v in labels):
+              raise SystemExit("runner_json must be a non-empty JSON string array")
+          mode = os.environ["SELF_HOSTED_MODE"]
+          if "self-hosted" not in labels:
+              if labels != ["ubuntu-latest"] or mode != "none":
+                  raise SystemExit('hosted validation must use ["ubuntu-latest"] with mode=none')
+              raise SystemExit(0)
+          if "Linux" not in labels:
+              raise SystemExit("self-hosted validation requires the Linux label")
+          if mode == "trusted-main":
+              if os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"} or os.environ["EVENT_REF"] != "refs/heads/main":
+                  raise SystemExit("trusted-main requires push/workflow_dispatch on refs/heads/main")
+          elif mode == "ephemeral-pr":
+              if os.environ["EVENT_NAME"] != "pull_request" or "ephemeral" not in labels:
+                  raise SystemExit("ephemeral-pr requires pull_request and an ephemeral runner label")
+          else:
+              raise SystemExit("self-hosted validation requires mode trusted-main or ephemeral-pr")
+          PY
+
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Python test steps
-        uses: optimizr-tech/optimizr-infra-ops/.github/actions/python-uv-test-steps@v1
+        uses: optimizr-tech/optimizr-actions/.github/actions/python-uv-test-steps@v1
         with:
           python_version: ${{ inputs.python_version }}
           sync_all_extras: ${{ inputs.sync_all_extras }}
