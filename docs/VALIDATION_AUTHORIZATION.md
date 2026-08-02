@@ -58,7 +58,7 @@ Authorization requires:
 - the validation path is in the reviewed allowlist;
 - the caller ref equals `required_ref`, which defaults to `refs/heads/main`.
 
-The action writes no outputs until every rule passes. It does not check out candidate code, query the GitHub API, consume secrets, or interpret `[skip-tests]`. Infrastructure routing remains the private caller's responsibility before invoking `_validation-gate.yml`.
+The action writes no outputs until every rule passes. It does not check out candidate code, query the GitHub API, or consume secrets. It does not interpret `[skip-tests]`. Infrastructure routing remains the private caller's responsibility before invoking `_validation-gate.yml`.
 
 ## Monitoring migration
 
