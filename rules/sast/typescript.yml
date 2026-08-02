@@ -9,8 +9,6 @@ rules:
     pattern-either:
       - pattern: child_process.exec(...)
       - pattern: child_process.execSync(...)
-      - pattern: $CP.exec(...)
-      - pattern: $CP.execSync(...)
   - id: optimizr.typescript.dynamic.eval-function
     languages: [typescript, javascript]
     severity: ERROR

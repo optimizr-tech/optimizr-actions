@@ -11,6 +11,8 @@ class DependencyPolicyContractTests(unittest.TestCase):
         self.assertIn("--exit-code 0", text)
         self.assertIn("dependency_policy/policy.py", text)
         self.assertIn("uv lock --check", text)
+        self.assertIn("project.get(\"requires-python\")", text)
+        self.assertIn('uv python install "$python_requirement"', text)
         self.assertIn("poetry check --lock", text)
         self.assertNotIn("continue-on-error", text)
         self.assertIn("realpath -e", text)
