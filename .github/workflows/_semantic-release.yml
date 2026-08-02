@@ -10,10 +10,15 @@ on:
   workflow_call:
     inputs:
       node_version:
-        description: "Node.js version (semantic-release v25+ requires >=22.14)"
+        description: "Controlled Node.js version used by the release runtime"
         required: false
         type: string
-        default: "22.14"
+        default: "24"
+      npm_version:
+        description: "Controlled npm version used before dependency installation"
+        required: false
+        type: string
+        default: "11"
       install_command:
         description: "Dependency install command"
         required: false
@@ -79,6 +84,22 @@ jobs:
         with:
           node-version: ${{ inputs.node_version }}
           cache: npm
+
+      - name: Setup controlled npm
+        shell: bash
+        env:
+          NPM_VERSION: ${{ inputs.npm_version }}
+        run: |
+          set -euo pipefail
+          case "$NPM_VERSION" in
+            ""|*[!0-9A-Za-z._+-]*)
+              echo "::error::npm_version contains unsupported characters"
+              exit 2
+              ;;
+          esac
+          npm install --global --no-audit --no-fund "npm@${NPM_VERSION}"
+          node --version
+          npm --version
 
       - name: Install dependencies
         run: ${{ inputs.install_command }}
