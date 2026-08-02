@@ -34,6 +34,9 @@ class DependencyPolicyContractTests(unittest.TestCase):
         self.assertIn("npm ci --ignore-scripts --no-audit --no-fund", text)
         self.assertNotIn("npm install --package-lock-only", text)
         self.assertIn('mkdir -p "$GITHUB_WORKSPACE/$EVIDENCE_DIR"', text)
+        self.assertIn("toolchain.json", text)
+        self.assertIn('"node"', text)
+        self.assertIn('"npm"', text)
 
     def test_node_toolchain_inputs_propagate_through_reusables(self):
         workflow_paths = [
@@ -59,6 +62,7 @@ class DependencyPolicyContractTests(unittest.TestCase):
         self.assertIn("npm 11", text)
         self.assertIn("`npm ci --ignore-scripts --no-audit --no-fund`", text)
         self.assertIn("never regenerates `package-lock.json`", text)
+        self.assertIn("toolchain evidence", text)
 
     def test_workflow_uses_pinned_actions_and_read_only_permissions(self):
         text = (ROOT / ".github/workflows/_dependency-policy.yml").read_text()
