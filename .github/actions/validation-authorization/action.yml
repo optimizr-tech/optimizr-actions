@@ -1,0 +1,82 @@
+name: Exact-SHA validation authorization
+description: Authorize release and deploy from one canonical validation-gate attestation
+inputs:
+  gate_job_result:
+    description: GitHub job result for the validation gate
+    required: true
+  gate_result:
+    description: Canonical validation-gate result
+    required: true
+  validated_sha:
+    description: Exact consumer SHA validated by the gate
+    required: true
+  candidate_sha:
+    description: Exact consumer SHA requested for delivery
+    required: true
+  evidence_digest:
+    description: Canonical sha256-prefixed validation evidence digest
+    required: true
+  actions_workflow_sha:
+    description: Exact optimizr-actions workflow revision resolved by the gate
+    required: true
+  validation_path:
+    description: Hosted or governed trusted validation path
+    required: true
+  candidate_ref:
+    description: Caller ref requested for delivery
+    required: true
+  required_ref:
+    description: Protected ref required for delivery authorization
+    required: false
+    default: refs/heads/main
+  allowed_paths_json:
+    description: JSON array of accepted validation paths
+    required: false
+    default: '["hosted","self-hosted","reviewed-emergency"]'
+outputs:
+  result:
+    description: authorized after all canonical checks pass
+    value: ${{ steps.authorize.outputs.result }}
+  validated_sha:
+    description: Exact authorized consumer SHA
+    value: ${{ steps.authorize.outputs.validated_sha }}
+  evidence_digest:
+    description: Canonical validation evidence digest
+    value: ${{ steps.authorize.outputs.evidence_digest }}
+  actions_workflow_sha:
+    description: Exact resolved optimizr-actions workflow SHA
+    value: ${{ steps.authorize.outputs.actions_workflow_sha }}
+  validation_path:
+    description: Authorized validation path
+    value: ${{ steps.authorize.outputs.validation_path }}
+runs:
+  using: composite
+  steps:
+    - name: Authorize exact-SHA delivery
+      id: authorize
+      shell: bash
+      env:
+        GATE_JOB_RESULT: ${{ inputs.gate_job_result }}
+        GATE_RESULT: ${{ inputs.gate_result }}
+        VALIDATED_SHA: ${{ inputs.validated_sha }}
+        CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        EVIDENCE_DIGEST: ${{ inputs.evidence_digest }}
+        ACTIONS_WORKFLOW_SHA: ${{ inputs.actions_workflow_sha }}
+        VALIDATION_PATH: ${{ inputs.validation_path }}
+        CANDIDATE_REF: ${{ inputs.candidate_ref }}
+        REQUIRED_REF: ${{ inputs.required_ref }}
+        ALLOWED_PATHS_JSON: ${{ inputs.allowed_paths_json }}
+      run: |
+        set -euo pipefail
+        python3 "$GITHUB_ACTION_PATH/../../../scripts/validation_authorization/authorize.py" \
+          --gate-job-result "$GATE_JOB_RESULT" \
+          --gate-result "$GATE_RESULT" \
+          --validated-sha "$VALIDATED_SHA" \
+          --candidate-sha "$CANDIDATE_SHA" \
+          --evidence-digest "$EVIDENCE_DIGEST" \
+          --actions-workflow-sha "$ACTIONS_WORKFLOW_SHA" \
+          --validation-path "$VALIDATION_PATH" \
+          --candidate-ref "$CANDIDATE_REF" \
+          --required-ref "$REQUIRED_REF" \
+          --allowed-paths-json "$ALLOWED_PATHS_JSON" \
+          --github-output "$GITHUB_OUTPUT"
