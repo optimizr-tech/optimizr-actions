@@ -12,12 +12,19 @@ class DependencyPolicyContractTests(unittest.TestCase):
         self.assertIn("dependency_policy/policy.py", text)
         self.assertIn("uv lock --check", text)
         self.assertIn("project.get(\"requires-python\")", text)
-        self.assertIn('uv python install "$python_requirement"', text)
+        self.assertIn("requires-python must declare a minimum Python version", text)
+        self.assertIn('uv python install "$python_version"', text)
+        self.assertNotIn('uv python install "$python_requirement"', text)
         self.assertIn("\n        PY\n        )\"", text)
         self.assertIn("poetry check --lock", text)
         self.assertNotIn("continue-on-error", text)
         self.assertIn("realpath -e", text)
         self.assertIn("resolves outside the repository", text)
+
+    def test_documentation_explains_uv_python_constraint_normalization(self):
+        text = (ROOT / "docs/DEPENDENCY_POLICY.md").read_text()
+        self.assertIn("minimum Python version", text)
+        self.assertIn("`>=3.14`", text)
 
     def test_workflow_uses_pinned_actions_and_read_only_permissions(self):
         text = (ROOT / ".github/workflows/_dependency-policy.yml").read_text()
