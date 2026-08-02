@@ -1,4 +1,4 @@
-"""Guard the portable-actions repository boundary during migration."""
+"""Guard the portable-actions repository boundary."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ NEEDLE = "uses: optimizr-tech/optimizr-infra-ops/"
 
 
 class RepositoryBoundaryTests(unittest.TestCase):
-    def test_no_new_portable_dependency_on_infra_ops_is_added(self) -> None:
+    def test_no_portable_dependency_on_infra_ops_is_executable(self) -> None:
         actual: Counter[tuple[str, str]] = Counter()
         roots = (ROOT / ".github" / "workflows", ROOT / ".github" / "actions")
 
@@ -45,8 +45,7 @@ class RepositoryBoundaryTests(unittest.TestCase):
         self.assertEqual(
             LEGACY_INFRA_OPS_REFERENCES,
             actual,
-            "Portable automation must not add new optimizr-infra-ops dependencies; "
-            "migrate an allowlisted reference instead.",
+            "Portable automation must not execute optimizr-infra-ops code.",
         )
 
 
