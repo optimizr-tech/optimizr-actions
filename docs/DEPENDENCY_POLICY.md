@@ -8,6 +8,11 @@ Supported contracts:
 - `package.json` with one matching `pnpm-lock.yaml`, `package-lock.json`, or `yarn.lock`;
 - `packageManager` selects the expected Node lockfile when present.
 
+For uv projects, `requires-python` must declare a minimum Python version, such
+as `>=3.14` or `>=3.14,<3.15`. The action normalizes that lower bound to the
+concrete runtime passed to uv (`3.14`); a constraint without a lower bound
+fails closed.
+
 The project may live at the repository root or in a repository-relative `working_directory`. The action resolves the directory with `realpath`, rejects traversal and symlinks, runs package-manager validation from that directory, and keeps evidence under the repository artifact path.
 
 The native package manager performs an immutable/frozen lock check. A missing tool, network failure, stale lockfile, missing advisory data, malformed policy, denied license, or unexcepted High/Critical advisory fails closed.
