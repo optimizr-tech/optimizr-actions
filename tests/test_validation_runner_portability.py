@@ -16,6 +16,12 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
         "_quality-gate-collect-dup.yml",
         "_quality-gate-baseline.yml",
         "_quality-gate-pr.yml",
+        "_security-suite.yml",
+        "_static-lint.yml",
+        "_security-gate.yml",
+        "_dependency-policy.yml",
+        "_sast-gate.yml",
+        "_supply-chain-evidence.yml",
     )
 
     def test_reusables_accept_governed_runner_selection(self):
@@ -42,6 +48,12 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
             "_quality-gate-collect-security.yml",
             "_quality-gate-collect-dup.yml",
             "_quality-gate-pr.yml",
+            "_security-suite.yml",
+            "_static-lint.yml",
+            "_security-gate.yml",
+            "_dependency-policy.yml",
+            "_sast-gate.yml",
+            "_supply-chain-evidence.yml",
         ):
             text = (ROOT / ".github/workflows" / name).read_text()
             with self.subTest(workflow=name):

@@ -39,6 +39,26 @@ class SecuritySuiteContractTests(unittest.TestCase):
         self.assertIn("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a", self.text)
         self.assertNotIn("github.event.client_payload", self.text)
 
+    def test_suite_enforces_runner_trust_before_children(self):
+        self.assertIn("self_hosted_mode:", self.text)
+        self.assertIn(
+            'hosted validation must use ["ubuntu-latest"] with mode=none',
+            self.text,
+        )
+        self.assertIn('os.environ["EVENT_NAME"] != "pull_request"', self.text)
+        self.assertIn('"ephemeral" not in labels', self.text)
+        self.assertIn('os.environ["EVENT_REF"] != "refs/heads/main"', self.text)
+        self.assertLess(
+            self.text.index("Validate runner trust contract"),
+            self.text.index("Resolve allowlisted profile"),
+        )
+
+    def test_suite_propagates_runner_mode_to_every_child(self):
+        self.assertEqual(
+            self.text.count("self_hosted_mode: ${{ inputs.self_hosted_mode }}"),
+            5,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

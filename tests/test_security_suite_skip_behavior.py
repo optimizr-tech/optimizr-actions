@@ -11,7 +11,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def summary_script() -> str:
     text = (ROOT / ".github/workflows/_security-suite.yml").read_text()
-    return textwrap.dedent(text.split("python3 - <<'PY'", 1)[1].split("\n          PY", 1)[0])
+    summary = text.split("- name: Write sanitized suite result", 1)[1]
+    return textwrap.dedent(
+        summary.split("python3 - <<'PY'", 1)[1].split("\n          PY", 1)[0]
+    )
 
 
 class SecuritySuiteSkipBehaviorTests(unittest.TestCase):
@@ -38,13 +41,22 @@ class SecuritySuiteSkipBehaviorTests(unittest.TestCase):
                 capture_output=True,
             )
 
+    def test_harness_extracts_summary_block(self):
+        script = summary_script()
+        self.assertIn("allowed_results", script)
+        self.assertNotIn("RUNNER_JSON", script)
+
     def test_required_python_job_cannot_be_skipped(self):
         result = self.run_summary(DEPENDENCY_RESULT="skipped")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("unexpectedly skipped", result.stderr)
 
     def test_optional_supply_chain_skip_is_allowed_without_images(self):
-        result = self.run_summary(PROFILE="infra", DEPENDENCY_RESULT="skipped", SAST_RESULT="skipped")
+        result = self.run_summary(
+            PROFILE="infra",
+            DEPENDENCY_RESULT="skipped",
+            SAST_RESULT="skipped",
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_supply_chain_becomes_required_when_images_are_declared(self):
