@@ -390,7 +390,7 @@
       "maturity": "stable-v1",
       "metadata_status": "unclassified",
       "path": ".github/workflows/_validation-gate.yml",
-      "source_sha256": "bebcfa1ab8c21e109175dbd369673fe8129e444b9c660774d39b37e7b47344c7"
+      "source_sha256": "5e42bcbe5e0a90701a5a620514661f5c98696d04c2df0c4e4f674b3978082c69"
     },
     {
       "kind": "workflow",
