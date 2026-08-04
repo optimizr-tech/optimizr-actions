@@ -35,8 +35,9 @@ class PRMetadataWorkflowContractTests(unittest.TestCase):
     def test_validator_uses_api_and_never_executes_candidate_code(self):
         text = VALIDATOR.read_text(encoding="utf-8")
         self.assertIn("/commits?per_page=100", text)
-        self.assertIn("state=closed", text)
+        self.assertIn('"state": "closed"', text)
         self.assertIn('"head": f"{head_owner}:{head_ref}"', text)
+        self.assertIn("urllib.parse.urlencode", text)
         self.assertIn("validate_pr_lifecycle", text)
         self.assertIn("urllib.request", text)
         for forbidden in (
