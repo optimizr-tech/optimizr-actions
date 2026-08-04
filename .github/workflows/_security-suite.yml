@@ -12,6 +12,11 @@ on:
         required: false
         type: string
         default: '["ubuntu-latest"]'
+      self_hosted_mode:
+        description: none, trusted-main, or ephemeral-pr
+        required: false
+        type: string
+        default: none
       dependency_working_directory:
         description: Repository-relative project directory used by dependency/license policy
         required: false
@@ -82,6 +87,54 @@ jobs:
       run_sast: ${{ steps.profile.outputs.run_sast }}
       run_supply_chain: ${{ steps.profile.outputs.run_supply_chain }}
     steps:
+      - name: Validate runner trust contract
+        shell: bash
+        env:
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          SELF_HOSTED_MODE: ${{ inputs.self_hosted_mode }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if not isinstance(labels, list) or not labels or any(
+              not isinstance(value, str) or not value for value in labels
+          ):
+              raise SystemExit("runner_json must be a non-empty JSON string array")
+          mode = os.environ["SELF_HOSTED_MODE"]
+          if "self-hosted" not in labels:
+              if labels != ["ubuntu-latest"] or mode != "none":
+                  raise SystemExit(
+                      'hosted validation must use ["ubuntu-latest"] with mode=none'
+                  )
+              raise SystemExit(0)
+          if "Linux" not in labels:
+              raise SystemExit("self-hosted validation requires the Linux label")
+          if mode == "trusted-main":
+              if (
+                  os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"}
+                  or os.environ["EVENT_REF"] != "refs/heads/main"
+              ):
+                  raise SystemExit(
+                      "trusted-main requires push/workflow_dispatch on refs/heads/main"
+                  )
+          elif mode == "ephemeral-pr":
+              if (
+                  os.environ["EVENT_NAME"] != "pull_request"
+                  or "ephemeral" not in labels
+              ):
+                  raise SystemExit(
+                      "ephemeral-pr requires pull_request and an ephemeral runner label"
+                  )
+          else:
+              raise SystemExit(
+                  "self-hosted validation requires mode trusted-main or ephemeral-pr"
+              )
+          PY
+
       - name: Resolve allowlisted profile
         id: profile
         shell: bash
@@ -126,6 +179,7 @@ jobs:
     uses: optimizr-tech/optimizr-actions/.github/workflows/_static-lint.yml@v1
     with:
       runner_json: ${{ inputs.runner_json }}
+      self_hosted_mode: ${{ inputs.self_hosted_mode }}
       shellcheck_severity: ${{ inputs.shellcheck_severity }}
       exclusions: ${{ inputs.static_lint_exclusions }}
       artifact_name: security-suite-static-lint
@@ -137,6 +191,7 @@ jobs:
     uses: optimizr-tech/optimizr-actions/.github/workflows/_security-gate.yml@v1
     with:
       runner_json: ${{ inputs.runner_json }}
+      self_hosted_mode: ${{ inputs.self_hosted_mode }}
       scan_type: fs
       scan_ref: "."
       severity: HIGH,CRITICAL
@@ -152,6 +207,7 @@ jobs:
     uses: optimizr-tech/optimizr-actions/.github/workflows/_dependency-policy.yml@v1
     with:
       runner_json: ${{ inputs.runner_json }}
+      self_hosted_mode: ${{ inputs.self_hosted_mode }}
       working_directory: ${{ inputs.dependency_working_directory }}
       policy_file: ${{ inputs.dependency_policy_file }}
       trivy_version: ${{ inputs.trivy_version }}
@@ -167,6 +223,7 @@ jobs:
     uses: optimizr-tech/optimizr-actions/.github/workflows/_sast-gate.yml@v1
     with:
       runner_json: ${{ inputs.runner_json }}
+      self_hosted_mode: ${{ inputs.self_hosted_mode }}
       profile: ${{ needs.profile.outputs.sast_profile }}
       baseline_file: ${{ inputs.sast_baseline_file }}
       artifact_name: security-suite-sast
@@ -179,6 +236,7 @@ jobs:
     uses: optimizr-tech/optimizr-actions/.github/workflows/_supply-chain-evidence.yml@v1
     with:
       runner_json: ${{ inputs.runner_json }}
+      self_hosted_mode: ${{ inputs.self_hosted_mode }}
       image_refs: ${{ inputs.image_refs }}
       trivy_version: ${{ inputs.trivy_version }}
       artifact_name: security-suite-supply-chain
