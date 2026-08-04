@@ -37,6 +37,25 @@ warning rather than prompting for a password or changing the deployment result.
 
 The staged migration and current drift inventory are documented in [`docs/ACTIONS_CONSOLIDATION.md`](docs/ACTIONS_CONSOLIDATION.md). Existing compatibility paths in `optimizr-infra-ops` remain until all consumers have migrated and rollback has been validated.
 
+## Capability catalog
+
+The machine-readable public capability inventory is stored in
+[`catalog/capabilities.json`](catalog/capabilities.json). It discovers reusable
+workflows under `.github/workflows/_*.yml`, composite actions under
+`.github/actions/*/action.yml`, and canonical files beneath `templates/`.
+
+Regenerate or verify it with:
+
+```powershell
+python -m scripts.capability_catalog.generate
+python -m scripts.capability_catalog.generate --check
+```
+
+The first catalog slice records deterministic source digests and intentionally
+marks detailed capability metadata as `unclassified`. Runner compatibility,
+trust boundaries, evidence, migration, rollback, and limitations are completed
+by the profiles/documentation slice tracked in issue #114.
+
 ## Validation
 
 Run the repository regression suite with:
