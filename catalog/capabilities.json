@@ -74,6 +74,13 @@
       "kind": "action",
       "maturity": "stable-v1",
       "metadata_status": "unclassified",
+      "path": ".github/actions/pr-metadata-validation/action.yml",
+      "source_sha256": "77529a1cf1779b31affdb13d1566bb74a8b15bedd1fc5c783ed9cb5914212e64"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
       "path": ".github/actions/python-uv-test-steps/action.yml",
       "source_sha256": "20a039d820bb0432ecae3267229b6bbbc410100033d478e2baaf7462e7374be8"
     },
@@ -257,7 +264,14 @@
       "maturity": "stable-v1",
       "metadata_status": "unclassified",
       "path": ".github/workflows/_postgres-major-logical-migration.yml",
-      "source_sha256": "1f0e4512f596924ed9f49f8ddf2a5d4d3ad88fbe6b4bc7d7d11e34906a1e397d"
+      "source_sha256": "1f0e4512f596924ed9f49f8ddf2a5d4d3ad88fbe6b4dc7d11e34906a1e397d"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_pr-metadata.yml",
+      "source_sha256": "240e5435c912ca1d188aa93c9904abec797b092732e8a736080e1179a82635dd"
     },
     {
       "kind": "workflow",
