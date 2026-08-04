@@ -1,0 +1,439 @@
+{
+  "artifacts": [
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/dependency-policy/action.yml",
+      "source_sha256": "0dd7c544b9bc28201357ca2ba3be62b77287bb52f74b236bda6713e4c32df8b9"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/deploy-snapshot-retention/action.yml",
+      "source_sha256": "113126765bfc845255b9947e047937f647b7dc18171bbe039ade615a14c5dd2d"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/docker-prune-safe/action.yml",
+      "source_sha256": "69194be8817c98b23d1311dd6f1edd9406212ea397dd46c8a9c4448d21f61020"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/ensure-network-volume/action.yml",
+      "source_sha256": "df6282ac147ea130b4c63747fdb4b31f7b98c0aa7a8f1c5da2588abf1d235028"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/local-validation/action.yml",
+      "source_sha256": "a5512806cd57c53fee4ed2291b867e178ae9207ad34fba3651a19e36e6f70dd1"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/negative-probes/action.yml",
+      "source_sha256": "b2cbb44938661f7113cc14ead9f136eff722ad0a949a547924dad559a6a39c23"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/node-project-test/action.yml",
+      "source_sha256": "0d9f726f3d7b4e8bf0cc241e0907e5d2c06152db0c8aaa07bf53777d8bc86fbe"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/pnpm-setup/action.yml",
+      "source_sha256": "31989989977bf41a57d46ba4a9868197fd3771ef82784f82b9750830d232fa3a"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/post-deploy-verification/action.yml",
+      "source_sha256": "3f376038362b3576c684a0aa0d75863002fb5fee613e8f11fb8bf7e9fabc8510"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/postgres-migration-diagnostics/action.yml",
+      "source_sha256": "9c1b6c4b3a9e7753367552d390497a0f8b25816cfc8af0517ea9faebeeafd83b"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/python-uv-test-steps/action.yml",
+      "source_sha256": "20a039d820bb0432ecae3267229b6bbbc410100033d478e2baaf7462e7374be8"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/quality-gate-scripts/action.yml",
+      "source_sha256": "44eef60334ff8080af3e8be042913a26cff361088f9c172ad5cb194b01f5bf7f"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/record-deploy-manifest/action.yml",
+      "source_sha256": "7e5aa02186d2f9ec85e1a0743b45ee79ea9a3dd13753722a393720726e19ba14"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/release-badge-resolver/action.yml",
+      "source_sha256": "243b05b62c5666bd5beb8cf3130534d56b271830a57fd45464f7389ee2096c97"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/repository-validation/action.yml",
+      "source_sha256": "fead6db205d3daa9c965b2c652d5898eaf0393d981343895522822d4d724efc5"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/sast-gate/action.yml",
+      "source_sha256": "ca499f05496a755a017ca334612a66906a8fc25d356ed10bcb2690df5406b2fa"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/security-gate/action.yml",
+      "source_sha256": "9e27a4719b13e6d9e5f8daa11a5a9a6a75049235a6502e475d90f3a7155612a5"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/security-rebuild/action.yml",
+      "source_sha256": "f83f23a3b60ad8bc833bc8dff7d0bad05d2459fa8dcfae2e549961a09136ec4d"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/security-retry-result/action.yml",
+      "source_sha256": "8dadcb40447daf8202b72257ec5b1f6df953d61daf0b9e4e6f9cec9f92d5bdfc"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/static-lint/action.yml",
+      "source_sha256": "fcd5633f4d3dc263a76a597dd3d27dd05e47601151b0bc7caf8fa42ba61c4195"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/static-site-deploy/action.yml",
+      "source_sha256": "0bfe313ebd072df1d29f1230751c7b87d09f9512e6a78237b130cea22bc71b36"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/supply-chain-evidence/action.yml",
+      "source_sha256": "35ec7d2d8a05caa72fa7a22c66058035d0f784b83909c03bf8507e2d22e33dec"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/update-release-badge/action.yml",
+      "source_sha256": "617907abf6802c751c140016d99ddf56f8ce145ae5151b1ba27ca56cea2e255e"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/validate-deploy-env/action.yml",
+      "source_sha256": "d069e29fc4a73cc3e61e9fa621c92b8e21a214ab45037daa42edeb7a81cde0e3"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/validation-attestation/action.yml",
+      "source_sha256": "20c6163d51eb5ac4209c46fc7e54bb72f8e7ac1ee11bc0d038ba740ea411ebce"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/validation-authorization/action.yml",
+      "source_sha256": "97c41c561510d224123884bfd3c8f763c823850e6cfb0ffb9ec44b9c09018861"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/wait-for-healthcheck/action.yml",
+      "source_sha256": "5833a6af38ccb09f22031e19d0b2e7eeb78a11694e2b3034fc9059a386760cac"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/write-deploy-manifest/action.yml",
+      "source_sha256": "c0761276a12f032eb402d47f36671857606b16df13e41d02be671d550a4e1384"
+    },
+    {
+      "kind": "action",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/actions/write-env-file/action.yml",
+      "source_sha256": "28cab908427ba46b78bb9c826cbd2b7383208d0383dd4d8254a33f85efe23ec5"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_commitlint.yml",
+      "source_sha256": "5b4701b18a0494ba763f5cf81f34fbf9f0930c57ba36926923e346365971dd7d"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_dependabot-security-automerge.yml",
+      "source_sha256": "4712b4b2149069d2509530f6fa7b1e682bf4e2a2b5b08b7eb5e2e846fcff547c"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_dependency-policy.yml",
+      "source_sha256": "4400650377120663e6f06de1cd377939cfb859d881568e84748222f0ae2febbf"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_docker-compose-validate.yml",
+      "source_sha256": "859030f22d4a907cff359a8ca904c812b9059c39f0d5a6ab8447b59e70c432b2"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_negative-probes.yml",
+      "source_sha256": "77e6730b15de7f8f6e454b181871fc22254d4b32be8603d8a52fb5ff993b489c"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_node-project-test.yml",
+      "source_sha256": "c89a55a96f72f9477385f26da04a39dd6be80d6737247519ec0c262f3d4a9e50"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_post-deploy-verification.yml",
+      "source_sha256": "427a456d3ada80a396b07c114fc05c7263e02c3dd30ed5bdf1d3f55a7fb8d70b"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_postgres-major-logical-migration.yml",
+      "source_sha256": "1f0e4512f596924ed9f49f8ddf2a5d4d3ad88fbe6b4bc7d7d11e34906a1e397d"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_python-uv-test.yml",
+      "source_sha256": "63e8d9179c12d46c87ce4ac98023769495615a5ad4943176e99f3a698f8ef736"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_quality-gate-baseline.yml",
+      "source_sha256": "8f334d3bf977d9ec3fe424d813c7e5dc733fd384681d39c278d3e9673e209185"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_quality-gate-collect-dup.yml",
+      "source_sha256": "d4c6b06babecb7501cc9936355a1985a8c9ad2b7519cbc4d6cb5f593c0c27843"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_quality-gate-collect-security.yml",
+      "source_sha256": "328a5bc31a48775f2be8561ce825e5e203f117e7ff67661195abb8c5cd86dfd9"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_quality-gate-pr.yml",
+      "source_sha256": "434aede257d92e101267b1a45fc3459bab39d63c7862358b74cd546539bb2d3c"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_quality-gate.yml",
+      "source_sha256": "91539ba31bf6f222f8caf78a8eb1b391a1e767e22fa3e3184424dd96a303fb18"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_release-badge-recovery.yml",
+      "source_sha256": "8b611bd3cdb948b783cf292f2722112c8f2c55fdfae3b9cdd7ed71c2de25cb01"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_repository-validation-emergency.yml",
+      "source_sha256": "3f45f6891f4fb8fbed59f74dae5dba3ab098491c56830ce072fc36a12f59f413"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_repository-validation.yml",
+      "source_sha256": "601c88ca3d4cc6a63a01a1568307c431e7306a84df2ca449f16432a711bbe0f5"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_sast-gate.yml",
+      "source_sha256": "81cd5bafd84a9f7ef7d2504345c25ea4f46e3a6699b12274c2859ad90b9eeb5d"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_security-gate.yml",
+      "source_sha256": "543b33071d1ab1e40dc29d9e941c7ca188e382f7e44906153557f151d561d488"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_security-suite.yml",
+      "source_sha256": "321acd61a127d995f9d2cf32c6c7e8229dfba5393388cd59ef7906e54ced0ceb"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_semantic-release.yml",
+      "source_sha256": "028b40fc8a7550bb98b6d9a8b1a5dc6114d68d62467cc5c97f13576328eba1d9"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_static-lint.yml",
+      "source_sha256": "74a52366c5b5a5219f5acc68b77dae1064e076534446c4eda9c3ae313c5ecffa"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_static-site-deploy.yml",
+      "source_sha256": "637375f82debcc96e1b2246e78efbe37e37775275e19d268f7a05dfbfd72936b"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_supply-chain-evidence.yml",
+      "source_sha256": "71977fd4d635a7e71c236be1cd74530f0af958a477aa001cee2298bb383b81e8"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_trivy-scan.yml",
+      "source_sha256": "acde3e8b904190d60183366ef95fbb42405b39adf82f8d3c78a540848a3bda29"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_validate-pr.yml",
+      "source_sha256": "6511f40a1bea4659e925c38cad759bff6add3bff5f61ed7a79a9668b40bb8d0a"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_validation-gate.yml",
+      "source_sha256": "bebcfa1ab8c21e109175dbd369673fe8129e444b9c660774d39b37e7b47344c7"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_vps-monorepo-deploy.yml",
+      "source_sha256": "1ba24b2a961bbb2321cff4424e5df5cde2d643e7ea6a743f141620717c4dfd1b"
+    },
+    {
+      "kind": "workflow",
+      "maturity": "stable-v1",
+      "metadata_status": "unclassified",
+      "path": ".github/workflows/_vps-self-hosted-deploy.yml",
+      "source_sha256": "cd95e0d0deebfdd655b1931c2d8c74c693345b951d1938fbf4faf5112abae7bb"
+    },
+    {
+      "kind": "template",
+      "maturity": "canonical-template",
+      "metadata_status": "unclassified",
+      "path": "templates/workflows/commitlint.yml",
+      "source_sha256": "0f5f21e007f4f246daba696843ad83765ea0704880a5fb5319ea0770adcf05d5"
+    },
+    {
+      "kind": "template",
+      "maturity": "canonical-template",
+      "metadata_status": "unclassified",
+      "path": "templates/workflows/dependabot-security-automerge.yml",
+      "source_sha256": "732c5409a84b8c1cd9caeca3b0d84348f06ce0997c78b8f688f3f377a5be53c2"
+    },
+    {
+      "kind": "template",
+      "maturity": "canonical-template",
+      "metadata_status": "unclassified",
+      "path": "templates/workflows/repository-validation-emergency.yml",
+      "source_sha256": "4901c6d42b629ece7450f92b5d25502a7f48fdc073f40a250756152b7af3a8b5"
+    },
+    {
+      "kind": "template",
+      "maturity": "canonical-template",
+      "metadata_status": "unclassified",
+      "path": "templates/workflows/validate-pr.yml",
+      "source_sha256": "0d7767557a5defb63f1bde1311954ae51bbde8e602e7327fcf54674cd6424f35"
+    }
+  ],
+  "schema_version": 1
+}

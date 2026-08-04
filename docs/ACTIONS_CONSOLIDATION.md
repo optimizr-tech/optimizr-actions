@@ -19,6 +19,32 @@ Portable workflow, composite-action, parser, policy-evaluation and evidence-gene
 | Quality-gate compatibility action | `.github/actions/quality-gate-scripts/action.yml` | materializes the package shipped with the selected Actions revision; old infra-ops inputs are ignored compatibility no-ops |
 | Docker/runner cleanup | `.github/actions/docker-prune-safe/action.yml` | job-scoped cleanup remains portable; host-wide lifecycle remains operational |
 
+## Machine-readable capability boundary
+
+The complete public surface is tracked in `catalog/capabilities.json` and verified
+against live repository discovery. The first catalog contract inventories:
+
+- reusable workflows matching `.github/workflows/_*.yml`;
+- composite actions matching `.github/actions/*/action.yml`;
+- regular canonical files beneath `templates/`.
+
+Every entry contains a deterministic SHA-256 digest of the exact source file.
+Adding, removing, or changing a public artifact without regenerating the catalog
+fails the repository contract suite.
+
+Use:
+
+```text
+python -m scripts.capability_catalog.generate
+python -m scripts.capability_catalog.generate --check
+```
+
+Detailed capability metadata remains explicitly `unclassified` until the next
+#114 slice assigns categories, runner compatibility, trust boundaries, evidence,
+permissions, migration, rollback, and known limitations. The inventory contract
+therefore establishes coverage without pretending that the human classification
+work is complete.
+
 ## Repository boundary
 
 The repository-boundary contract requires **zero executable references** to `optimizr-infra-ops` under:
