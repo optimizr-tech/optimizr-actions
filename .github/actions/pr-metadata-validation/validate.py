@@ -126,9 +126,13 @@ def _request_json(url: str, token: str) -> object:
         return json.load(response)
 
 
-def fetch_pr_metadata(api_url: str, repository: str, pr_number: int, token: str) -> tuple[dict, list[dict]]:
+def _repository_api_root(api_url: str, repository: str) -> str:
     encoded_repo = "/".join(urllib.parse.quote(part, safe="") for part in repository.split("/"))
-    root = f"{api_url.rstrip('/')}/repos/{encoded_repo}/pulls/{pr_number}"
+    return f"{api_url.rstrip('/')}/repos/{encoded_repo}"
+
+
+def fetch_pr_metadata(api_url: str, repository: str, pr_number: int, token: str) -> tuple[dict, list[dict]]:
+    root = f"{_repository_api_root(api_url, repository)}/pulls/{pr_number}"
     pr = _request_json(root, token)
     if not isinstance(pr, dict):
         raise RuntimeError("GitHub PR response is not an object")
@@ -142,6 +146,82 @@ def fetch_pr_metadata(api_url: str, repository: str, pr_number: int, token: str)
         if len(payload) < 100:
             return pr, commits
     raise RuntimeError("PR has more than 1000 commits; metadata validation is bounded")
+
+
+def fetch_branch_history(
+    api_url: str,
+    repository: str,
+    head_owner: str,
+    head_ref: str,
+    token: str,
+) -> list[dict]:
+    root = f"{_repository_api_root(api_url, repository)}/pulls"
+    history: list[dict] = []
+    for page in range(1, 11):
+        query = urllib.parse.urlencode(
+            {
+                "state": "closed",
+                "head": f"{head_owner}:{head_ref}",
+                "per_page": 100,
+                "page": page,
+            }
+        )
+        payload = _request_json(f"{root}?{query}", token)
+        if not isinstance(payload, list):
+            raise RuntimeError("GitHub branch history response is not a list")
+        history.extend(item for item in payload if isinstance(item, dict))
+        if len(payload) < 100:
+            return history
+    raise RuntimeError("branch history exceeds 1000 pull requests; validation is bounded")
+
+
+def resolve_head_identity(pr: dict) -> tuple[str, str] | None:
+    head = pr.get("head") or {}
+    if not isinstance(head, dict):
+        return None
+    head_ref = str(head.get("ref") or "")
+    head_repo = head.get("repo") or {}
+    head_repo_full_name = str(head_repo.get("full_name") or "") if isinstance(head_repo, dict) else ""
+    head_label = str(head.get("label") or "")
+
+    head_owner = ""
+    if "/" in head_repo_full_name:
+        head_owner = head_repo_full_name.split("/", 1)[0]
+    elif ":" in head_label:
+        head_owner = head_label.split(":", 1)[0]
+
+    if not head_owner or not head_ref:
+        return None
+    return head_owner, head_ref
+
+
+def validate_pr_lifecycle(
+    pr: dict,
+    pr_number: int,
+    branch_history: list[dict],
+) -> list[ValidationFailure]:
+    failures: list[ValidationFailure] = []
+    if str(pr.get("state") or "") != "open":
+        failures.append(ValidationFailure("branch lifecycle", "current pull request is not open"))
+    if bool(pr.get("merged")) or pr.get("merged_at"):
+        failures.append(ValidationFailure("branch lifecycle", "current pull request is already merged"))
+
+    for prior in branch_history:
+        try:
+            prior_number = int(prior.get("number") or 0)
+        except (TypeError, ValueError):
+            continue
+        if prior_number == pr_number:
+            continue
+        if prior.get("merged_at"):
+            failures.append(
+                ValidationFailure(
+                    "branch lifecycle",
+                    f"head branch was already used by merged PR #{prior_number}; create a fresh branch",
+                )
+            )
+            break
+    return failures
 
 
 def emit_failure(failure: ValidationFailure) -> None:
@@ -206,6 +286,37 @@ def main() -> int:
         failures.append(ValidationFailure("exact SHA", "PR head SHA does not match the event input"))
     if not commits:
         failures.append(ValidationFailure("PR commits", "no commits were returned by GitHub"))
+
+    state_failures = validate_pr_lifecycle(pr, pr_number, [])
+    failures.extend(state_failures)
+    if not state_failures:
+        head_identity = resolve_head_identity(pr)
+        if head_identity is None:
+            failures.append(ValidationFailure("branch lifecycle", "unable to resolve the exact head branch identity"))
+        else:
+            try:
+                branch_history = fetch_branch_history(
+                    api_url,
+                    repository,
+                    head_identity[0],
+                    head_identity[1],
+                    token,
+                )
+            except (
+                urllib.error.URLError,
+                urllib.error.HTTPError,
+                TimeoutError,
+                RuntimeError,
+                json.JSONDecodeError,
+            ) as exc:
+                failures.append(
+                    ValidationFailure(
+                        "branch lifecycle",
+                        f"unable to fetch branch history: {type(exc).__name__}",
+                    )
+                )
+            else:
+                failures.extend(validate_pr_lifecycle(pr, pr_number, branch_history))
 
     for index, item in enumerate(commits, start=1):
         commit = item.get("commit") or {}
