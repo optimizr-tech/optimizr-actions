@@ -12,6 +12,10 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
         "_validate-pr.yml",
         "_python-uv-test.yml",
         "_node-project-test.yml",
+        "_quality-gate-collect-security.yml",
+        "_quality-gate-collect-dup.yml",
+        "_quality-gate-baseline.yml",
+        "_quality-gate-pr.yml",
     )
 
     def test_reusables_accept_governed_runner_selection(self):
@@ -30,8 +34,15 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
                 self.assertNotIn("[skip-tests]", text)
                 self.assertNotIn("github.event.head_commit.message", text)
 
-    def test_pr_metadata_workflows_require_ephemeral_self_hosted_runners(self):
-        for name in ("_commitlint.yml", "_validate-pr.yml", "_node-project-test.yml"):
+    def test_pr_capable_workflows_require_ephemeral_self_hosted_runners(self):
+        for name in (
+            "_commitlint.yml",
+            "_validate-pr.yml",
+            "_node-project-test.yml",
+            "_quality-gate-collect-security.yml",
+            "_quality-gate-collect-dup.yml",
+            "_quality-gate-pr.yml",
+        ):
             text = (ROOT / ".github/workflows" / name).read_text()
             with self.subTest(workflow=name):
                 self.assertIn('"ephemeral" not in labels', text)
