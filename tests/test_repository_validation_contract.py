@@ -29,6 +29,14 @@ class RepositoryValidationContractTests(unittest.TestCase):
         self.assertIn("steps.contract.outputs.result", text)
         self.assertIn("inputs.candidate_sha || github.sha", text)
 
+    def test_ephemeral_override_is_bounded_to_pull_request_runner_labels(self):
+        text = (ROOT / ".github/workflows/_repository-validation.yml").read_text()
+        self.assertIn("allow_ephemeral_pr:", text)
+        self.assertIn("ALLOW_EPHEMERAL_PR", text)
+        self.assertIn('"ephemeral" not in labels', text)
+        self.assertIn('os.environ["EVENT_NAME"] != "pull_request"', text)
+        self.assertIn("ephemeral self-hosted repository validation", text)
+
     def test_emergency_reusable_owns_environment_protection(self):
         text = (ROOT / ".github/workflows/_repository-validation-emergency.yml").read_text()
         self.assertIn("workflow_call:", text)

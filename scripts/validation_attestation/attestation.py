@@ -9,7 +9,7 @@ import re
 import sys
 
 SHA = re.compile(r"[0-9a-f]{40}\Z")
-PATHS = {"hosted", "self-hosted", "reviewed-emergency"}
+PATHS = {"hosted", "self-hosted", "ephemeral-pr", "reviewed-emergency"}
 RESULTS = {"success", "failure", "cancelled", "skipped"}
 
 

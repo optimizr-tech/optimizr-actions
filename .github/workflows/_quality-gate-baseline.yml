@@ -1,11 +1,20 @@
 name: _quality-gate-baseline
 
 # Emit quality-gate-baseline artifact on main after producer jobs succeed.
-# Presets: python-backend (payment) | monorepo-serve (optimizr-serve).
 
 on:
   workflow_call:
     inputs:
+      runner_json:
+        description: JSON runner labels
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      self_hosted_mode:
+        description: none or trusted-main
+        required: false
+        type: string
+        default: none
       preset:
         description: "Artifact layout preset: python-backend | monorepo-serve"
         required: true
@@ -32,16 +41,39 @@ permissions:
 jobs:
   quality-gate-baseline:
     name: Quality gate baseline (main)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
     timeout-minutes: 10
     steps:
+      - name: Validate runner trust contract
+        shell: bash
+        env:
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          SELF_HOSTED_MODE: ${{ inputs.self_hosted_mode }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          mode = os.environ["SELF_HOSTED_MODE"]
+          if "self-hosted" not in labels:
+              if labels != ["ubuntu-latest"] or mode != "none":
+                  raise SystemExit('hosted validation must use ["ubuntu-latest"] with mode=none')
+              raise SystemExit(0)
+          if "Linux" not in labels:
+              raise SystemExit("self-hosted validation requires the Linux label")
+          if mode != "trusted-main":
+              raise SystemExit("self-hosted quality baseline requires trusted-main")
+          if os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"} or os.environ["EVENT_REF"] != "refs/heads/main":
+              raise SystemExit("trusted-main requires push/workflow_dispatch on refs/heads/main")
+          PY
       - name: Checkout caller
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           persist-credentials: false
 
       - name: Checkout exact quality-gate implementation
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
@@ -49,19 +81,12 @@ jobs:
           persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
           python-version: "3.12"
 
-      - name: Download artifacts (python-backend)
-        if: inputs.preset == 'python-backend'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
-        with:
-          path: artifacts
-
-      - name: Download artifacts (monorepo-serve)
-        if: inputs.preset == 'monorepo-serve'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+      - name: Download artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           path: artifacts
 
@@ -70,15 +95,18 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/.optimizr-actions-source
         run: |
           set -euo pipefail
+          case "${{ inputs.preset }}" in
+            python-backend|monorepo-serve) ;;
+            *) echo "unsupported quality-gate preset" >&2; exit 2 ;;
+          esac
           python -m scripts.quality_gate.run \
             --artifacts-dir artifacts \
             --head-sha "${GITHUB_SHA}" \
             emit-baseline > quality-gate-baseline.json
           python -m json.tool quality-gate-baseline.json > /dev/null
-          echo "baseline metrics: $(python -c 'import json; print(len(json.load(open("quality-gate-baseline.json"))["metrics"]))')"
 
       - name: Upload baseline
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: quality-gate-baseline
           path: quality-gate-baseline.json
