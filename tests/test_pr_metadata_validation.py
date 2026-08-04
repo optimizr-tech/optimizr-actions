@@ -4,6 +4,7 @@ import importlib.util
 from pathlib import Path
 import sys
 import unittest
+import urllib.parse
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / ".github/actions/pr-metadata-validation/validate.py"
@@ -59,7 +60,8 @@ class PRMetadataValidationTests(unittest.TestCase):
         try:
             def fake(url, token):
                 calls.append(url)
-                if "page=1" in url:
+                query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+                if query.get("page") == ["1"]:
                     return [{"number": 4, "merged_at": None}] * 100
                 return [{"number": 5, "merged_at": "2026-08-04T12:00:00Z"}]
             module._request_json = fake
