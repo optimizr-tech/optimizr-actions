@@ -10,7 +10,14 @@ SCRIPT = ROOT / "scripts/validation_attestation/attestation.py"
 
 
 class ValidationAttestationTests(unittest.TestCase):
-    def run_script(self, *, candidate="a" * 40, context_sha="a" * 40, results=None):
+    def run_script(
+        self,
+        *,
+        candidate="a" * 40,
+        context_sha="a" * 40,
+        results=None,
+        validation_path="hosted",
+    ):
         results = results or {
             "repository_validation": "success",
             "security_suite": "success",
@@ -24,7 +31,7 @@ class ValidationAttestationTests(unittest.TestCase):
                     "--repository", "optimizr-tech/example",
                     "--candidate-sha", candidate,
                     "--context-sha", context_sha,
-                    "--validation-path", "hosted",
+                    "--validation-path", validation_path,
                     "--required-checks-json", '["repository_validation","security_suite"]',
                     "--results-json", json.dumps(results),
                     "--workflow-repository", "optimizr-tech/optimizr-actions",
@@ -46,6 +53,12 @@ class ValidationAttestationTests(unittest.TestCase):
         self.assertEqual(payload["validated_sha"], "a" * 40)
         self.assertEqual(payload["actions_workflow_sha"], "b" * 40)
         self.assertRegex(payload["evidence_digest"], r"^sha256:[0-9a-f]{64}$")
+
+    def test_ephemeral_pull_request_path_is_attested(self):
+        completed, payload = self.run_script(validation_path="ephemeral-pr")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(payload["validation_path"], "ephemeral-pr")
+        self.assertEqual(payload["result"], "passed")
 
     def test_skipped_required_check_fails_closed(self):
         completed, payload = self.run_script(
