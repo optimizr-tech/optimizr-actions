@@ -1,0 +1,76 @@
+name: _pr-metadata
+
+on:
+  workflow_call:
+    inputs:
+      runner_json:
+        description: Hosted runner or persistent read-only metadata runner labels
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      self_hosted_mode:
+        description: none for hosted or metadata-pr for self-hosted metadata-only execution
+        required: false
+        type: string
+        default: none
+      pr_number:
+        required: true
+        type: number
+      pr_title:
+        required: true
+        type: string
+      pr_body:
+        required: true
+        type: string
+      base_sha:
+        required: true
+        type: string
+      head_sha:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  metadata:
+    name: PR metadata
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: 5
+    steps:
+      - name: Validate metadata runner trust contract
+        shell: bash
+        env:
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          SELF_HOSTED_MODE: ${{ inputs.self_hosted_mode }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if not isinstance(labels, list) or not labels or any(not isinstance(v, str) or not v for v in labels):
+              raise SystemExit("runner_json must be a non-empty JSON string array")
+          mode = os.environ["SELF_HOSTED_MODE"]
+          if "self-hosted" not in labels:
+              if labels != ["ubuntu-latest"] or mode != "none":
+                  raise SystemExit('hosted metadata validation requires ["ubuntu-latest"] with mode=none')
+          else:
+              if "Linux" not in labels:
+                  raise SystemExit("self-hosted metadata validation requires Linux")
+              if mode != "metadata-pr":
+                  raise SystemExit("self-hosted metadata validation requires mode metadata-pr")
+              if os.environ["EVENT_NAME"] != "pull_request":
+                  raise SystemExit("metadata-pr requires a pull_request event")
+          PY
+
+      - name: Validate title, body and commit subjects
+        uses: optimizr-tech/optimizr-actions/.github/actions/pr-metadata-validation@v1
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          pr_number: ${{ inputs.pr_number }}
+          pr_title: ${{ inputs.pr_title }}
+          pr_body: ${{ inputs.pr_body }}
+          base_sha: ${{ inputs.base_sha }}
+          head_sha: ${{ inputs.head_sha }}
