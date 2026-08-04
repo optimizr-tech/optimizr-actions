@@ -41,6 +41,11 @@ on:
         type: boolean
         required: false
         default: true
+      allow_ephemeral_pr:
+        description: Allow untrusted-ref validation only on an isolated ephemeral pull-request runner
+        type: boolean
+        required: false
+        default: false
       trusted_ref:
         description: Trusted full branch ref
         type: string
@@ -83,12 +88,50 @@ jobs:
         env:
           RUNNER_JSON: ${{ inputs.runner_json }}
           REQUIRE_TRUSTED: ${{ inputs.require_trusted_ref }}
+          ALLOW_EPHEMERAL_PR: ${{ inputs.allow_ephemeral_pr }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           python3 - <<'PY'
           import json, os
+
           labels = json.loads(os.environ["RUNNER_JSON"])
-          if "self-hosted" in labels and os.environ["REQUIRE_TRUSTED"] != "true":
-              raise SystemExit("self-hosted repository validation must require a trusted ref")
+          if not isinstance(labels, list) or not labels or any(
+              not isinstance(value, str) or not value for value in labels
+          ):
+              raise SystemExit("runner_json must be a non-empty JSON string array")
+
+          self_hosted = "self-hosted" in labels
+          require_trusted = os.environ["REQUIRE_TRUSTED"] == "true"
+          allow_ephemeral = os.environ["ALLOW_EPHEMERAL_PR"] == "true"
+
+          if not self_hosted:
+              if allow_ephemeral:
+                  raise SystemExit(
+                      "ephemeral self-hosted repository validation requires self-hosted labels"
+                  )
+              raise SystemExit(0)
+
+          if "Linux" not in labels:
+              raise SystemExit("self-hosted repository validation requires the Linux label")
+
+          if require_trusted:
+              if allow_ephemeral:
+                  raise SystemExit(
+                      "trusted-ref validation and ephemeral PR validation are mutually exclusive"
+                  )
+              raise SystemExit(0)
+
+          if not allow_ephemeral:
+              raise SystemExit(
+                  "self-hosted repository validation must require a trusted ref or an ephemeral PR override"
+              )
+          if (
+              os.environ["EVENT_NAME"] != "pull_request"
+              or "ephemeral" not in labels
+          ):
+              raise SystemExit(
+                  "ephemeral self-hosted repository validation requires pull_request and an ephemeral runner label"
+              )
           PY
       - name: Checkout exact candidate
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
