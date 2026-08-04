@@ -30,6 +30,20 @@ class ValidationGateContractTests(unittest.TestCase):
         self.assertIn("needs.security-suite.result", text)
         self.assertIn("if: always()", text)
 
+    def test_gate_accepts_only_governed_ephemeral_pull_request_runners(self):
+        text = (ROOT / ".github/workflows/_validation-gate.yml").read_text()
+        self.assertIn("ephemeral-pr", text)
+        self.assertIn('"ephemeral" not in labels', text)
+        self.assertIn('os.environ["EVENT_NAME"] != "pull_request"', text)
+        self.assertIn(
+            "allow_ephemeral_pr: ${{ inputs.validation_path == 'ephemeral-pr' }}",
+            text,
+        )
+        self.assertIn(
+            "require_trusted_ref: ${{ inputs.validation_path == 'self-hosted' || inputs.validation_path == 'reviewed-emergency' }}",
+            text,
+        )
+
     def test_security_suite_exports_success_result(self):
         text = (ROOT / ".github/workflows/_security-suite.yml").read_text()
         self.assertIn("jobs.summary.outputs.result", text)
