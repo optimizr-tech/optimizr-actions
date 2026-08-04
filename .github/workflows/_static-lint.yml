@@ -7,6 +7,11 @@ on:
         required: false
         type: string
         default: '["ubuntu-latest"]'
+      self_hosted_mode:
+        description: none, trusted-main, or ephemeral-pr
+        required: false
+        type: string
+        default: none
       shellcheck_severity:
         description: error, warning, info, or style
         required: false
@@ -35,6 +40,54 @@ jobs:
     runs-on: ${{ fromJSON(inputs.runner_json) }}
     timeout-minutes: 20
     steps:
+      - name: Validate runner trust contract
+        shell: bash
+        env:
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          SELF_HOSTED_MODE: ${{ inputs.self_hosted_mode }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if not isinstance(labels, list) or not labels or any(
+              not isinstance(value, str) or not value for value in labels
+          ):
+              raise SystemExit("runner_json must be a non-empty JSON string array")
+          mode = os.environ["SELF_HOSTED_MODE"]
+          if "self-hosted" not in labels:
+              if labels != ["ubuntu-latest"] or mode != "none":
+                  raise SystemExit(
+                      'hosted validation must use ["ubuntu-latest"] with mode=none'
+                  )
+              raise SystemExit(0)
+          if "Linux" not in labels:
+              raise SystemExit("self-hosted validation requires the Linux label")
+          if mode == "trusted-main":
+              if (
+                  os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"}
+                  or os.environ["EVENT_REF"] != "refs/heads/main"
+              ):
+                  raise SystemExit(
+                      "trusted-main requires push/workflow_dispatch on refs/heads/main"
+                  )
+          elif mode == "ephemeral-pr":
+              if (
+                  os.environ["EVENT_NAME"] != "pull_request"
+                  or "ephemeral" not in labels
+              ):
+                  raise SystemExit(
+                      "ephemeral-pr requires pull_request and an ephemeral runner label"
+                  )
+          else:
+              raise SystemExit(
+                  "self-hosted validation requires mode trusted-main or ephemeral-pr"
+              )
+          PY
+
       - name: Checkout exact candidate
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
