@@ -2,16 +2,15 @@ from pathlib import Path
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-PINNED_REVISION = "62ea4fba2da72e502a3141391a5db988f8a98c16"
 
 
 class ValidationGateContractTests(unittest.TestCase):
     def test_gate_exposes_one_attestation_for_release_and_deploy(self):
         text = (ROOT / ".github/workflows/_validation-gate.yml").read_text()
-        self.assertIn(f"_repository-validation.yml@{PINNED_REVISION}", text)
-        self.assertIn(f"_security-suite.yml@{PINNED_REVISION}", text)
-        self.assertIn(f"validation-attestation@{PINNED_REVISION}", text)
-        self.assertEqual(text.count(PINNED_REVISION), 3)
+        self.assertIn("_repository-validation.yml@v1", text)
+        self.assertIn("_security-suite.yml@v1", text)
+        self.assertIn("validation-attestation@v1", text)
+        self.assertNotIn("62ea4fba2da72e502a3141391a5db988f8a98c16", text)
         for output in (
             "result:",
             "validated_sha:",
