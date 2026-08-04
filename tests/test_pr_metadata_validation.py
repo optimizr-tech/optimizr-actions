@@ -53,6 +53,59 @@ class PRMetadataValidationTests(unittest.TestCase):
         self.assertEqual(101, len(commits))
         self.assertEqual(3, len(calls))
 
+    def test_branch_history_is_bounded_and_encodes_exact_head(self):
+        calls = []
+        original = module._request_json
+        try:
+            def fake(url, token):
+                calls.append(url)
+                if "page=1" in url:
+                    return [{"number": 4, "merged_at": None}] * 100
+                return [{"number": 5, "merged_at": "2026-08-04T12:00:00Z"}]
+            module._request_json = fake
+            history = module.fetch_branch_history(
+                "https://api.github.test",
+                "owner/repo",
+                "owner",
+                "fix/issue-1",
+                "token",
+            )
+        finally:
+            module._request_json = original
+        self.assertEqual(101, len(history))
+        self.assertEqual(2, len(calls))
+        self.assertIn("state=closed", calls[0])
+        self.assertIn("head=owner%3Afix%2Fissue-1", calls[0])
+
+    def test_reused_merged_branch_fails(self):
+        pr = {"state": "open", "merged": False, "merged_at": None}
+        prior = [
+            {"number": 194, "merged_at": "2026-08-04T12:43:18Z"},
+            {"number": 193, "merged_at": None},
+        ]
+        failures = module.validate_pr_lifecycle(pr, 195, prior)
+        messages = " ".join(item.message for item in failures)
+        self.assertIn("merged PR #194", messages)
+
+    def test_closed_unmerged_branch_history_is_allowed(self):
+        pr = {"state": "open", "merged": False, "merged_at": None}
+        prior = [{"number": 198, "merged_at": None}]
+        self.assertEqual([], module.validate_pr_lifecycle(pr, 199, prior))
+
+    def test_closed_or_merged_current_pr_fails(self):
+        closed = module.validate_pr_lifecycle(
+            {"state": "closed", "merged": False, "merged_at": None},
+            7,
+            [],
+        )
+        merged = module.validate_pr_lifecycle(
+            {"state": "closed", "merged": True, "merged_at": "2026-08-04T12:00:00Z"},
+            7,
+            [],
+        )
+        self.assertTrue(any("not open" in item.message for item in closed))
+        self.assertTrue(any("already merged" in item.message for item in merged))
+
 
 if __name__ == "__main__":
     unittest.main()
