@@ -158,7 +158,7 @@ jobs:
   repository-validation:
     needs: [preflight, emergency-preflight]
     if: always() && (needs.preflight.result == 'success' || needs.emergency-preflight.result == 'success')
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_repository-validation.yml@62ea4fba2da72e502a3141391a5db988f8a98c16
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_repository-validation.yml@v1
     with:
       runner_json: ${{ inputs.runner_json }}
       script_path: ${{ inputs.script_path }}
@@ -172,7 +172,7 @@ jobs:
   security-suite:
     needs: [preflight, emergency-preflight]
     if: always() && (needs.preflight.result == 'success' || needs.emergency-preflight.result == 'success')
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_security-suite.yml@62ea4fba2da72e502a3141391a5db988f8a98c16
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_security-suite.yml@v1
     with:
       runner_json: ${{ inputs.runner_json }}
       profile: ${{ inputs.security_profile }}
@@ -199,7 +199,7 @@ jobs:
     steps:
       - name: Create canonical attestation
         id: attestation
-        uses: optimizr-tech/optimizr-actions/.github/actions/validation-attestation@62ea4fba2da72e502a3141391a5db988f8a98c16
+        uses: optimizr-tech/optimizr-actions/.github/actions/validation-attestation@v1
         with:
           repository: ${{ github.repository }}
           candidate_sha: ${{ inputs.candidate_sha }}
