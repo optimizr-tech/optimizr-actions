@@ -264,7 +264,7 @@
       "maturity": "stable-v1",
       "metadata_status": "unclassified",
       "path": ".github/workflows/_postgres-major-logical-migration.yml",
-      "source_sha256": "1f0e4512f596924ed9f49f8ddf2a5d4d3ad88fbe6b4dc7d11e34906a1e397d"
+      "source_sha256": "1f0e4512f596924ed9f49f8ddf2a5d4d3ad88fbe6b4bc7d7d11e34906a1e397d"
     },
     {
       "kind": "workflow",
