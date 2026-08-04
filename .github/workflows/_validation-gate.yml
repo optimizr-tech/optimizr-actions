@@ -175,6 +175,7 @@ jobs:
     uses: optimizr-tech/optimizr-actions/.github/workflows/_security-suite.yml@v1
     with:
       runner_json: ${{ inputs.runner_json }}
+      self_hosted_mode: ${{ inputs.validation_path == 'ephemeral-pr' && 'ephemeral-pr' || ((inputs.validation_path == 'self-hosted' || inputs.validation_path == 'reviewed-emergency') && 'trusted-main' || 'none') }}
       profile: ${{ inputs.security_profile }}
       dependency_working_directory: ${{ inputs.dependency_working_directory }}
       dependency_policy_file: ${{ inputs.dependency_policy_file }}
