@@ -45,6 +45,13 @@ class ValidationGateContractTests(unittest.TestCase):
             text,
         )
 
+    def test_gate_propagates_security_runner_trust_mode(self):
+        text = (ROOT / ".github/workflows/_validation-gate.yml").read_text()
+        self.assertIn(
+            "self_hosted_mode: ${{ inputs.validation_path == 'ephemeral-pr' && 'ephemeral-pr' || ((inputs.validation_path == 'self-hosted' || inputs.validation_path == 'reviewed-emergency') && 'trusted-main' || 'none') }}",
+            text,
+        )
+
     def test_security_suite_exports_success_result(self):
         text = (ROOT / ".github/workflows/_security-suite.yml").read_text()
         self.assertIn("jobs.summary.outputs.result", text)
