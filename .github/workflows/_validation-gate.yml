@@ -8,7 +8,7 @@ on:
         required: false
         default: '["ubuntu-latest"]'
       validation_path:
-        description: hosted, self-hosted, or reviewed-emergency
+        description: hosted, self-hosted, ephemeral-pr, or reviewed-emergency
         type: string
         required: false
         default: hosted
@@ -118,8 +118,15 @@ jobs:
                   raise SystemExit("self-hosted validation requires self-hosted and Linux labels")
               if os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"} or os.environ["EVENT_REF"] != "refs/heads/main":
                   raise SystemExit("persistent self-hosted validation requires trusted main")
+          elif path == "ephemeral-pr":
+              if "self-hosted" not in labels or "Linux" not in labels:
+                  raise SystemExit("ephemeral-pr validation requires self-hosted and Linux labels")
+              if "ephemeral" not in labels:
+                  raise SystemExit("ephemeral-pr validation requires an ephemeral runner label")
+              if os.environ["EVENT_NAME"] != "pull_request":
+                  raise SystemExit("ephemeral-pr validation requires pull_request")
           else:
-              raise SystemExit("validation_path must be hosted, self-hosted, or reviewed-emergency")
+              raise SystemExit("validation_path must be hosted, self-hosted, ephemeral-pr, or reviewed-emergency")
           PY
 
   emergency-preflight:
@@ -157,7 +164,8 @@ jobs:
       script_path: ${{ inputs.script_path }}
       args_json: ${{ inputs.args_json }}
       candidate_sha: ${{ inputs.candidate_sha }}
-      require_trusted_ref: ${{ inputs.validation_path != 'hosted' }}
+      require_trusted_ref: ${{ inputs.validation_path == 'self-hosted' || inputs.validation_path == 'reviewed-emergency' }}
+      allow_ephemeral_pr: ${{ inputs.validation_path == 'ephemeral-pr' }}
       artifact_name: validation-gate-repository
       retention_days: ${{ inputs.retention_days }}
 
