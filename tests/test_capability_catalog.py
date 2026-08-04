@@ -10,6 +10,8 @@ CATALOG_PATH = ROOT / "catalog" / "capabilities.json"
 
 
 class CapabilityCatalogTests(unittest.TestCase):
+    maxDiff = None
+
     def test_catalog_discovers_and_sorts_public_artifacts(self) -> None:
         catalog = build_catalog(ROOT)
 
