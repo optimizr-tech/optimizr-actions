@@ -11,6 +11,7 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
         "_commitlint.yml",
         "_validate-pr.yml",
         "_python-uv-test.yml",
+        "_node-project-test.yml",
     )
 
     def test_reusables_accept_governed_runner_selection(self):
@@ -30,11 +31,11 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
                 self.assertNotIn("github.event.head_commit.message", text)
 
     def test_pr_metadata_workflows_require_ephemeral_self_hosted_runners(self):
-        for name in ("_commitlint.yml", "_validate-pr.yml"):
+        for name in ("_commitlint.yml", "_validate-pr.yml", "_node-project-test.yml"):
             text = (ROOT / ".github/workflows" / name).read_text()
             with self.subTest(workflow=name):
-                self.assertIn('ALLOW_TRUSTED_MAIN: "false"', text)
                 self.assertIn('"ephemeral" not in labels', text)
+                self.assertIn('os.environ["EVENT_NAME"] != "pull_request"', text)
 
     def test_explicit_optional_skip_remains_caller_controlled(self):
         for name in (
