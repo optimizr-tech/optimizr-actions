@@ -1,9 +1,10 @@
 name: Validate and move v1 compatibility tag
 
 # `v1` is the floating compatibility contract for backward-compatible changes.
-# Push remains the normal path. pull_request_target:closed is used only as the
-# recovery path when a merged commit contains a native GitHub skip instruction
-# that suppresses the push-triggered workflow.
+# Pull requests validate the synthetic merge candidate before publication.
+# Push remains the normal publication path. pull_request_target:closed is used
+# only as the recovery path when a merged commit contains a native GitHub skip
+# instruction that suppresses the push-triggered workflow.
 
 on:
   push:
@@ -14,6 +15,16 @@ on:
       - "templates/**"
       - "presets/**"
       - "scripts/**"
+      - "catalog/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/actions/**"
+      - ".github/workflows/**"
+      - "templates/**"
+      - "presets/**"
+      - "scripts/**"
+      - "catalog/**"
   pull_request_target:
     types: [closed]
     branches: [main]
@@ -81,7 +92,7 @@ jobs:
                   --jq '.[].filename'
               )"
               if printf '%s\n' "$changed_files" \
-                | grep -Eq '^(\.github/actions/|\.github/workflows/|templates/|presets/|scripts/)'; then
+                | grep -Eq '^(\.github/actions/|\.github/workflows/|templates/|presets/|scripts/|catalog/)'; then
                 publish=true
               else
                 publish=false
@@ -116,6 +127,7 @@ jobs:
       - name: Run Python contract tests
         run: |
           set -euo pipefail
+          python3 -m scripts.capability_catalog.generate --check
           python3 -m unittest discover -v
           python3 -m compileall scripts tests
 
@@ -139,7 +151,7 @@ jobs:
   move-v1:
     name: Move floating v1 tag
     needs: [scope, validate]
-    if: needs.scope.outputs.publish == 'true'
+    if: needs.scope.outputs.publish == 'true' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
