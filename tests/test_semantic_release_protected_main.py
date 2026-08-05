@@ -83,17 +83,24 @@ class ProtectedReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("protected_main_mode requires releaserc_source=canonical", self.workflow)
         self.assertIn("protected_main_mode is incompatible with update_release_badge=true", self.workflow)
 
-    def test_workflow_fetches_versioned_transformer_outside_consumer_workspace(self) -> None:
+    def test_protected_assets_use_exact_called_workflow_identity(self) -> None:
+        self.assertIn("WORKFLOW_REPOSITORY: ${{ job.workflow_repository }}", self.workflow)
+        self.assertIn("WORKFLOW_SHA: ${{ job.workflow_sha }}", self.workflow)
+        self.assertIn('SOURCE_REPOSITORY="$WORKFLOW_REPOSITORY"', self.workflow)
+        self.assertIn('SOURCE_REF="$WORKFLOW_SHA"', self.workflow)
         self.assertIn(
-            "repos/optimizr-tech/optimizr-actions/contents/scripts/release/prepare_protected_releaserc.py?ref=${REF}",
+            '"repos/${SOURCE_REPOSITORY}/contents/scripts/release/prepare_protected_releaserc.py?ref=${SOURCE_REF}"',
             self.workflow,
         )
         self.assertIn("$RUNNER_TEMP/prepare_protected_releaserc.py", self.workflow)
-        self.assertIn("if: inputs.protected_main_mode", self.workflow)
         self.assertNotIn(
             "run: python3 scripts/release/prepare_protected_releaserc.py",
             self.workflow,
         )
+
+    def test_normal_mode_preserves_requested_actions_ref(self) -> None:
+        self.assertIn("REQUESTED_REF: ${{ inputs.actions_ref }}", self.workflow)
+        self.assertIn('SOURCE_REF="$REQUESTED_REF"', self.workflow)
 
     def test_badge_push_is_unreachable_in_protected_mode(self) -> None:
         self.assertIn(
@@ -106,6 +113,7 @@ class ProtectedReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("protected_main_mode: true", text)
         self.assertIn("does not commit generated files to `main`", text)
         self.assertIn("separate reviewed pull request", text)
+        self.assertIn("`job.workflow_sha`", text)
         self.assertIn("Disable `protected_main_mode` before ruleset activation", text)
 
 
