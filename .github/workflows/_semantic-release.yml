@@ -54,6 +54,11 @@ on:
         required: false
         type: boolean
         default: false
+      protected_main_mode:
+        description: "Publish tag and GitHub Release without pushing generated commits to the protected branch"
+        required: false
+        type: boolean
+        default: false
       skip:
         description: "Explicitly skip release by caller policy; [skip-tests] never controls releases"
         required: false
@@ -73,6 +78,23 @@ jobs:
     runs-on: ${{ fromJSON(inputs.runs_on) }}
     timeout-minutes: 15
     steps:
+      - name: Validate protected-main inputs
+        if: inputs.protected_main_mode
+        shell: bash
+        env:
+          RELEASERC_SOURCE: ${{ inputs.releaserc_source }}
+          UPDATE_RELEASE_BADGE: ${{ inputs.update_release_badge }}
+        run: |
+          set -euo pipefail
+          if [[ "$RELEASERC_SOURCE" != "canonical" ]]; then
+            echo "::error::protected_main_mode requires releaserc_source=canonical"
+            exit 2
+          fi
+          if [[ "$UPDATE_RELEASE_BADGE" == "true" ]]; then
+            echo "::error::protected_main_mode is incompatible with update_release_badge=true"
+            exit 2
+          fi
+
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
@@ -118,6 +140,10 @@ jobs:
             > "$DEST"
           echo "Using canonical releaserc from optimizr-actions@${REF}"
 
+      - name: Prepare protected-main release config
+        if: inputs.protected_main_mode
+        run: python3 scripts/release/prepare_protected_releaserc.py .releaserc.json
+
       - name: Install semantic-release runtime
         env:
           SEMANTIC_RELEASE_VERSION: ${{ inputs.semantic_release_version }}
@@ -160,7 +186,7 @@ jobs:
   update-release-badge:
     name: Update release badge
     needs: release
-    if: ${{ inputs.update_release_badge && needs.release.result == 'success' }}
+    if: ${{ inputs.update_release_badge && !inputs.protected_main_mode && needs.release.result == 'success' }}
     runs-on: ${{ fromJSON(inputs.runs_on) }}
     timeout-minutes: 5
     permissions:
