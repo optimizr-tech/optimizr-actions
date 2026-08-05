@@ -362,7 +362,7 @@
       "maturity": "stable-v1",
       "metadata_status": "unclassified",
       "path": ".github/workflows/_semantic-release.yml",
-      "source_sha256": "e609a09fd7b53ca945bec933640a061e99ac62f3138970d514487c88cfb81482"
+      "source_sha256": "4109785b4f7d807bfbd343abdf9cffc7752519a2d0115ba09a07ee2927281b59"
     },
     {
       "kind": "workflow",
