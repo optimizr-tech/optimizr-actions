@@ -130,8 +130,7 @@ jobs:
         if: inputs.releaserc_source == 'canonical'
         env:
           REQUESTED_REF: ${{ inputs.actions_ref }}
-          WORKFLOW_REPOSITORY: ${{ job.workflow_repository }}
-          WORKFLOW_SHA: ${{ job.workflow_sha }}
+          JOB_CONTEXT_JSON: ${{ toJSON(job) }}
           GH_TOKEN: ${{ github.token }}
           PROTECTED_MAIN_MODE: ${{ inputs.protected_main_mode }}
         run: |
@@ -140,6 +139,18 @@ jobs:
           SOURCE_REF="$REQUESTED_REF"
 
           if [[ "$PROTECTED_MAIN_MODE" == "true" ]]; then
+            readarray -t workflow_identity < <(
+              python3 - <<'PY'
+          import json
+          import os
+
+          job_context = json.loads(os.environ["JOB_CONTEXT_JSON"])
+          print(job_context.get("workflow_repository", ""))
+          print(job_context.get("workflow_sha", ""))
+          PY
+            )
+            WORKFLOW_REPOSITORY="${workflow_identity[0]:-}"
+            WORKFLOW_SHA="${workflow_identity[1]:-}"
             SOURCE_REPOSITORY="$WORKFLOW_REPOSITORY"
             SOURCE_REF="$WORKFLOW_SHA"
             if [[ "$SOURCE_REPOSITORY" != "optimizr-tech/optimizr-actions" ]]; then
