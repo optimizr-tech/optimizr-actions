@@ -47,7 +47,9 @@ jobs:
     secrets: inherit
 ```
 
-Protected mode downloads the canonical releaserc and its transformer from the same reviewed `actions_ref`. It removes `@semantic-release/changelog` and `@semantic-release/git` from the runtime configuration, then verifies that `@semantic-release/github` remains available. Semantic-release can still analyze commits, generate release notes, create the version tag, and publish the GitHub Release, but it does not commit generated files to `main`.
+Protected mode resolves its canonical releaserc and transformer from `job.workflow_repository` at the exact immutable `job.workflow_sha` selected by GitHub for the called reusable workflow. It does not trust a moving branch or tag for its own executable assets, even when the caller keeps `actions_ref: v1` for backward-compatible normal-mode behavior.
+
+The transformer removes `@semantic-release/changelog` and `@semantic-release/git` from the runtime configuration, then verifies that `@semantic-release/github` remains available. Semantic-release can still analyze commits, generate release notes, create the version tag, and publish the GitHub Release, but it does not commit generated files to `main`.
 
 `protected_main_mode` requires `releaserc_source: canonical` and is incompatible with `update_release_badge: true`. A generated `CHANGELOG.md`, package version commit, or badge change must use a separate reviewed pull request if the repository chooses to retain those versioned files. The release workflow must not receive an administrator, PAT, or GitHub Actions bypass merely to push generated commits through branch protection.
 
@@ -59,7 +61,7 @@ The protected transformer is fetched into `RUNNER_TEMP`; the consumer checkout n
 
 ## Failure and rollback
 
-Invalid npm version syntax, Node/npm installation failure, `npm ci` mismatch, release-config resolution failure, protected-mode validation failure, dry-run failure, or release failure blocks the job. There is no fallback to the runner-bundled npm or to a branch-protection bypass.
+Invalid npm version syntax, Node/npm installation failure, `npm ci` mismatch, release-config resolution failure, protected-mode workflow identity failure, dry-run failure, or release failure blocks the job. There is no fallback to the runner-bundled npm, a mutable asset ref, or a branch-protection bypass.
 
 ### Rollback
 
