@@ -45,7 +45,7 @@ on:
         type: string
         default: "local"
       actions_ref:
-        description: "Tag or immutable SHA used for the canonical optimizr-actions releaserc"
+        description: "Tag or immutable SHA used for canonical assets in normal mode; protected mode uses the exact called workflow SHA"
         required: false
         type: string
         default: "main"
@@ -129,25 +129,53 @@ jobs:
       - name: Resolve canonical release assets
         if: inputs.releaserc_source == 'canonical'
         env:
-          REF: ${{ inputs.actions_ref }}
+          REQUESTED_REF: ${{ inputs.actions_ref }}
+          JOB_CONTEXT_JSON: ${{ toJSON(job) }}
           GH_TOKEN: ${{ github.token }}
           PROTECTED_MAIN_MODE: ${{ inputs.protected_main_mode }}
         run: |
           set -euo pipefail
-          DEST=".releaserc.json"
+          SOURCE_REPOSITORY="optimizr-tech/optimizr-actions"
+          SOURCE_REF="$REQUESTED_REF"
 
+          if [[ "$PROTECTED_MAIN_MODE" == "true" ]]; then
+            readarray -t workflow_identity < <(
+              python3 - <<'PY'
+          import json
+          import os
+
+          job_context = json.loads(os.environ["JOB_CONTEXT_JSON"])
+          print(job_context.get("workflow_repository", ""))
+          print(job_context.get("workflow_sha", ""))
+          PY
+            )
+            WORKFLOW_REPOSITORY="${workflow_identity[0]:-}"
+            WORKFLOW_SHA="${workflow_identity[1]:-}"
+            SOURCE_REPOSITORY="$WORKFLOW_REPOSITORY"
+            SOURCE_REF="$WORKFLOW_SHA"
+            if [[ "$SOURCE_REPOSITORY" != "optimizr-tech/optimizr-actions" ]]; then
+              echo "::error::protected-main workflow repository is not trusted"
+              exit 2
+            fi
+            if [[ ! "$SOURCE_REF" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::protected-main workflow SHA is not immutable"
+              exit 2
+            fi
+          fi
+
+          DEST=".releaserc.json"
           gh api -H "Accept: application/vnd.github.raw" \
-            "repos/optimizr-tech/optimizr-actions/contents/templates/.releaserc.json?ref=${REF}" \
+            "repos/${SOURCE_REPOSITORY}/contents/templates/.releaserc.json?ref=${SOURCE_REF}" \
             > "$DEST"
-          echo "Using canonical releaserc from optimizr-actions@${REF}"
+          echo "Using canonical releaserc from ${SOURCE_REPOSITORY}@${SOURCE_REF}"
 
           if [[ "$PROTECTED_MAIN_MODE" == "true" ]]; then
             TRANSFORMER="$RUNNER_TEMP/prepare_protected_releaserc.py"
             gh api -H "Accept: application/vnd.github.raw" \
-              "repos/optimizr-tech/optimizr-actions/contents/scripts/release/prepare_protected_releaserc.py?ref=${REF}" \
+              "repos/${SOURCE_REPOSITORY}/contents/scripts/release/prepare_protected_releaserc.py?ref=${SOURCE_REF}" \
               > "$TRANSFORMER"
             chmod 700 "$TRANSFORMER"
-            echo "Using protected-main transformer from optimizr-actions@${REF}"
+            echo "Using protected-main transformer from ${SOURCE_REPOSITORY}@${SOURCE_REF}"
           fi
 
       - name: Prepare protected-main release config
