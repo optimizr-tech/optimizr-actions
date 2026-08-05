@@ -82,9 +82,17 @@ class ProtectedReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("protected_main_mode requires releaserc_source=canonical", self.workflow)
         self.assertIn("protected_main_mode is incompatible with update_release_badge=true", self.workflow)
 
-    def test_workflow_prepares_filtered_runtime_config(self) -> None:
-        self.assertIn("prepare_protected_releaserc.py", self.workflow)
+    def test_workflow_fetches_versioned_transformer_outside_consumer_workspace(self) -> None:
+        self.assertIn(
+            "repos/optimizr-tech/optimizr-actions/contents/scripts/release/prepare_protected_releaserc.py?ref=${REF}",
+            self.workflow,
+        )
+        self.assertIn("$RUNNER_TEMP/prepare_protected_releaserc.py", self.workflow)
         self.assertIn("if: inputs.protected_main_mode", self.workflow)
+        self.assertNotIn(
+            "run: python3 scripts/release/prepare_protected_releaserc.py",
+            self.workflow,
+        )
 
     def test_badge_push_is_unreachable_in_protected_mode(self) -> None:
         self.assertIn(
