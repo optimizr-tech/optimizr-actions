@@ -126,11 +126,12 @@ jobs:
       - name: Install dependencies
         run: ${{ inputs.install_command }}
 
-      - name: Resolve canonical releaserc
+      - name: Resolve canonical release assets
         if: inputs.releaserc_source == 'canonical'
         env:
           REF: ${{ inputs.actions_ref }}
           GH_TOKEN: ${{ github.token }}
+          PROTECTED_MAIN_MODE: ${{ inputs.protected_main_mode }}
         run: |
           set -euo pipefail
           DEST=".releaserc.json"
@@ -140,9 +141,18 @@ jobs:
             > "$DEST"
           echo "Using canonical releaserc from optimizr-actions@${REF}"
 
+          if [[ "$PROTECTED_MAIN_MODE" == "true" ]]; then
+            TRANSFORMER="$RUNNER_TEMP/prepare_protected_releaserc.py"
+            gh api -H "Accept: application/vnd.github.raw" \
+              "repos/optimizr-tech/optimizr-actions/contents/scripts/release/prepare_protected_releaserc.py?ref=${REF}" \
+              > "$TRANSFORMER"
+            chmod 700 "$TRANSFORMER"
+            echo "Using protected-main transformer from optimizr-actions@${REF}"
+          fi
+
       - name: Prepare protected-main release config
         if: inputs.protected_main_mode
-        run: python3 scripts/release/prepare_protected_releaserc.py .releaserc.json
+        run: python3 "$RUNNER_TEMP/prepare_protected_releaserc.py" .releaserc.json
 
       - name: Install semantic-release runtime
         env:
