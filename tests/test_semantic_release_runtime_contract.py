@@ -37,8 +37,12 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         self.assertIn("releaserc_source:", text)
         self.assertIn("actions_ref:", text)
         self.assertIn("update_release_badge:", text)
+        self.assertIn("protected_main_mode:", text)
         self.assertIn("skip:", text)
-        self.assertIn("inputs.update_release_badge && needs.release.result == 'success'", text)
+        self.assertIn(
+            "inputs.update_release_badge && !inputs.protected_main_mode && needs.release.result == 'success'",
+            text,
+        )
         self.assertRegex(text, r"actions/checkout@[0-9a-f]{40}")
         self.assertRegex(text, r"optimizr-tech/optimizr-actions/.github/actions/update-release-badge@[0-9a-f]{40}")
 
