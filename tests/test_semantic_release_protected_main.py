@@ -10,6 +10,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "release" / "prepare_protected_releaserc.py"
 WORKFLOW = ROOT / ".github" / "workflows" / "_semantic-release.yml"
+DOC = ROOT / "docs" / "SEMANTIC_RELEASE.md"
 
 spec = importlib.util.spec_from_file_location("prepare_protected_releaserc", SCRIPT)
 assert spec and spec.loader
@@ -99,6 +100,13 @@ class ProtectedReleaseWorkflowTests(unittest.TestCase):
             "inputs.update_release_badge && !inputs.protected_main_mode",
             self.workflow,
         )
+
+    def test_documentation_explains_protected_mode_and_rollback(self) -> None:
+        text = DOC.read_text(encoding="utf-8")
+        self.assertIn("protected_main_mode: true", text)
+        self.assertIn("does not commit generated files to `main`", text)
+        self.assertIn("separate reviewed pull request", text)
+        self.assertIn("Disable `protected_main_mode` before ruleset activation", text)
 
 
 if __name__ == "__main__":
