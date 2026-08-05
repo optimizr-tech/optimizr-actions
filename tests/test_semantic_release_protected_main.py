@@ -83,9 +83,9 @@ class ProtectedReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("protected_main_mode requires releaserc_source=canonical", self.workflow)
         self.assertIn("protected_main_mode is incompatible with update_release_badge=true", self.workflow)
 
-    def test_protected_assets_use_exact_called_workflow_identity(self) -> None:
-        self.assertIn("WORKFLOW_REPOSITORY: ${{ job.workflow_repository }}", self.workflow)
-        self.assertIn("WORKFLOW_SHA: ${{ job.workflow_sha }}", self.workflow)
+    def test_protected_assets_use_serialized_exact_workflow_identity(self) -> None:
+        self.assertIn("JOB_CONTEXT_JSON: ${{ toJSON(job) }}", self.workflow)
+        self.assertIn('job_context = json.loads(os.environ["JOB_CONTEXT_JSON"])', self.workflow)
         self.assertIn('SOURCE_REPOSITORY="$WORKFLOW_REPOSITORY"', self.workflow)
         self.assertIn('SOURCE_REF="$WORKFLOW_SHA"', self.workflow)
         self.assertIn(
@@ -93,10 +93,8 @@ class ProtectedReleaseWorkflowTests(unittest.TestCase):
             self.workflow,
         )
         self.assertIn("$RUNNER_TEMP/prepare_protected_releaserc.py", self.workflow)
-        self.assertNotIn(
-            "run: python3 scripts/release/prepare_protected_releaserc.py",
-            self.workflow,
-        )
+        self.assertNotIn("${{ job.workflow_repository }}", self.workflow)
+        self.assertNotIn("${{ job.workflow_sha }}", self.workflow)
 
     def test_normal_mode_preserves_requested_actions_ref(self) -> None:
         self.assertIn("REQUESTED_REF: ${{ inputs.actions_ref }}", self.workflow)
