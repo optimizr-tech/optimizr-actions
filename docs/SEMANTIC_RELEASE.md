@@ -30,14 +30,37 @@ The workflow checks out complete history, installs dependencies, resolves either
 
 `[skip-tests]` does not authorize or suppress a release. Delivery authorization belongs to the exact-SHA validation gate and its caller. The explicit `skip` input exists only for reviewed caller policy.
 
+## Protected main mode
+
+Repositories with strict pull-request rulesets should enable the opt-in protected mode:
+
+```yaml
+jobs:
+  release:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_semantic-release.yml@v1
+    with:
+      runs_on: '["self-hosted", "Linux", "service"]'
+      releaserc_source: canonical
+      actions_ref: v1
+      protected_main_mode: true
+      update_release_badge: false
+    secrets: inherit
+```
+
+Protected mode downloads the canonical releaserc and its transformer from the same reviewed `actions_ref`. It removes `@semantic-release/changelog` and `@semantic-release/git` from the runtime configuration, then verifies that `@semantic-release/github` remains available. Semantic-release can still analyze commits, generate release notes, create the version tag, and publish the GitHub Release, but it does not commit generated files to `main`.
+
+`protected_main_mode` requires `releaserc_source: canonical` and is incompatible with `update_release_badge: true`. A generated `CHANGELOG.md`, package version commit, or badge change must use a separate reviewed pull request if the repository chooses to retain those versioned files. The release workflow must not receive an administrator, PAT, or GitHub Actions bypass merely to push generated commits through branch protection.
+
+The protected transformer is fetched into `RUNNER_TEMP`; the consumer checkout never needs to contain Optimizr Actions implementation scripts.
+
 ## `optimizr-infra-ops` migration
 
 `optimizr-infra-ops` must consume this reusable through governed `@v1` instead of maintaining a second executable `_semantic-release.yml`. Its compatibility copy may remain temporarily during the canary and must be removed in a separate PR after release, badge, and floating-tag behavior are proven.
 
 ## Failure and rollback
 
-Invalid npm version syntax, Node/npm installation failure, `npm ci` mismatch, release-config resolution failure, dry-run failure, or release failure blocks the job. There is no fallback to the runner-bundled npm.
+Invalid npm version syntax, Node/npm installation failure, `npm ci` mismatch, release-config resolution failure, protected-mode validation failure, dry-run failure, or release failure blocks the job. There is no fallback to the runner-bundled npm or to a branch-protection bypass.
 
 ### Rollback
 
-Revert the central PR and restore the previous governed Actions revision. Consumer migrations are independently revertible until their local compatibility copies are removed. A rollback must not silently return to a runtime that rewrites the consumer lockfile.
+Disable `protected_main_mode` before ruleset activation if a consumer canary reveals incompatibility, then revert the central PR or restore the previous governed Actions revision. Do not disable a live strict ruleset merely to restore automated CHANGELOG or badge commits. Consumer migrations are independently revertible until strict branch protection is applied. A rollback must not silently return to a runtime that rewrites the consumer lockfile.
