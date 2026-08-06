@@ -16,6 +16,8 @@ class DockerComposeValidateContractTests(unittest.TestCase):
         self.assertIn("Resolve Docker access mode", self.text)
         self.assertIn('docker info >/dev/null 2>&1', self.text)
         self.assertIn('sudo -n docker info >/dev/null 2>&1', self.text)
+        self.assertIn("docker_mode must be auto, direct, or sudo", self.text)
+        self.assertIn("Docker is unavailable through direct access", self.text)
         self.assertIn('echo "mode=${resolved}" >> "$GITHUB_OUTPUT"', self.text)
         self.assertLess(
             self.text.index("Resolve Docker access mode"),
@@ -29,10 +31,13 @@ class DockerComposeValidateContractTests(unittest.TestCase):
         )
         self.assertGreaterEqual(self.text.count("docker_compose()"), 2)
         self.assertGreaterEqual(
-            self.text.count('sudo -n docker compose "$@"'),
+            self.text.count('\n              sudo -n docker compose "$@"'),
             2,
         )
-        self.assertGreaterEqual(self.text.count('docker compose "$@"'), 2)
+        self.assertGreaterEqual(
+            self.text.count('\n              docker compose "$@"'),
+            2,
+        )
         self.assertNotIn('docker compose -f "$f" config --quiet', self.text)
         self.assertNotIn(
             'docker compose "${args[@]}" config --quiet',
