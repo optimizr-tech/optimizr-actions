@@ -236,7 +236,7 @@
       "maturity": "stable-v1",
       "metadata_status": "unclassified",
       "path": ".github/workflows/_docker-compose-validate.yml",
-      "source_sha256": "859030f22d4a907cff359a8ca904c812b9059c39f0d5a6ab8447b59e70c432b2"
+      "source_sha256": "55386a264af9002186d8eb3d60e96abac6e812162eb58345ffa5b244406ed3c5"
     },
     {
       "kind": "workflow",
