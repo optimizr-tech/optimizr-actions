@@ -20,6 +20,11 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Setup uv
+      uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+      with:
+        python-version: "3.12"
+
     - name: Install controlled lint tools
       id: tools
       shell: bash
@@ -43,6 +48,7 @@ runs:
         esac
         bin_dir="${RUNNER_TEMP:-/tmp}/optimizr-static-lint/bin"
         work_dir="${RUNNER_TEMP:-/tmp}/optimizr-static-lint/downloads"
+        venv_dir="${RUNNER_TEMP:-/tmp}/optimizr-static-lint/venv"
         rm -rf "$bin_dir" "$work_dir"
         mkdir -p "$bin_dir" "$work_dir"
         curl --fail --location --silent --show-error "$shellcheck_url" -o "$work_dir/shellcheck.tar.xz"
@@ -52,9 +58,11 @@ runs:
         echo "$actionlint_sha  $work_dir/actionlint.tar.gz" | sha256sum -c -
         tar -xzf "$work_dir/actionlint.tar.gz" -C "$bin_dir" actionlint
         chmod 755 "$bin_dir/shellcheck" "$bin_dir/actionlint"
-        python3 -m pip install --disable-pip-version-check --user 'PyYAML==6.0.2'
+        uv venv "$venv_dir"
+        uv pip install --python "$venv_dir/bin/python" 'PyYAML==6.0.2'
         echo "shellcheck=$bin_dir/shellcheck" >> "$GITHUB_OUTPUT"
         echo "actionlint=$bin_dir/actionlint" >> "$GITHUB_OUTPUT"
+        echo "python=$venv_dir/bin/python" >> "$GITHUB_OUTPUT"
     - name: Run blocking static lint
       shell: bash
       env:
@@ -63,9 +71,10 @@ runs:
         EVIDENCE_DIR: ${{ inputs.evidence_dir }}
         SHELLCHECK: ${{ steps.tools.outputs.shellcheck }}
         ACTIONLINT: ${{ steps.tools.outputs.actionlint }}
+        PYTHON: ${{ steps.tools.outputs.python }}
       run: |
         set -euo pipefail
-        python3 "$GITHUB_ACTION_PATH/../../../scripts/static_lint/runner.py" \
+        "$PYTHON" "$GITHUB_ACTION_PATH/../../../scripts/static_lint/runner.py" \
           --root "$GITHUB_WORKSPACE" \
           --shellcheck "$SHELLCHECK" \
           --actionlint "$ACTIONLINT" \

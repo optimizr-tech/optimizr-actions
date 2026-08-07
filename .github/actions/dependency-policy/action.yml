@@ -183,6 +183,11 @@ runs:
         cache: "true"
         path: ${{ runner.temp }}/optimizr-trivy/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
 
+    - name: Setup uv
+      uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+      with:
+        python-version: "3.12"
+
     - name: Validate lockfile synchronization
       shell: bash
       env:
@@ -198,7 +203,7 @@ runs:
         for ecosystem in "${ecosystems[@]}"; do
           case "$ecosystem" in
             python-uv)
-              python3 -m pip install --disable-pip-version-check --user 'uv==0.8.3'
+              uv tool install 'uv==0.8.3'
               export PATH="$HOME/.local/bin:$PATH"
               python_version="$(python3 - <<'PY'
         from pathlib import Path
@@ -221,7 +226,7 @@ runs:
               uv lock --check
               ;;
             python-poetry)
-              python3 -m pip install --disable-pip-version-check --user 'poetry==2.1.4'
+              uv tool install 'poetry==2.1.4'
               export PATH="$HOME/.local/bin:$PATH"
               poetry check --lock
               ;;
