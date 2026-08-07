@@ -22,7 +22,8 @@ Agents must not:
 - move the floating `v1` tag without successful release validation;
 - silently break caller inputs, outputs, permissions, or default behavior;
 - execute untrusted pull-request code on production self-hosted runners;
-- merge, publish `v1`, deploy, restart services, or change production without explicit human approval.
+- merge, publish `v1`, deploy, restart services, or change production without explicit human approval;
+- add `Co-Authored-By` or `Co-authored-by` trailers (such as `Co-authored-by: Claude Code`) to commit messages or pull requests.
 
 ## Repository boundaries
 
