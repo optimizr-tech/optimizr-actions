@@ -5,7 +5,7 @@
       "maturity": "stable-v1",
       "metadata_status": "unclassified",
       "path": ".github/actions/dependency-policy/action.yml",
-      "source_sha256": "0dd7c544b9bc28201357ca2ba3be62b77287bb52f74b236bda6713e4c32df8b9"
+      "source_sha256": "0780c9c6a3cd51f1bc66ade8b0fef3b3777cbf56a6442701ceaab1907abef05b"
     },
     {
       "kind": "action",
@@ -117,7 +117,7 @@
       "maturity": "stable-v1",
       "metadata_status": "unclassified",
       "path": ".github/actions/sast-gate/action.yml",
-      "source_sha256": "ca499f05496a755a017ca334612a66906a8fc25d356ed10bcb2690df5406b2fa"
+      "source_sha256": "87a4f8526a71d8b63985e81eedfa28199ee740b05bf684c8e0f99ecc7c983eaf"
     },
     {
       "kind": "action",
@@ -145,7 +145,7 @@
       "maturity": "stable-v1",
       "metadata_status": "unclassified",
       "path": ".github/actions/static-lint/action.yml",
-      "source_sha256": "fcd5633f4d3dc263a76a597dd3d27dd05e47601151b0bc7caf8fa42ba61c4195"
+      "source_sha256": "2a1ce0b0608ced9ea7e44575fb09a2cc5db5d7e5eb4cb0ab16b6394d903264e4"
     },
     {
       "kind": "action",

@@ -20,11 +20,16 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Setup uv
+      uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+      with:
+        python-version: "3.12"
+
     - name: Install controlled Semgrep
       shell: bash
       run: |
         set -euo pipefail
-        python3 -m pip install --disable-pip-version-check --user 'semgrep==1.170.0'
+        uv tool install 'semgrep==1.170.0'
         export PATH="$HOME/.local/bin:$PATH"
         test "$(semgrep --version | head -n 1)" = "1.170.0"
     - name: Run controlled local SAST profile
