@@ -195,6 +195,7 @@
     ".github/workflows/_pr-metadata.yml": {
       "category": "governance",
       "trust_boundary": "untrusted-pr",
+      "runner": ["hosted", "self-hosted-persistent", "self-hosted-ephemeral"],
       "evidence": "PR title, body and commit subject validation results",
       "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@v1"]
     },

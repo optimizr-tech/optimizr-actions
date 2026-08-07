@@ -47,8 +47,10 @@ capability catalog (`catalog/capabilities.json`).
 
 Rules of thumb:
 
-- A contract tagged `untrusted-pr` must never require secrets or run on
-  self-hosted runners.
+- A contract tagged `untrusted-pr` must never require secrets; on self-hosted
+  runners it runs only in `ephemeral-pr` mode, with one deliberate exception:
+  `_pr-metadata.yml` also keeps `metadata-pr` (persistent, read-only metadata)
+  because it never checks out or executes candidate code and holds no secrets.
 - A contract tagged `trusted-pr` may run on hosted or on self-hosted only
   behind `validation-authorization`.
 - A contract tagged `trusted-push` is for push/deploy paths; when a reusable
