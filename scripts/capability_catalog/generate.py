@@ -6,7 +6,8 @@ import argparse
 from pathlib import Path
 import sys
 
-from .catalog import render_catalog
+from .catalog import build_catalog, render_catalog
+from .metadata import incomplete_artifacts, load_curated_metadata, orphaned_metadata
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,7 +26,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    catalog = build_catalog(ROOT)
     rendered = render_catalog(ROOT)
+    incomplete = incomplete_artifacts(catalog["artifacts"])
+    if incomplete:
+        print(
+            "capability catalog metadata is incomplete for: "
+            + ", ".join(sorted(incomplete)),
+            file=sys.stderr,
+        )
+        return 1
+    orphaned = orphaned_metadata(
+        load_curated_metadata(ROOT / "catalog" / "artifact_metadata.json"),
+        catalog["artifacts"],
+    )
+    if orphaned:
+        print(
+            "curated metadata references undiscovered artifacts: "
+            + ", ".join(orphaned),
+            file=sys.stderr,
+        )
+        return 1
 
     if args.check:
         committed = (

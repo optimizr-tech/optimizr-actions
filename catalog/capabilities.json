@@ -1,453 +1,2057 @@
 {
   "artifacts": [
     {
+      "category": "security",
+      "evidence": "Trivy vulnerability and license policy report plus lockfile audit evidence",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/actions/dependency-policy@v1"
+      ],
+      "inputs": {
+        "evidence_dir": "",
+        "node_version": "",
+        "npm_version": "",
+        "policy_file": "",
+        "trivy_version": "",
+        "working_directory": ""
+      },
       "kind": "action",
+      "known_limitations": "Requires controlled trivy version; policy file is repository-owned",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "evidence_dir": ""
+      },
       "path": ".github/actions/dependency-policy/action.yml",
-      "source_sha256": "0780c9c6a3cd51f1bc66ade8b0fef3b3777cbf56a6442701ceaab1907abef05b"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "0780c9c6a3cd51f1bc66ade8b0fef3b3777cbf56a6442701ceaab1907abef05b",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "deploy",
+      "evidence": "Pruned deploy snapshot inventory with bounded root, count and age enforcement",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/actions/deploy-snapshot-retention@v1"
+      ],
+      "inputs": {
+        "max_age_days": "",
+        "max_count": "",
+        "max_total_bytes": "",
+        "root": ""
+      },
       "kind": "action",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/actions/deploy-snapshot-retention/action.yml",
-      "source_sha256": "113126765bfc845255b9947e047937f647b7dc18171bbe039ade615a14c5dd2d"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "113126765bfc845255b9947e047937f647b7dc18171bbe039ade615a14c5dd2d",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "deploy",
+      "evidence": "Docker prune operation evidence; never touches volumes or networks",
+      "examples": [],
+      "inputs": {
+        "image_age_threshold": ""
+      },
       "kind": "action",
+      "known_limitations": "Host Docker access required; destructive by nature",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/actions/docker-prune-safe/action.yml",
-      "source_sha256": "69194be8817c98b23d1311dd6f1edd9406212ea397dd46c8a9c4448d21f61020"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "69194be8817c98b23d1311dd6f1edd9406212ea397dd46c8a9c4448d21f61020",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "deploy",
+      "evidence": "Idempotent Docker network and volume creation evidence",
+      "examples": [],
+      "inputs": {
+        "networks": "",
+        "volumes": ""
+      },
       "kind": "action",
+      "known_limitations": "Historically hosted in optimizr-infra-ops; adapter form",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/actions/ensure-network-volume/action.yml",
-      "source_sha256": "df6282ac147ea130b4c63747fdb4b31f7b98c0aa7a8f1c5da2588abf1d235028"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "df6282ac147ea130b4c63747fdb4b31f7b98c0aa7a8f1c5da2588abf1d235028",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "governance",
+      "evidence": "Repository-owned validation preset result with secret-free evidence",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/actions/local-validation@v1"
+      ],
+      "inputs": {
+        "allow_dirty": "",
+        "command_args_json": "",
+        "evidence": "",
+        "preset": ""
+      },
       "kind": "action",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "evidence_path": ""
+      },
       "path": ".github/actions/local-validation/action.yml",
-      "source_sha256": "a5512806cd57c53fee4ed2291b867e178ae9207ad34fba3651a19e36e6f70dd1"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "a5512806cd57c53fee4ed2291b867e178ae9207ad34fba3651a19e36e6f70dd1",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "deploy",
+      "evidence": "Declarative denial and exposure probe results after protected deployment",
+      "examples": [],
+      "inputs": {
+        "evidence_path": "",
+        "head_sha": "",
+        "manifest_path": "",
+        "repository": ""
+      },
       "kind": "action",
+      "known_limitations": "Runs on VPS runner with host access",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "evidence_path": ""
+      },
       "path": ".github/actions/negative-probes/action.yml",
-      "source_sha256": "b2cbb44938661f7113cc14ead9f136eff722ad0a949a547924dad559a6a39c23"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "b2cbb44938661f7113cc14ead9f136eff722ad0a949a547924dad559a6a39c23",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "test",
+      "evidence": "Bounded npm/pnpm project validation results without shell interpolation",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/actions/node-project-test@v1"
+      ],
+      "inputs": {
+        "project_json": ""
+      },
       "kind": "action",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/actions/node-project-test/action.yml",
-      "source_sha256": "0d9f726f3d7b4e8bf0cc241e0907e5d2c06152db0c8aaa07bf53777d8bc86fbe"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "0d9f726f3d7b4e8bf0cc241e0907e5d2c06152db0c8aaa07bf53777d8bc86fbe",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "test",
+      "evidence": "Node.js plus pnpm setup with dependency cache",
+      "examples": [],
+      "inputs": {
+        "cache_dependency_path": "",
+        "node_version": "",
+        "pnpm_version": ""
+      },
       "kind": "action",
+      "known_limitations": "Node installed before pnpm/action-setup per issue #148 workaround",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/actions/pnpm-setup/action.yml",
-      "source_sha256": "d124224ff144585e42c6e4b92f84d18da8816ccd86a839259f11964310bfd22b"
+      "permissions": {},
+      "runner": [
+        "hosted"
+      ],
+      "source_sha256": "d124224ff144585e42c6e4b92f84d18da8816ccd86a839259f11964310bfd22b",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "deploy",
+      "evidence": "Container and HTTP readiness verification bound to an exact deployed SHA",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/actions/post-deploy-verification@v1"
+      ],
+      "inputs": {
+        "deployed_sha": "",
+        "evidence_path": "",
+        "manifest_path": "",
+        "repository": ""
+      },
       "kind": "action",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/actions/post-deploy-verification/action.yml",
-      "source_sha256": "3f376038362b3576c684a0aa0d75863002fb5fee613e8f11fb8bf7e9fabc8510"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "3f376038362b3576c684a0aa0d75863002fb5fee613e8f11fb8bf7e9fabc8510",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "deploy",
+      "evidence": "Sanitized component hashes for PostgreSQL migration verification",
+      "examples": [],
+      "inputs": {
+        "input_file": "",
+        "mode": "",
+        "output_file": "",
+        "overall_sha256": "",
+        "side": "",
+        "source_file": "",
+        "target_file": ""
+      },
       "kind": "action",
+      "known_limitations": "Requires side-aware invocation (source/target)",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/actions/postgres-migration-diagnostics/action.yml",
-      "source_sha256": "9c1b6c4b3a9e7753367552d390497a0f8b25816cfc8af0517ea9faebeeafd83b"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "9c1b6c4b3a9e7753367552d390497a0f8b25816cfc8af0517ea9faebeeafd83b",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "governance",
+      "evidence": "PR title, body and commit subject validation results",
+      "examples": [],
+      "inputs": {
+        "base_sha": "",
+        "head_sha": "",
+        "pr_body": "",
+        "pr_number": "",
+        "pr_title": "",
+        "repository": "",
+        "token": ""
+      },
       "kind": "action",
+      "known_limitations": "Does not check out candidate code",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "commit_count": "",
+        "result": ""
+      },
       "path": ".github/actions/pr-metadata-validation/action.yml",
-      "source_sha256": "77529a1cf1779b31affdb13d1566bb74a8b15bedd1fc5c783ed9cb5914212e64"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "77529a1cf1779b31affdb13d1566bb74a8b15bedd1fc5c783ed9cb5914212e64",
+      "trust_boundary": "untrusted-pr"
     },
     {
+      "category": "test",
+      "evidence": "uv sync, ruff, optional mypy, pytest coverage results and coverage artifacts",
+      "examples": [],
+      "inputs": {
+        "cov_package": "",
+        "coverage_branch": "",
+        "coverage_json_path": "",
+        "coverage_min": "",
+        "coverage_xml_path": "",
+        "extra_steps": "",
+        "extras": "",
+        "mypy_enabled": "",
+        "mypy_target": "",
+        "pytest_args": "",
+        "pytest_env": "",
+        "python_version": "",
+        "ruff_check": "",
+        "ruff_paths": "",
+        "sync_all_extras": "",
+        "upload_artifact_name": "",
+        "upload_artifact_paths": ""
+      },
       "kind": "action",
+      "known_limitations": "Composite intended for _python-uv-test.yml; prefer the reusable workflow",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/actions/python-uv-test-steps/action.yml",
-      "source_sha256": "20a039d820bb0432ecae3267229b6bbbc410100033d478e2baaf7462e7374be8"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "20a039d820bb0432ecae3267229b6bbbc410100033d478e2baaf7462e7374be8",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "test",
+      "evidence": "Materialized quality_gate package pinned to this optimizr-actions revision",
+      "examples": [],
+      "inputs": {
+        "infra_ops_read_token": "",
+        "infra_ops_ref": "",
+        "python_version": ""
+      },
       "kind": "action",
+      "known_limitations": "Reads infra-ops quality gate contract",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "scripts_path": ""
+      },
       "path": ".github/actions/quality-gate-scripts/action.yml",
-      "source_sha256": "44eef60334ff8080af3e8be042913a26cff361088f9c172ad5cb194b01f5bf7f"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "44eef60334ff8080af3e8be042913a26cff361088f9c172ad5cb194b01f5bf7f",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "deploy",
+      "evidence": "Sanitized deploy manifest recording bounded Docker state",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/actions/record-deploy-manifest@v1"
+      ],
+      "inputs": {
+        "compose_file": "",
+        "container_name": "",
+        "deploy_path": "",
+        "docker_mode": "",
+        "migration_result": "",
+        "optional_build_result": "",
+        "retention": "",
+        "security_final_result": "",
+        "security_initial_result": "",
+        "security_rebuild_attempted": "",
+        "security_rebuild_result": "",
+        "security_remediation_window_state": "",
+        "services": "",
+        "status": ""
+      },
       "kind": "action",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "last_successful_path": "",
+        "manifest_path": ""
+      },
       "path": ".github/actions/record-deploy-manifest/action.yml",
-      "source_sha256": "7e5aa02186d2f9ec85e1a0743b45ee79ea9a3dd13753722a393720726e19ba14"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "7e5aa02186d2f9ec85e1a0743b45ee79ea9a3dd13753722a393720726e19ba14",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "release",
+      "evidence": "Resolved explicit, event, or latest semantic release tag for badge updates",
+      "examples": [],
+      "inputs": {
+        "badge_path": "",
+        "branch": "",
+        "event_tag": "",
+        "requested_tag": ""
+      },
       "kind": "action",
+      "known_limitations": "Requires release history; branch must be explicit",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "version": ""
+      },
       "path": ".github/actions/release-badge-resolver/action.yml",
-      "source_sha256": "243b05b62c5666bd5beb8cf3130534d56b271830a57fd45464f7389ee2096c97"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "243b05b62c5666bd5beb8cf3130534d56b271830a57fd45464f7389ee2096c97",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "governance",
+      "evidence": "Repository-owned executable results with argv-safe, commit-bound evidence",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/actions/repository-validation@v1"
+      ],
+      "inputs": {
+        "args_json": "",
+        "base_sha": "",
+        "evidence_path": "",
+        "head_sha": "",
+        "image_refs_json": "",
+        "repository": "",
+        "require_trusted_ref": "",
+        "script_path": "",
+        "timeout_seconds": "",
+        "trusted_ref": ""
+      },
       "kind": "action",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "evidence_path": "",
+        "result": ""
+      },
       "path": ".github/actions/repository-validation/action.yml",
-      "source_sha256": "fead6db205d3daa9c965b2c652d5898eaf0393d981343895522822d4d724efc5"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "fead6db205d3daa9c965b2c652d5898eaf0393d981343895522822d4d724efc5",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "security",
+      "evidence": "Semgrep SAST results with expiring exact baselines",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/actions/sast-gate@v1"
+      ],
+      "inputs": {
+        "baseline_file": "",
+        "evidence_dir": "",
+        "profile": ""
+      },
       "kind": "action",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "evidence_dir": ""
+      },
       "path": ".github/actions/sast-gate/action.yml",
-      "source_sha256": "87a4f8526a71d8b63985e81eedfa28199ee740b05bf684c8e0f99ecc7c983eaf"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "87a4f8526a71d8b63985e81eedfa28199ee740b05bf684c8e0f99ecc7c983eaf",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "security",
+      "evidence": "Full Trivy finding report with actionable security failure classification",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@v1"
+      ],
+      "inputs": {
+        "baseline_file": "",
+        "db_max_age_hours": "",
+        "docker_mode": "",
+        "evidence_dir": "",
+        "exceptions_file": "",
+        "ignore_unfixed": "",
+        "image_refs": "",
+        "remediation_window_enabled": "",
+        "remediation_window_exposure_criticality": "",
+        "remediation_window_policy_file": "",
+        "remediation_window_service_scope": "",
+        "scan_ref": "",
+        "scan_type": "",
+        "severity": "",
+        "trivy_version": ""
+      },
       "kind": "action",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "classification": "",
+        "evaluator_version": "",
+        "evidence_dir": "",
+        "failure_reason": "",
+        "fixable_vulnerability_count": "",
+        "misconfiguration_count": "",
+        "nearest_deadline": "",
+        "policy_digest": "",
+        "remediation_state": "",
+        "remediation_window_allowed": "",
+        "remediation_window_blocking_total": "",
+        "remediation_window_classification": "",
+        "remediation_window_count": "",
+        "remediation_window_covered": "",
+        "remediation_window_decision": "",
+        "remediation_window_due_soon_count": "",
+        "remediation_window_failure_reason": "",
+        "remediation_window_overdue_count": "",
+        "remediation_window_reintroduced_count": "",
+        "remediation_window_rejected_count": "",
+        "remediation_window_uncovered": "",
+        "remediation_window_unmatched_count": "",
+        "result": "",
+        "secret_count": "",
+        "unfixed_vulnerability_count": ""
+      },
       "path": ".github/actions/security-gate/action.yml",
-      "source_sha256": "9e27a4719b13e6d9e5f8daa11a5a9a6a75049235a6502e475d90f3a7155612a5"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "9e27a4719b13e6d9e5f8daa11a5a9a6a75049235a6502e475d90f3a7155612a5",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "security",
+      "evidence": "Bounded Compose image pull and rebuild evidence for security remediation",
+      "examples": [],
+      "inputs": {
+        "build_all": "",
+        "compose_file": "",
+        "deploy_path": "",
+        "no_cache": "",
+        "optional_services": "",
+        "required_services": ""
+      },
       "kind": "action",
+      "known_limitations": "Requires deploy path and compose file ownership",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "failure_reason": "",
+        "optional_build_result": ""
+      },
       "path": ".github/actions/security-rebuild/action.yml",
-      "source_sha256": "f83f23a3b60ad8bc833bc8dff7d0bad05d2459fa8dcfae2e549961a09136ec4d"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "f83f23a3b60ad8bc833bc8dff7d0bad05d2459fa8dcfae2e549961a09136ec4d",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "security",
+      "evidence": "Retry classification evidence; fails closed unless immutable images changed and final scan passes",
+      "examples": [],
+      "inputs": {
+        "final_classification": "",
+        "final_fixable_vulnerability_count": "",
+        "final_misconfiguration_count": "",
+        "final_outcome": "",
+        "final_secret_count": "",
+        "final_unfixed_vulnerability_count": "",
+        "initial_classification": "",
+        "initial_fixable_vulnerability_count": "",
+        "initial_misconfiguration_count": "",
+        "initial_outcome": "",
+        "initial_refs": "",
+        "initial_secret_count": "",
+        "initial_unfixed_vulnerability_count": "",
+        "rebuild_outcome": "",
+        "remediated_refs": "",
+        "retry_enabled": ""
+      },
       "kind": "action",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "compatibility_allowed": "",
+        "final_result": "",
+        "fixable_vulnerability_count": "",
+        "initial_result": "",
+        "misconfiguration_count": "",
+        "passed": "",
+        "rebuild_attempted": "",
+        "rebuild_result": "",
+        "secret_count": "",
+        "unfixed_vulnerability_count": ""
+      },
       "path": ".github/actions/security-retry-result/action.yml",
-      "source_sha256": "8dadcb40447daf8202b72257ec5b1f6df953d61daf0b9e4e6f9cec9f92d5bdfc"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "8dadcb40447daf8202b72257ec5b1f6df953d61daf0b9e4e6f9cec9f92d5bdfc",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "test",
+      "evidence": "Checksum-verified ShellCheck, actionlint and composite metadata validation results",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/actions/static-lint@v1"
+      ],
+      "inputs": {
+        "evidence_dir": "",
+        "exclusions": "",
+        "shellcheck_severity": ""
+      },
       "kind": "action",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "evidence_dir": ""
+      },
       "path": ".github/actions/static-lint/action.yml",
-      "source_sha256": "2a1ce0b0608ced9ea7e44575fb09a2cc5db5d7e5eb4cb0ab16b6394d903264e4"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "2a1ce0b0608ced9ea7e44575fb09a2cc5db5d7e5eb4cb0ab16b6394d903264e4",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "deploy",
+      "evidence": "Static asset build and promotion evidence through candidate and rollback volumes",
+      "examples": [],
+      "inputs": {
+        "deployed_sha": "",
+        "docker_mode": "",
+        "evidence_path": "",
+        "manifest_path": ""
+      },
       "kind": "action",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/actions/static-site-deploy/action.yml",
-      "source_sha256": "0bfe313ebd072df1d29f1230751c7b87d09f9512e6a78237b130cea22bc71b36"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "0bfe313ebd072df1d29f1230751c7b87d09f9512e6a78237b130cea22bc71b36",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "security",
+      "evidence": "CycloneDX, SPDX and SLSA-compatible provenance for immutable image identities",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/actions/supply-chain-evidence@v1"
+      ],
+      "inputs": {
+        "evidence_dir": "",
+        "image_refs": "",
+        "trivy_version": ""
+      },
       "kind": "action",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "evidence_dir": ""
+      },
       "path": ".github/actions/supply-chain-evidence/action.yml",
-      "source_sha256": "35ec7d2d8a05caa72fa7a22c66058035d0f784b83909c03bf8507e2d22e33dec"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "35ec7d2d8a05caa72fa7a22c66058035d0f784b83909c03bf8507e2d22e33dec",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "release",
+      "evidence": "Release SVG badge patch with explicit target branch; optional commit and push",
+      "examples": [],
+      "inputs": {
+        "badge_path": "",
+        "branch": "",
+        "commit": "",
+        "commit_message": "",
+        "version": ""
+      },
       "kind": "action",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/actions/update-release-badge/action.yml",
-      "source_sha256": "617907abf6802c751c140016d99ddf56f8ce145ae5151b1ba27ca56cea2e255e"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "617907abf6802c751c140016d99ddf56f8ce145ae5151b1ba27ca56cea2e255e",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "deploy",
+      "evidence": "Fail-closed confirmation that required secrets and vars exist before env injection",
+      "examples": [],
+      "inputs": {
+        "infra_ops_read_token": "",
+        "infra_ops_ref": "",
+        "required_keys": ""
+      },
       "kind": "action",
+      "known_limitations": "Adapter to infra-ops validate_deploy_env.py",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/actions/validate-deploy-env/action.yml",
-      "source_sha256": "d069e29fc4a73cc3e61e9fa621c92b8e21a214ab45037daa42edeb7a81cde0e3"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "d069e29fc4a73cc3e61e9fa621c92b8e21a214ab45037daa42edeb7a81cde0e3",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "governance",
+      "evidence": "Canonical exact-SHA validation attestation with result digest",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/actions/validation-attestation@v1"
+      ],
+      "inputs": {
+        "candidate_sha": "",
+        "context_sha": "",
+        "evidence_path": "",
+        "repository": "",
+        "required_checks_json": "",
+        "results_json": "",
+        "run_id": "",
+        "validation_path": "",
+        "workflow_ref": "",
+        "workflow_repository": "",
+        "workflow_sha": ""
+      },
       "kind": "action",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "actions_workflow_sha": "",
+        "evidence_digest": "",
+        "evidence_path": "",
+        "result": "",
+        "validated_sha": "",
+        "validation_path": ""
+      },
       "path": ".github/actions/validation-attestation/action.yml",
-      "source_sha256": "20c6163d51eb5ac4209c46fc7e54bb72f8e7ac1ee11bc0d038ba740ea411ebce"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "20c6163d51eb5ac4209c46fc7e54bb72f8e7ac1ee11bc0d038ba740ea411ebce",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "governance",
+      "evidence": "Release/deploy authorization derived from one canonical validation-gate attestation",
+      "examples": [],
+      "inputs": {
+        "actions_workflow_sha": "",
+        "allowed_paths_json": "",
+        "candidate_ref": "",
+        "candidate_sha": "",
+        "evidence_digest": "",
+        "gate_job_result": "",
+        "gate_result": "",
+        "required_ref": "",
+        "validated_sha": "",
+        "validation_path": ""
+      },
       "kind": "action",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "actions_workflow_sha": "",
+        "evidence_digest": "",
+        "result": "",
+        "validated_sha": "",
+        "validation_path": ""
+      },
       "path": ".github/actions/validation-authorization/action.yml",
-      "source_sha256": "97c41c561510d224123884bfd3c8f763c823850e6cfb0ffb9ec44b9c09018861"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "97c41c561510d224123884bfd3c8f763c823850e6cfb0ffb9ec44b9c09018861",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "deploy",
+      "evidence": "Docker container healthy readiness confirmation with bounded polling",
+      "examples": [],
+      "inputs": {
+        "container_name": "",
+        "poll_interval": "",
+        "timeout": ""
+      },
       "kind": "action",
+      "known_limitations": "Historically hosted in optimizr-infra-ops; adapter form",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/actions/wait-for-healthcheck/action.yml",
-      "source_sha256": "5833a6af38ccb09f22031e19d0b2e7eeb78a11694e2b3034fc9059a386760cac"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "5833a6af38ccb09f22031e19d0b2e7eeb78a11694e2b3034fc9059a386760cac",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "deploy",
+      "evidence": "Strict sanitized deployment evidence below a canonical deploy path",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/actions/write-deploy-manifest@v1"
+      ],
+      "inputs": {
+        "deploy_path": "",
+        "deployed_ref": "",
+        "deployed_sha": "",
+        "environment": "",
+        "healthchecks_json": "",
+        "images_json": "",
+        "migration_result": "",
+        "optional_build_result": "",
+        "repository": "",
+        "retention": "",
+        "rollback_of": "",
+        "run_id": "",
+        "services_json": "",
+        "status": "",
+        "workflow": ""
+      },
       "kind": "action",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "last_successful_path": "",
+        "manifest_path": ""
+      },
       "path": ".github/actions/write-deploy-manifest/action.yml",
-      "source_sha256": "c0761276a12f032eb402d47f36671857606b16df13e41d02be671d550a4e1384"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "c0761276a12f032eb402d47f36671857606b16df13e41d02be671d550a4e1384",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "deploy",
+      "evidence": "Compose-compatible environment file from an audited repository schema",
+      "examples": [],
+      "inputs": {
+        "allowed_root": "",
+        "destination": "",
+        "evidence_path": "",
+        "mode": "",
+        "schema_path": ""
+      },
       "kind": "action",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/actions/write-env-file/action.yml",
-      "source_sha256": "28cab908427ba46b78bb9c826cbd2b7383208d0383dd4d8254a33f85efe23ec5"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "28cab908427ba46b78bb9c826cbd2b7383208d0383dd4d8254a33f85efe23ec5",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "test",
+      "evidence": "Commitlint results over the PR commit range",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_commitlint.yml@v1"
+      ],
+      "inputs": {
+        "base_sha": "",
+        "config_path": "",
+        "head_sha": "",
+        "install_command": "",
+        "node_version": "",
+        "runner_json": "",
+        "self_hosted_mode": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_commitlint.yml",
-      "source_sha256": "5b4701b18a0494ba763f5cf81f34fbf9f0930c57ba36926923e346365971dd7d"
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "5b4701b18a0494ba763f5cf81f34fbf9f0930c57ba36926923e346365971dd7d",
+      "trust_boundary": "untrusted-pr"
     },
     {
+      "category": "security",
+      "evidence": "Dependabot security automerge decisions bounded by minor/patch policy",
+      "examples": [],
+      "inputs": {
+        "allow_minor": ""
+      },
       "kind": "workflow",
+      "known_limitations": "Auto-merge requires repository automation permissions",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_dependabot-security-automerge.yml",
-      "source_sha256": "4712b4b2149069d2509530f6fa7b1e682bf4e2a2b5b08b7eb5e2e846fcff547c"
+      "permissions": {
+        "contents": "write",
+        "pull-requests": "write"
+      },
+      "runner": [
+        "hosted"
+      ],
+      "source_sha256": "4712b4b2149069d2509530f6fa7b1e682bf4e2a2b5b08b7eb5e2e846fcff547c",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "security",
+      "evidence": "Dependency policy gate results across lockfiles and image policies",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_dependency-policy.yml@v1"
+      ],
+      "inputs": {
+        "artifact_name": "",
+        "node_version": "",
+        "npm_version": "",
+        "policy_file": "",
+        "retention_days": "",
+        "runner_json": "",
+        "self_hosted_mode": "",
+        "trivy_version": "",
+        "working_directory": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_dependency-policy.yml",
-      "source_sha256": "6cd586e17f8b7742373319cccd0e4f420f07d21dfdc47c7c7ba1e32a9cb46f83"
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "6cd586e17f8b7742373319cccd0e4f420f07d21dfdc47c7c7ba1e32a9cb46f83",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "test",
+      "evidence": "Docker Compose syntax and script bash validation results",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_docker-compose-validate.yml@v1"
+      ],
+      "inputs": {
+        "build_image": "",
+        "compose_files": "",
+        "compose_stacks": "",
+        "docker_mode": "",
+        "runner_json": "",
+        "script_globs": "",
+        "self_hosted_mode": "",
+        "skip": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_docker-compose-validate.yml",
-      "source_sha256": "55386a264af9002186d8eb3d60e96abac6e812162eb58345ffa5b244406ed3c5"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "55386a264af9002186d8eb3d60e96abac6e812162eb58345ffa5b244406ed3c5",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "deploy",
+      "evidence": "Post-deploy denial and exposure probe results with manifest-bound evidence",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_negative-probes.yml@v1"
+      ],
+      "inputs": {
+        "artifact_name": "",
+        "deployed_sha": "",
+        "environment_name": "",
+        "manifest_path": "",
+        "retention_days": "",
+        "runner_json": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_negative-probes.yml",
-      "source_sha256": "77e6730b15de7f8f6e454b181871fc22254d4b32be8603d8a52fb5ff993b489c"
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "self-hosted-persistent"
+      ],
+      "source_sha256": "77e6730b15de7f8f6e454b181871fc22254d4b32be8603d8a52fb5ff993b489c",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "test",
+      "evidence": "Bounded npm/pnpm project matrix validation results",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_node-project-test.yml@v1"
+      ],
+      "inputs": {
+        "node_version": "",
+        "pnpm_version": "",
+        "projects_json": "",
+        "retention_days": "",
+        "runner_json": "",
+        "self_hosted_mode": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_node-project-test.yml",
-      "source_sha256": "c89a55a96f72f9477385f26da04a39dd6be80d6737247519ec0c262f3d4a9e50"
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "c89a55a96f72f9477385f26da04a39dd6be80d6737247519ec0c262f3d4a9e50",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "deploy",
+      "evidence": "Post-deploy container and readiness verification for an exact deployed SHA",
+      "examples": [],
+      "inputs": {
+        "artifact_name": "",
+        "deployed_sha": "",
+        "environment_name": "",
+        "manifest_path": "",
+        "negative_manifest_path": "",
+        "retention_days": "",
+        "runner_json": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_post-deploy-verification.yml",
-      "source_sha256": "427a456d3ada80a396b07c114fc05c7263e02c3dd30ed5bdf1d3f55a7fb8d70b"
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "self-hosted-persistent"
+      ],
+      "source_sha256": "427a456d3ada80a396b07c114fc05c7263e02c3dd30ed5bdf1d3f55a7fb8d70b",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "deploy",
+      "evidence": "PostgreSQL major logical migration diagnostics with sanitized component hashes",
+      "examples": [],
+      "inputs": {
+        "backup_retention_days": "",
+        "database_name": "",
+        "database_user": "",
+        "quiesce_containers": "",
+        "runner_label": "",
+        "service_name": "",
+        "source_compose_directory": "",
+        "source_compose_file": "",
+        "source_container": "",
+        "source_major": "",
+        "source_mount_path": "",
+        "source_service": "",
+        "source_volume": "",
+        "target_image": "",
+        "target_major": "",
+        "target_mount_path": "",
+        "target_pgdata": "",
+        "target_volume": "",
+        "verification_sql": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_postgres-major-logical-migration.yml",
-      "source_sha256": "1f0e4512f596924ed9f49f8ddf2a5d4d3ad88fbe6b4bc7d7d11e34906a1e397d"
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "self-hosted-persistent"
+      ],
+      "source_sha256": "1f0e4512f596924ed9f49f8ddf2a5d4d3ad88fbe6b4bc7d7d11e34906a1e397d",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "governance",
+      "evidence": "PR title, body and commit subject validation results",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@v1"
+      ],
+      "inputs": {
+        "base_sha": "",
+        "head_sha": "",
+        "pr_body": "",
+        "pr_number": "",
+        "pr_title": "",
+        "runner_json": "",
+        "self_hosted_mode": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_pr-metadata.yml",
-      "source_sha256": "240e5435c912ca1d188aa93c9904abec797b092732e8a736080e1179a82635dd"
+      "permissions": {
+        "contents": "read",
+        "pull-requests": "read"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "240e5435c912ca1d188aa93c9904abec797b092732e8a736080e1179a82635dd",
+      "trust_boundary": "untrusted-pr"
     },
     {
+      "category": "test",
+      "evidence": "uv sync, ruff, optional mypy and pytest coverage results",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_python-uv-test.yml@v1"
+      ],
+      "inputs": {
+        "cov_package": "",
+        "coverage_branch": "",
+        "coverage_json_path": "",
+        "coverage_min": "",
+        "coverage_xml_path": "",
+        "extra_steps": "",
+        "extras": "",
+        "integration_preset": "",
+        "mypy_enabled": "",
+        "mypy_target": "",
+        "pytest_args": "",
+        "pytest_env": "",
+        "python_version": "",
+        "ruff_check": "",
+        "ruff_paths": "",
+        "runner_json": "",
+        "self_hosted_mode": "",
+        "skip": "",
+        "sync_all_extras": "",
+        "timeout_minutes": "",
+        "upload_artifact_name": "",
+        "upload_artifact_paths": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_python-uv-test.yml",
-      "source_sha256": "63e8d9179c12d46c87ce4ac98023769495615a5ad4943176e99f3a698f8ef736"
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "63e8d9179c12d46c87ce4ac98023769495615a5ad4943176e99f3a698f8ef736",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "test",
+      "evidence": "Quality-gate-baseline artifact emitted on main after producer jobs succeed",
+      "examples": [],
+      "inputs": {
+        "baseline_retention_days": "",
+        "infra_ops_ref": "",
+        "preset": "",
+        "runner_json": "",
+        "self_hosted_mode": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_quality-gate-baseline.yml",
-      "source_sha256": "8f334d3bf977d9ec3fe424d813c7e5dc733fd384681d39c278d3e9673e209185"
+      "permissions": {
+        "actions": "read",
+        "contents": "read"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "8f334d3bf977d9ec3fe424d813c7e5dc733fd384681d39c278d3e9673e209185",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "test",
+      "evidence": "jscpd duplication metrics per scope for quality-gate reporting",
+      "examples": [],
+      "inputs": {
+        "runner_json": "",
+        "scope_paths": "",
+        "scopes": "",
+        "self_hosted_mode": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_quality-gate-collect-dup.yml",
-      "source_sha256": "d4c6b06babecb7501cc9936355a1985a8c9ad2b7519cbc4d6cb5f593c0c27843"
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "d4c6b06babecb7501cc9936355a1985a8c9ad2b7519cbc4d6cb5f593c0c27843",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "security",
+      "evidence": "Matrix security scan metrics in non-blocking JSON mode",
+      "examples": [],
+      "inputs": {
+        "pnpm_apps": "",
+        "python_app_path": "",
+        "runner_json": "",
+        "self_hosted_mode": "",
+        "tools": "",
+        "uv_sync_args": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_quality-gate-collect-security.yml",
-      "source_sha256": "328a5bc31a48775f2be8561ce825e5e203f117e7ff67661195abb8c5cd86dfd9"
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "328a5bc31a48775f2be8561ce825e5e203f117e7ff67661195abb8c5cd86dfd9",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "test",
+      "evidence": "PR artifact comparison against main baseline with idempotent comment",
+      "examples": [],
+      "inputs": {
+        "fail_on_red": "",
+        "infra_ops_ref": "",
+        "post_comment": "",
+        "preset": "",
+        "runner_json": "",
+        "self_hosted_mode": "",
+        "workflow_file": ""
+      },
       "kind": "workflow",
+      "known_limitations": "Posts PR comments; requires pull-requests write",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_quality-gate-pr.yml",
-      "source_sha256": "434aede257d92e101267b1a45fc3459bab39d63c7862358b74cd546539bb2d3c"
+      "permissions": {
+        "actions": "read",
+        "contents": "read",
+        "issues": "write",
+        "pull-requests": "write"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "434aede257d92e101267b1a45fc3459bab39d63c7862358b74cd546539bb2d3c",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "test",
+      "evidence": "Aggregated quality-gate metrics with baseline comparison",
+      "examples": [],
+      "inputs": {
+        "artifact_name": "",
+        "post_comment": "",
+        "thresholds_path": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_quality-gate.yml",
-      "source_sha256": "91539ba31bf6f222f8caf78a8eb1b391a1e767e22fa3e3184424dd96a303fb18"
+      "permissions": {
+        "actions": "read",
+        "contents": "read",
+        "pull-requests": "write"
+      },
+      "runner": [
+        "hosted"
+      ],
+      "source_sha256": "91539ba31bf6f222f8caf78a8eb1b391a1e767e22fa3e3184424dd96a303fb18",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "release",
+      "evidence": "Release badge recovery with explicit v-prefixed tag or event resolution",
+      "examples": [],
+      "inputs": {
+        "badge_path": "",
+        "branch": "",
+        "runner_json": "",
+        "tag": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "version": ""
+      },
       "path": ".github/workflows/_release-badge-recovery.yml",
-      "source_sha256": "8b611bd3cdb948b783cf292f2722112c8f2c55fdfae3b9cdd7ed71c2de25cb01"
+      "permissions": {
+        "contents": "write"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "8b611bd3cdb948b783cf292f2722112c8f2c55fdfae3b9cdd7ed71c2de25cb01",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "governance",
+      "evidence": "Repository validation through a protected environment requiring reviewer approval",
+      "examples": [],
+      "inputs": {
+        "args_json": "",
+        "artifact_name": "",
+        "candidate_sha": "",
+        "environment_name": "",
+        "retention_days": "",
+        "runner_json": "",
+        "script_path": "",
+        "timeout_seconds": "",
+        "trusted_ref": ""
+      },
       "kind": "workflow",
+      "known_limitations": "Emergency path; dispatch on main only",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "evidence_path": "",
+        "result": "",
+        "validated_sha": ""
+      },
       "path": ".github/workflows/_repository-validation-emergency.yml",
-      "source_sha256": "3f45f6891f4fb8fbed59f74dae5dba3ab098491c56830ce072fc36a12f59f413"
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "3f45f6891f4fb8fbed59f74dae5dba3ab098491c56830ce072fc36a12f59f413",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "governance",
+      "evidence": "Repository-owned validation results with exact-SHA, commit-bound evidence",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_repository-validation.yml@v1"
+      ],
+      "inputs": {
+        "allow_ephemeral_pr": "",
+        "args_json": "",
+        "artifact_name": "",
+        "base_sha": "",
+        "candidate_sha": "",
+        "image_refs_json": "",
+        "require_trusted_ref": "",
+        "retention_days": "",
+        "runner_json": "",
+        "script_path": "",
+        "timeout_seconds": "",
+        "trusted_ref": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "evidence_path": "",
+        "result": "",
+        "validated_sha": ""
+      },
       "path": ".github/workflows/_repository-validation.yml",
-      "source_sha256": "601c88ca3d4cc6a63a01a1568307c431e7306a84df2ca449f16432a711bbe0f5"
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "601c88ca3d4cc6a63a01a1568307c431e7306a84df2ca449f16432a711bbe0f5",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "security",
+      "evidence": "SAST gate results with expiring exact baselines",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_sast-gate.yml@v1"
+      ],
+      "inputs": {
+        "artifact_name": "",
+        "baseline_file": "",
+        "profile": "",
+        "retention_days": "",
+        "runner_json": "",
+        "self_hosted_mode": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_sast-gate.yml",
-      "source_sha256": "c12712f58d921eae0535a6d758997c541aa5305b6ddbf835a44b6e85fe7100eb"
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "c12712f58d921eae0535a6d758997c541aa5305b6ddbf835a44b6e85fe7100eb",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "security",
+      "evidence": "Security gate results with actionable failure classification",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_security-gate.yml@v1"
+      ],
+      "inputs": {
+        "artifact_name": "",
+        "db_max_age_hours": "",
+        "docker_mode": "",
+        "evidence_dir": "",
+        "exceptions_file": "",
+        "ignore_unfixed": "",
+        "image_refs": "",
+        "remediation_window_enabled": "",
+        "remediation_window_exposure_criticality": "",
+        "remediation_window_policy_file": "",
+        "remediation_window_service_scope": "",
+        "retention_days": "",
+        "runner_json": "",
+        "scan_ref": "",
+        "scan_type": "",
+        "self_hosted_mode": "",
+        "severity": "",
+        "trivy_version": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_security-gate.yml",
-      "source_sha256": "40de911c2b9b2a1acc78fcfc1eb931df1c16b3598acd35c6e3b40ebef22a6383"
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "40de911c2b9b2a1acc78fcfc1eb931df1c16b3598acd35c6e3b40ebef22a6383",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "security",
+      "evidence": "Unified security suite results (Trivy, SAST, dependency policy, supply chain)",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_security-suite.yml@v1"
+      ],
+      "inputs": {
+        "dependency_policy_file": "",
+        "dependency_working_directory": "",
+        "image_refs": "",
+        "node_version": "",
+        "npm_version": "",
+        "profile": "",
+        "retention_days": "",
+        "runner_json": "",
+        "sast_baseline_file": "",
+        "self_hosted_mode": "",
+        "shellcheck_severity": "",
+        "static_lint_exclusions": "",
+        "trivy_version": ""
+      },
       "kind": "workflow",
+      "known_limitations": "ephemeral-pr mode only on ephemeral runners",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "evidence_path": "",
+        "result": ""
+      },
       "path": ".github/workflows/_security-suite.yml",
-      "source_sha256": "3c564bcfbd4df242d1c45610470e4aecb59667783b1695e6fc96c1e0acf82dcc"
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "3c564bcfbd4df242d1c45610470e4aecb59667783b1695e6fc96c1e0acf82dcc",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "release",
+      "evidence": "Semantic release dry-run results with optional release badge update",
+      "examples": [],
+      "inputs": {
+        "actions_ref": "",
+        "install_command": "",
+        "node_version": "",
+        "npm_version": "",
+        "protected_main_mode": "",
+        "releaserc_source": "",
+        "runs_on": "",
+        "semantic_release_extra_packages": "",
+        "semantic_release_version": "",
+        "skip": "",
+        "update_release_badge": ""
+      },
       "kind": "workflow",
+      "known_limitations": "Consume via immutable SHA per governance contract",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_semantic-release.yml",
-      "source_sha256": "29649b3d3e690b55ea2db617ce58ab71273ad830bda886f32e52e1c4da4797cd"
+      "permissions": {
+        "contents": "write",
+        "issues": "write",
+        "pull-requests": "write"
+      },
+      "runner": [
+        "hosted"
+      ],
+      "source_sha256": "29649b3d3e690b55ea2db617ce58ab71273ad830bda886f32e52e1c4da4797cd",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "test",
+      "evidence": "Static lint results (ShellCheck, actionlint, composite metadata)",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_static-lint.yml@v1"
+      ],
+      "inputs": {
+        "artifact_name": "",
+        "exclusions": "",
+        "retention_days": "",
+        "runner_json": "",
+        "self_hosted_mode": "",
+        "shellcheck_severity": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_static-lint.yml",
-      "source_sha256": "f5ef7e246ef6a792357d91ed8b05bd28c69310599c05eeeda6bbd81c12760435"
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "f5ef7e246ef6a792357d91ed8b05bd28c69310599c05eeeda6bbd81c12760435",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "deploy",
+      "evidence": "Static site deployment evidence with candidate and rollback volumes",
+      "examples": [],
+      "inputs": {
+        "deployed_sha": "",
+        "docker_mode": "",
+        "environment_name": "",
+        "manifest_path": "",
+        "retention_days": "",
+        "runner_json": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_static-site-deploy.yml",
-      "source_sha256": "637375f82debcc96e1b2246e78efbe37e37775275e19d268f7a05dfbfd72936b"
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "637375f82debcc96e1b2246e78efbe37e37775275e19d268f7a05dfbfd72936b",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "security",
+      "evidence": "CycloneDX, SPDX and SLSA-compatible provenance evidence",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_supply-chain-evidence.yml@v1"
+      ],
+      "inputs": {
+        "artifact_name": "",
+        "image_refs": "",
+        "retention_days": "",
+        "runner_json": "",
+        "self_hosted_mode": "",
+        "trivy_version": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_supply-chain-evidence.yml",
-      "source_sha256": "7631c4fc1afe1ea9309a40b1beae9394b1a196ac49bfbfa3a1ddd3c65debb074"
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "7631c4fc1afe1ea9309a40b1beae9394b1a196ac49bfbfa3a1ddd3c65debb074",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "security",
+      "evidence": "Trivy filesystem/image scan report as an artifact",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_trivy-scan.yml@v1"
+      ],
+      "inputs": {
+        "exit_code": "",
+        "runner_json": "",
+        "scan_ref": "",
+        "scan_type": "",
+        "self_hosted_mode": "",
+        "severity": "",
+        "skip": "",
+        "upload_artifact": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_trivy-scan.yml",
-      "source_sha256": "acde3e8b904190d60183366ef95fbb42405b39adf82f8d3c78a540848a3bda29"
+      "permissions": {
+        "actions": "write",
+        "contents": "read"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "acde3e8b904190d60183366ef95fbb42405b39adf82f8d3c78a540848a3bda29",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "test",
+      "evidence": "PR convention validation results (title, body, commits)",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_validate-pr.yml@v1"
+      ],
+      "inputs": {
+        "base_sha": "",
+        "head_sha": "",
+        "pr_body": "",
+        "pr_title": "",
+        "run_self_tests": "",
+        "runner_json": "",
+        "self_hosted_mode": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_validate-pr.yml",
-      "source_sha256": "6511f40a1bea4659e925c38cad759bff6add3bff5f61ed7a79a9668b40bb8d0a"
+      "permissions": {
+        "contents": "read",
+        "pull-requests": "read"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "6511f40a1bea4659e925c38cad759bff6add3bff5f61ed7a79a9668b40bb8d0a",
+      "trust_boundary": "untrusted-pr"
     },
     {
+      "category": "governance",
+      "evidence": "Exact-SHA validation attestation across repository validation and security suite",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_validation-gate.yml@v1"
+      ],
+      "inputs": {
+        "args_json": "",
+        "candidate_sha": "",
+        "dependency_policy_file": "",
+        "dependency_working_directory": "",
+        "environment_name": "",
+        "image_refs": "",
+        "node_version": "",
+        "npm_version": "",
+        "retention_days": "",
+        "runner_json": "",
+        "sast_baseline_file": "",
+        "script_path": "",
+        "security_profile": "",
+        "validation_path": ""
+      },
       "kind": "workflow",
+      "known_limitations": "self-hosted path requires trusted main; ephemeral-pr only for PRs",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {
+        "actions_workflow_sha": "",
+        "evidence_digest": "",
+        "result": "",
+        "validated_sha": "",
+        "validation_path": ""
+      },
       "path": ".github/workflows/_validation-gate.yml",
-      "source_sha256": "5e42bcbe5e0a90701a5a620514661f5c98696d04c2df0c4e4f674b3978082c69"
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "5e42bcbe5e0a90701a5a620514661f5c98696d04c2df0c4e4f674b3978082c69",
+      "trust_boundary": "trusted-pr"
     },
     {
+      "category": "deploy",
+      "evidence": "Monorepo deploy evidence through the governed VPS runner",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-monorepo-deploy.yml@v1"
+      ],
+      "inputs": {
+        "compose_file": "",
+        "compose_up_flags": "",
+        "container_name": "",
+        "deploy_manifest_enabled": "",
+        "deploy_manifest_migration_result": "",
+        "deploy_manifest_retention": "",
+        "deploy_snapshot_enabled": "",
+        "deploy_snapshot_max_total_bytes": "",
+        "deploy_snapshot_retention_count": "",
+        "deploy_snapshot_retention_days": "",
+        "deploy_timeout_minutes": "",
+        "docker_mode": "",
+        "ensure_networks": "",
+        "ensure_volumes": "",
+        "health_timeout": "",
+        "image_age_threshold": "",
+        "post_deploy_commands": "",
+        "pre_deploy_commands": "",
+        "run_prune": "",
+        "runner_label": "",
+        "security_db_max_age_hours": "",
+        "security_exceptions_file": "",
+        "security_ignore_unfixed": "",
+        "security_rebuild_retry_enabled": "",
+        "security_rebuild_retry_no_cache": "",
+        "security_remediation_window_enabled": "",
+        "security_remediation_window_exposure_criticality": "",
+        "security_remediation_window_policy_file": "",
+        "security_remediation_window_service_scope": "",
+        "security_require_image_scan": "",
+        "security_severity": "",
+        "security_trivy_version": "",
+        "service_name": "",
+        "services_build": "",
+        "services_build_optional": "",
+        "services_up": "",
+        "timeout_minutes": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_vps-monorepo-deploy.yml",
-      "source_sha256": "1ba24b2a961bbb2321cff4424e5df5cde2d643e7ea6a743f141620717c4dfd1b"
+      "permissions": {},
+      "runner": [
+        "self-hosted-persistent"
+      ],
+      "source_sha256": "1ba24b2a961bbb2321cff4424e5df5cde2d643e7ea6a743f141620717c4dfd1b",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "deploy",
+      "evidence": "Compose stack deployment evidence on a trusted VPS runner",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@v1"
+      ],
+      "inputs": {
+        "build_image": "",
+        "build_no_cache": "",
+        "compose_file": "",
+        "container_name": "",
+        "deploy_manifest_enabled": "",
+        "deploy_manifest_migration_result": "",
+        "deploy_manifest_retention": "",
+        "deploy_snapshot_enabled": "",
+        "deploy_snapshot_max_total_bytes": "",
+        "deploy_snapshot_retention_count": "",
+        "deploy_snapshot_retention_days": "",
+        "deploy_timeout_minutes": "",
+        "docker_mode": "",
+        "ensure_networks": "",
+        "ensure_volumes": "",
+        "health_timeout": "",
+        "image_age_threshold": "",
+        "pre_deploy_validation": "",
+        "run_prune": "",
+        "runner_label": "",
+        "security_baseline_file": "",
+        "security_db_max_age_hours": "",
+        "security_exceptions_file": "",
+        "security_ignore_unfixed": "",
+        "security_rebuild_retry_enabled": "",
+        "security_rebuild_retry_no_cache": "",
+        "security_rebuild_services": "",
+        "security_remediation_window_enabled": "",
+        "security_remediation_window_exposure_criticality": "",
+        "security_remediation_window_policy_file": "",
+        "security_remediation_window_service_scope": "",
+        "security_require_image_scan": "",
+        "security_severity": "",
+        "security_trivy_version": "",
+        "service_name": ""
+      },
       "kind": "workflow",
+      "known_limitations": "",
       "maturity": "stable-v1",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": ".github/workflows/_vps-self-hosted-deploy.yml",
-      "source_sha256": "cd95e0d0deebfdd655b1931c2d8c74c693345b951d1938fbf4faf5112abae7bb"
+      "permissions": {},
+      "runner": [
+        "self-hosted-persistent"
+      ],
+      "source_sha256": "cd95e0d0deebfdd655b1931c2d8c74c693345b951d1938fbf4faf5112abae7bb",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "test",
+      "evidence": "Commitlint workflow scaffold wiring the canonical reusable",
+      "examples": [],
+      "inputs": {},
       "kind": "template",
+      "known_limitations": "Template; copy into consumer repository",
       "maturity": "canonical-template",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": "templates/workflows/commitlint.yml",
-      "source_sha256": "0f5f21e007f4f246daba696843ad83765ea0704880a5fb5319ea0770adcf05d5"
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "hosted"
+      ],
+      "source_sha256": "0f5f21e007f4f246daba696843ad83765ea0704880a5fb5319ea0770adcf05d5",
+      "trust_boundary": "untrusted-pr"
     },
     {
+      "category": "security",
+      "evidence": "Dependabot security automerge workflow scaffold",
+      "examples": [],
+      "inputs": {},
       "kind": "template",
+      "known_limitations": "Template; copy into consumer repository",
       "maturity": "canonical-template",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": "templates/workflows/dependabot-security-automerge.yml",
-      "source_sha256": "732c5409a84b8c1cd9caeca3b0d84348f06ce0997c78b8f688f3f377a5be53c2"
+      "permissions": {
+        "contents": "write",
+        "pull-requests": "write"
+      },
+      "runner": [
+        "hosted"
+      ],
+      "source_sha256": "732c5409a84b8c1cd9caeca3b0d84348f06ce0997c78b8f688f3f377a5be53c2",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "governance",
+      "evidence": "Emergency repository validation workflow scaffold",
+      "examples": [],
+      "inputs": {},
       "kind": "template",
+      "known_limitations": "Template; copy into consumer repository",
       "maturity": "canonical-template",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": "templates/workflows/repository-validation-emergency.yml",
-      "source_sha256": "4901c6d42b629ece7450f92b5d25502a7f48fdc073f40a250756152b7af3a8b5"
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "hosted"
+      ],
+      "source_sha256": "4901c6d42b629ece7450f92b5d25502a7f48fdc073f40a250756152b7af3a8b5",
+      "trust_boundary": "trusted-push"
     },
     {
+      "category": "test",
+      "evidence": "PR validation workflow scaffold wiring the canonical reusable",
+      "examples": [],
+      "inputs": {},
       "kind": "template",
+      "known_limitations": "Template; copy into consumer repository",
       "maturity": "canonical-template",
-      "metadata_status": "unclassified",
+      "metadata_status": "classified",
+      "outputs": {},
       "path": "templates/workflows/validate-pr.yml",
-      "source_sha256": "0d7767557a5defb63f1bde1311954ae51bbde8e602e7327fcf54674cd6424f35"
+      "permissions": {
+        "contents": "read",
+        "pull-requests": "read"
+      },
+      "runner": [
+        "hosted"
+      ],
+      "source_sha256": "0d7767557a5defb63f1bde1311954ae51bbde8e602e7327fcf54674cd6424f35",
+      "trust_boundary": "untrusted-pr"
     }
   ],
-  "schema_version": 1
+  "schema_version": 2
 }

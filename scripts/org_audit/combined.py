@@ -21,14 +21,186 @@ from scripts.org_audit.audit import (
     MAX_WORKFLOW_BYTES,
     AuditError,
     Finding,
+    PR_BILLING_SKIP_GUARD_RE,
     _api_json,
     _fetch_workflows,
+    _job_blocks,
     _repositories_from_env,
     _update_issue,
     audit_workflows,
     render_json,
     render_markdown,
 )
+
+import re
+
+ROOT = Path(__file__).resolve().parents[2]
+
+LOCAL_COMPOSE_PATTERN = re.compile(
+    r"^\s+docker(?:-compose)? compose config\b|run:.*\bdocker(?:-compose)? compose config\b"
+)
+LOCAL_SECURITY_TOOL_PATTERNS = {
+    "Trivy scan": re.compile(r"^\s+trivy\s+(?:fs|image|rootfs|filesystem|repo|config|filesystem)\b|run:.*\btrivy\b"),
+    "gitleaks": re.compile(r"^\s+gitleaks\b|run:.*\bgitleaks\b"),
+    "SBOM": re.compile(r"^\s+syft\b|run:.*\bsyft\b"),
+    "dependency audit": re.compile(r"^\s+(?:pip-audit|poetry audit|npm audit|pnpm audit|yarn audit)\b|run:.*\b(?:pip-audit|poetry audit|npm audit|pnpm audit|yarn audit)\b"),
+}
+LOCAL_PYTHON_TEST_PATTERN = re.compile(
+    r"^\s+(?:uv run pytest|uv run coverage|pytest|coverage run|coverage report)\b|run:.*\b(?:uv run pytest|pytest --cov|coverage run)\b"
+)
+LOCAL_STATIC_LINT_PATTERNS = {
+    "ShellCheck": re.compile(r"^\s+shellcheck\b|run:.*\bshellcheck\b"),
+    "actionlint": re.compile(r"^\s+actionlint\b|run:.*\bactionlint\b"),
+    "Ruff": re.compile(r"^\s+ruff check\b|run:.*\bruff check\b"),
+    "mypy": re.compile(r"^\s+mypy\b|run:.*\bmypy\b"),
+}
+LOCAL_QUALITY_GATE_PATTERN = re.compile(
+    r"\.github/scripts/quality[-_]gate|scripts/quality[-_]gate|run:.*\bquality-gate\b"
+)
+CANONICAL_REUSABLE_SUFFIX = {
+    "compose": "optimizr-actions/.github/workflows/_docker-compose-validate.yml@v1",
+    "security": ("optimizr-actions/.github/workflows/_security-gate.yml@v1", "optimizr-actions/.github/workflows/_trivy-scan.yml@v1", "optimizr-actions/.github/workflows/_sast-gate.yml@v1", "optimizr-actions/.github/workflows/_dependency-policy.yml@v1", "optimizr-actions/.github/workflows/_supply-chain-evidence.yml@v1"),
+    "python": ("optimizr-actions/.github/workflows/_python-uv-test.yml@v1", "optimizr-actions/.github/actions/python-uv-test-steps/action.yml@v1"),
+    "lint": "optimizr-actions/.github/workflows/_static-lint.yml@v1",
+    "quality_gate": ("optimizr-actions/.github/workflows/_quality-gate.yml@v1", "optimizr-actions/.github/workflows/_quality-gate-pr.yml@v1", "optimizr-actions/.github/actions/quality-gate-scripts/action.yml@v1"),
+    "repository_validation": "optimizr-actions/.github/workflows/_repository-validation.yml@v1",
+    "validation_gate": "optimizr-actions/.github/workflows/_validation-gate.yml@v1",
+    "validate_pr": "optimizr-actions/.github/workflows/_validate-pr.yml@v1",
+}
+SELF_HOSTED_RUNS_ON_RE = re.compile(r"(?m)^\s+runs-on\s*:\s*.*self-hosted")
+HOSTED_RUNS_ON_RE = re.compile(r"(?m)^\s+runs-on\s*:\s*.*(?:ubuntu|windows|macos)-")
+USES_REUSABLE_RE = re.compile(r"optimizr-actions/(?:\.github/(?:workflows|actions)/[^@\s]+\.ya?ml|\.github/actions/[^@\s]+/action\.yml)@([^\s#]+)")
+
+
+def _canonical_present(joined: str) -> dict[str, bool]:
+    present: dict[str, bool] = {}
+    for capability, suffix in CANONICAL_REUSABLE_SUFFIX.items():
+        targets = (suffix,) if isinstance(suffix, str) else suffix
+        present[capability] = any(f"optimizr-tech/{target}" in joined for target in targets)
+    return present
+
+
+def audit_functional_duplication(
+    repository: str,
+    visibility: str,
+    workflows: Mapping[str, str],
+    catalog: Mapping[str, object] | None = None,
+) -> list[Finding]:
+    """Detect avoidable local reimplementation of canonical capabilities.
+
+    A local implementation is reported only when the canonical reusable is
+    not called anywhere in the repository. Product-specific extensions are
+    allowed: register the exception in the consumer ``docs/adoption.md`` with
+    a reason.
+    """
+    findings: list[Finding] = []
+    joined = "\n".join(workflows.values())
+    canonical = _canonical_present(joined)
+
+    for path, content in workflows.items():
+        def add(rule_id: str, message: str) -> None:
+            findings.append(Finding(repository, visibility, path, rule_id, message))
+
+        if not canonical["compose"] and LOCAL_COMPOSE_PATTERN.search(content):
+            add(
+                "LOCAL_COMPOSE_VALIDATION",
+                "Compose model validation is implemented locally. Canonical: `optimizr-actions/.github/workflows/_docker-compose-validate.yml@v1`. Risk: divergence from the central contract. Migrate to the reusable; declare a product-specific exception in docs/adoption.md when the local check adds behavior the reusable does not provide.",
+            )
+        if not canonical["security"]:
+            found_tools = [
+                tool
+                for tool, pattern in LOCAL_SECURITY_TOOL_PATTERNS.items()
+                if pattern.search(content)
+            ]
+            if found_tools:
+                add(
+                    "DUPLICATED_SECURITY_SCAN",
+                    f"Security scanning is recreated locally ({', '.join(found_tools)}). Canonical: `_security-gate.yml`, `_trivy-scan.yml`, `_sast-gate.yml`, `_dependency-policy.yml` or `_supply-chain-evidence.yml` at @v1. Risk: findings and evidence are not governed. Migrate to the canonical reusable; declare product-specific exceptions in docs/adoption.md.",
+                )
+        if not canonical["python"] and LOCAL_PYTHON_TEST_PATTERN.search(content):
+            add(
+                "DUPLICATED_PYTHON_TEST_RUNNER",
+                "Python uv/pytest/coverage is recreated locally. Canonical: `_python-uv-test.yml@v1` with `python-uv-test-steps/action.yml`. Risk: matrix and evidence drift from the canonical runner. Migrate to the reusable; declare product-specific exceptions in docs/adoption.md.",
+            )
+        if not canonical["lint"]:
+            found_linters = [
+                linter
+                for linter, pattern in LOCAL_STATIC_LINT_PATTERNS.items()
+                if pattern.search(content)
+            ]
+            if found_linters:
+                add(
+                    "DUPLICATED_STATIC_LINT",
+                    f"Static linting is recreated locally ({', '.join(found_linters)}). Canonical: `_static-lint.yml@v1`. Risk: versions and gates diverge from the canonical policy. Migrate to the reusable; declare product-specific exceptions in docs/adoption.md.",
+                )
+        if not canonical["quality_gate"] and LOCAL_QUALITY_GATE_PATTERN.search(content):
+            add(
+                "DUPLICATED_QUALITY_GATE",
+                "A quality gate is implemented locally instead of the canonical one. Canonical: `_quality-gate.yml@v1`, `_quality-gate-pr.yml@v1` or `quality-gate-scripts/action.yml`. Risk: baseline and duplicate-collection evidence are lost. Migrate to the canonical gate; declare product-specific exceptions in docs/adoption.md.",
+            )
+        if (
+            "pull_request" in content
+            and PR_BILLING_SKIP_GUARD_RE.search(content)
+            and not canonical["repository_validation"]
+            and not canonical["validation_gate"]
+            and not SELF_HOSTED_RUNS_ON_RE.search(content)
+        ):
+            add(
+                "SKIP_TESTS_WITHOUT_EQUIVALENT",
+                "PR workflow has a caller-level [skip-tests] guard but no equivalent validation path. `[skip-tests]` switches infrastructure, not coverage. Canonical: `_repository-validation.yml@v1` or `_validation-gate.yml@v1` on a self-hosted runner. Risk: billing-outage path skips all validation. Add the equivalent self-hosted validation path.",
+            )
+        for job_name, job_block in _job_blocks(content):
+            mandatory = (
+                "optimizr-actions/.github/workflows/_repository-validation.yml@v1" in job_block
+                or "optimizr-actions/.github/workflows/_validate-pr.yml@v1" in job_block
+            )
+            if mandatory and re.search(r"skip\s*:\s*[\"']?true[\"']?", job_block):
+                add(
+                    "PERMANENT_SKIP_IN_MANDATORY_VALIDATION",
+                    f"Job `{job_name}` permanently sets `skip: true` on mandatory canonical validation. Risk: the reusable is nominally adopted but functionally disabled, with no evidence produced. Remove the permanent skip or document the exception in docs/adoption.md.",
+                )
+        if re.search(r"actions/checkout@[^\s]+", content) and re.search(
+            r"optimizr-actions/scripts/", content
+        ):
+            add(
+                "ACTIONS_CLONE_SCRIPT_EXECUTION",
+                "The workflow checks out optimizr-actions and executes its internal scripts directly, running part of a central contract and losing reusable outputs and evidence. Canonical: call the reusable with @v1 instead. Risk: silent drift and no governed evidence.",
+            )
+        if "optimizr-actions/.github/workflows/" in content and SELF_HOSTED_RUNS_ON_RE.search(content):
+            reported: set[str] = set()
+            for job_name, job_block in _job_blocks(content):
+                if HOSTED_RUNS_ON_RE.search(job_block):
+                    for reusable in sorted(
+                        {match.group(0) for match in USES_REUSABLE_RE.finditer(job_block)}
+                    ):
+                        reusable_path = ".github/" + reusable.split("/.github/", 1)[1].split("@", 1)[0]
+                        runner_kinds = _runner_kinds_for(catalog, reusable_path)
+                        if any(kind.startswith("self-hosted") for kind in runner_kinds) and reusable not in reported:
+                            reported.add(reusable)
+                            add(
+                                "HOSTED_ONLY_REUSABLE",
+                                f"Reusable `{reusable}` supports self-hosted runners but is called only from hosted job `{job_name}` in a repository that already runs self-hosted jobs. Risk: persistent/efêmero capacity with evidence is never exercised. Call it from a self-hosted job or document the hosted-only choice in docs/adoption.md.",
+                            )
+    return findings
+
+
+def _runner_kinds_for(
+    catalog: Mapping[str, object] | None, artifact_path: str
+) -> list[str]:
+    """Return runner kinds declared in the catalog for ``artifact_path``."""
+    if not catalog:
+        return []
+    artifacts = catalog.get("artifacts")
+    if not isinstance(artifacts, list):
+        return []
+    for artifact in artifacts:
+        if not isinstance(artifact, Mapping) or artifact.get("path") != artifact_path:
+            continue
+        runner = artifact.get("runner")
+        if isinstance(runner, list):
+            return [str(kind) for kind in runner]
+    return []
+
 
 
 def audit_security_adoption(
@@ -115,7 +287,18 @@ def _fetch_dependabot_config(repository: str, token: str) -> str | None:
     return None
 
 
+def _load_catalog() -> dict[str, object] | None:
+    """Load the canonical capability catalog shipped with the audit."""
+    catalog_file = ROOT / "catalog" / "capabilities.json"
+    try:
+        payload = json.loads(catalog_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, Mapping) else None
+
+
 def _audit_selected(repositories: Sequence[str], token: str) -> list[Finding]:
+    catalog = _load_catalog()
     findings: list[Finding] = []
     for repository in repositories:
         visibility, workflows = _fetch_workflows(repository, token)
@@ -127,6 +310,9 @@ def _audit_selected(repositories: Sequence[str], token: str) -> list[Finding]:
                 workflows,
                 _fetch_dependabot_config(repository, token),
             )
+        )
+        findings.extend(
+            audit_functional_duplication(repository, visibility, workflows, catalog)
         )
     return findings
 
