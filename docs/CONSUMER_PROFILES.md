@@ -98,9 +98,9 @@ consumer repository:
 
 | Profile | Canary consumer | Adoption signal |
 | --- | --- | --- |
-| Compose/infra | `optimizr-monitoring` | Already calls `_repository-validation` and Compose validation; its remaining local CI validation exercises the profile gap the audit flags |
-| Python service | `optimizr-serve` | Smallest service with canonical validation callers; cheapest to migrate and measure |
-| Monorepo Python + Node | To be selected by the adoption audit | First repository that calls both `_python-uv-test.yml` and `_node-project-test.yml`; per-workspace dependency policies tracked by `_dependency-policy.yml` callers |
+| Compose/infra | `optimizr-monitoring` | Already calls `_repository-validation` and Compose validation; its remaining local CI validation exercises the profile gap the audit flags. Migration tracked in optimizr-tech/optimizr-monitoring#89-#98 |
+| Python service | `optimizr-serve` | Smallest service with canonical validation callers; cheapest to migrate and measure. Migration tracked in optimizr-tech/optimizr-serve#1220-#1224 |
+| Monorepo Python + Node | To be confirmed after `optimizr-serve` migrates | Adoption audit found `optimizr-serve` to be the only repository calling both `_python-uv-test.yml` and `_node-project-test.yml` (strongest partial monorepo signal); it is re-evaluated as monorepo canary after its Python service migration lands |
 
 Each canary follows the same sequence: run the public adoption audit on the
 repository, file migration issues for each finding (no automatic commits),
