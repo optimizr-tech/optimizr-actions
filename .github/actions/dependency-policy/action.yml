@@ -220,13 +220,18 @@ runs:
         )"
               if [ -n "$python_version" ]; then
                 uv python install "$python_version"
+                # setup-uv pins UV_PYTHON (default 3.12) for the runner; the lock
+                # check must run against the project's minimum Python, otherwise
+                # consumers with requires-python >= 3.14 fail resolution.
+                UV_PYTHON="$python_version" uv lock --check
               else
                 uv python install
+                uv lock --check
               fi
-              uv lock --check
               ;;
             python-poetry)
-              uv tool install 'poetry==2.1.4'
+              # --force: persistent self-hosted runner reuses HOME (see sast-gate).
+              uv tool install --force 'poetry==2.1.4'
               export PATH="$HOME/.local/bin:$PATH"
               poetry check --lock
               ;;

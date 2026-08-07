@@ -29,7 +29,9 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        uv tool install 'semgrep==1.170.0'
+        # --force: the persistent self-hosted runner reuses HOME, so the tool
+        # may already exist; without --force uv exits 2 (Executables already exist).
+        uv tool install --force 'semgrep==1.170.0'
         export PATH="$HOME/.local/bin:$PATH"
         test "$(semgrep --version | head -n 1)" = "1.170.0"
     - name: Run controlled local SAST profile
