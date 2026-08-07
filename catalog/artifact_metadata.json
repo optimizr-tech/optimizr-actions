@@ -1,0 +1,333 @@
+{
+  "schema_version": 1,
+  "entries": {
+    ".github/actions/dependency-policy/action.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "Trivy vulnerability and license policy report plus lockfile audit evidence",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/actions/dependency-policy@v1"],
+      "known_limitations": "Requires controlled trivy version; policy file is repository-owned"
+    },
+    ".github/actions/deploy-snapshot-retention/action.yml": {
+      "trust_boundary": "trusted-push",
+      "evidence": "Pruned deploy snapshot inventory with bounded root, count and age enforcement",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/actions/deploy-snapshot-retention@v1"]
+    },
+    ".github/actions/docker-prune-safe/action.yml": {
+      "trust_boundary": "trusted-push",
+      "evidence": "Docker prune operation evidence; never touches volumes or networks",
+      "known_limitations": "Host Docker access required; destructive by nature"
+    },
+    ".github/actions/ensure-network-volume/action.yml": {
+      "trust_boundary": "trusted-push",
+      "evidence": "Idempotent Docker network and volume creation evidence",
+      "known_limitations": "Historically hosted in optimizr-infra-ops; adapter form"
+    },
+    ".github/actions/local-validation/action.yml": {
+      "category": "governance",
+      "trust_boundary": "trusted-pr",
+      "evidence": "Repository-owned validation preset result with secret-free evidence",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/actions/local-validation@v1"]
+    },
+    ".github/actions/negative-probes/action.yml": {
+      "trust_boundary": "trusted-push",
+      "evidence": "Declarative denial and exposure probe results after protected deployment",
+      "known_limitations": "Runs on VPS runner with host access"
+    },
+    ".github/actions/node-project-test/action.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "Bounded npm/pnpm project validation results without shell interpolation",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/actions/node-project-test@v1"]
+    },
+    ".github/actions/pnpm-setup/action.yml": {
+      "runner": ["hosted"],
+      "trust_boundary": "trusted-pr",
+      "evidence": "Node.js plus pnpm setup with dependency cache",
+      "known_limitations": "Node installed before pnpm/action-setup per issue #148 workaround"
+    },
+    ".github/actions/post-deploy-verification/action.yml": {
+      "trust_boundary": "trusted-push",
+      "evidence": "Container and HTTP readiness verification bound to an exact deployed SHA",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/actions/post-deploy-verification@v1"]
+    },
+    ".github/actions/postgres-migration-diagnostics/action.yml": {
+      "trust_boundary": "trusted-push",
+      "evidence": "Sanitized component hashes for PostgreSQL migration verification",
+      "known_limitations": "Requires side-aware invocation (source/target)"
+    },
+    ".github/actions/pr-metadata-validation/action.yml": {
+      "category": "governance",
+      "trust_boundary": "untrusted-pr",
+      "evidence": "PR title, body and commit subject validation results",
+      "known_limitations": "Does not check out candidate code"
+    },
+    ".github/actions/python-uv-test-steps/action.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "uv sync, ruff, optional mypy, pytest coverage results and coverage artifacts",
+      "known_limitations": "Composite intended for _python-uv-test.yml; prefer the reusable workflow"
+    },
+    ".github/actions/quality-gate-scripts/action.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "Materialized quality_gate package pinned to this optimizr-actions revision",
+      "known_limitations": "Reads infra-ops quality gate contract"
+    },
+    ".github/actions/record-deploy-manifest/action.yml": {
+      "trust_boundary": "trusted-push",
+      "evidence": "Sanitized deploy manifest recording bounded Docker state",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/actions/record-deploy-manifest@v1"]
+    },
+    ".github/actions/release-badge-resolver/action.yml": {
+      "trust_boundary": "trusted-push",
+      "evidence": "Resolved explicit, event, or latest semantic release tag for badge updates",
+      "known_limitations": "Requires release history; branch must be explicit"
+    },
+    ".github/actions/repository-validation/action.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "Repository-owned executable results with argv-safe, commit-bound evidence",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/actions/repository-validation@v1"]
+    },
+    ".github/actions/sast-gate/action.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "Semgrep SAST results with expiring exact baselines",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/actions/sast-gate@v1"]
+    },
+    ".github/actions/security-gate/action.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "Full Trivy finding report with actionable security failure classification",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@v1"]
+    },
+    ".github/actions/security-rebuild/action.yml": {
+      "trust_boundary": "trusted-push",
+      "evidence": "Bounded Compose image pull and rebuild evidence for security remediation",
+      "known_limitations": "Requires deploy path and compose file ownership"
+    },
+    ".github/actions/security-retry-result/action.yml": {
+      "trust_boundary": "trusted-push",
+      "evidence": "Retry classification evidence; fails closed unless immutable images changed and final scan passes"
+    },
+    ".github/actions/static-lint/action.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "Checksum-verified ShellCheck, actionlint and composite metadata validation results",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/actions/static-lint@v1"]
+    },
+    ".github/actions/static-site-deploy/action.yml": {
+      "trust_boundary": "trusted-push",
+      "evidence": "Static asset build and promotion evidence through candidate and rollback volumes"
+    },
+    ".github/actions/supply-chain-evidence/action.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "CycloneDX, SPDX and SLSA-compatible provenance for immutable image identities",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/actions/supply-chain-evidence@v1"]
+    },
+    ".github/actions/update-release-badge/action.yml": {
+      "trust_boundary": "trusted-push",
+      "evidence": "Release SVG badge patch with explicit target branch; optional commit and push"
+    },
+    ".github/actions/validate-deploy-env/action.yml": {
+      "trust_boundary": "trusted-push",
+      "evidence": "Fail-closed confirmation that required secrets and vars exist before env injection",
+      "known_limitations": "Adapter to infra-ops validate_deploy_env.py"
+    },
+    ".github/actions/validation-attestation/action.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "Canonical exact-SHA validation attestation with result digest",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/actions/validation-attestation@v1"]
+    },
+    ".github/actions/validation-authorization/action.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "Release/deploy authorization derived from one canonical validation-gate attestation"
+    },
+    ".github/actions/wait-for-healthcheck/action.yml": {
+      "trust_boundary": "trusted-push",
+      "evidence": "Docker container healthy readiness confirmation with bounded polling",
+      "known_limitations": "Historically hosted in optimizr-infra-ops; adapter form"
+    },
+    ".github/actions/write-deploy-manifest/action.yml": {
+      "trust_boundary": "trusted-push",
+      "evidence": "Strict sanitized deployment evidence below a canonical deploy path",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/actions/write-deploy-manifest@v1"]
+    },
+    ".github/actions/write-env-file/action.yml": {
+      "trust_boundary": "trusted-push",
+      "evidence": "Compose-compatible environment file from an audited repository schema"
+    },
+    ".github/workflows/_commitlint.yml": {
+      "trust_boundary": "untrusted-pr",
+      "evidence": "Commitlint results over the PR commit range",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_commitlint.yml@v1"]
+    },
+    ".github/workflows/_dependabot-security-automerge.yml": {
+      "runner": ["hosted"],
+      "trust_boundary": "trusted-push",
+      "evidence": "Dependabot security automerge decisions bounded by minor/patch policy",
+      "known_limitations": "Auto-merge requires repository automation permissions"
+    },
+    ".github/workflows/_dependency-policy.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "Dependency policy gate results across lockfiles and image policies",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_dependency-policy.yml@v1"]
+    },
+    ".github/workflows/_docker-compose-validate.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "Docker Compose syntax and script bash validation results",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_docker-compose-validate.yml@v1"]
+    },
+    ".github/workflows/_negative-probes.yml": {
+      "runner": ["self-hosted-persistent"],
+      "trust_boundary": "trusted-push",
+      "evidence": "Post-deploy denial and exposure probe results with manifest-bound evidence",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_negative-probes.yml@v1"]
+    },
+    ".github/workflows/_node-project-test.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "Bounded npm/pnpm project matrix validation results",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_node-project-test.yml@v1"]
+    },
+    ".github/workflows/_post-deploy-verification.yml": {
+      "runner": ["self-hosted-persistent"],
+      "trust_boundary": "trusted-push",
+      "evidence": "Post-deploy container and readiness verification for an exact deployed SHA"
+    },
+    ".github/workflows/_postgres-major-logical-migration.yml": {
+      "runner": ["self-hosted-persistent"],
+      "trust_boundary": "trusted-push",
+      "evidence": "PostgreSQL major logical migration diagnostics with sanitized component hashes"
+    },
+    ".github/workflows/_pr-metadata.yml": {
+      "category": "governance",
+      "trust_boundary": "untrusted-pr",
+      "runner": ["hosted", "self-hosted-persistent", "self-hosted-ephemeral"],
+      "evidence": "PR title, body and commit subject validation results",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@v1"]
+    },
+    ".github/workflows/_python-uv-test.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "uv sync, ruff, optional mypy and pytest coverage results",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_python-uv-test.yml@v1"]
+    },
+    ".github/workflows/_quality-gate-baseline.yml": {
+      "trust_boundary": "trusted-push",
+      "evidence": "Quality-gate-baseline artifact emitted on main after producer jobs succeed"
+    },
+    ".github/workflows/_quality-gate-collect-dup.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "jscpd duplication metrics per scope for quality-gate reporting"
+    },
+    ".github/workflows/_quality-gate-collect-security.yml": {
+      "category": "security",
+      "trust_boundary": "trusted-pr",
+      "evidence": "Matrix security scan metrics in non-blocking JSON mode"
+    },
+    ".github/workflows/_quality-gate-pr.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "PR artifact comparison against main baseline with idempotent comment",
+      "known_limitations": "Posts PR comments; requires pull-requests write"
+    },
+    ".github/workflows/_quality-gate.yml": {
+      "runner": ["hosted"],
+      "trust_boundary": "trusted-pr",
+      "evidence": "Aggregated quality-gate metrics with baseline comparison"
+    },
+    ".github/workflows/_release-badge-recovery.yml": {
+      "trust_boundary": "trusted-push",
+      "evidence": "Release badge recovery with explicit v-prefixed tag or event resolution"
+    },
+    ".github/workflows/_repository-validation-emergency.yml": {
+      "trust_boundary": "trusted-push",
+      "evidence": "Repository validation through a protected environment requiring reviewer approval",
+      "known_limitations": "Emergency path; dispatch on main only"
+    },
+    ".github/workflows/_repository-validation.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "Repository-owned validation results with exact-SHA, commit-bound evidence",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_repository-validation.yml@v1"]
+    },
+    ".github/workflows/_sast-gate.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "SAST gate results with expiring exact baselines",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_sast-gate.yml@v1"]
+    },
+    ".github/workflows/_security-gate.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "Security gate results with actionable failure classification",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_security-gate.yml@v1"]
+    },
+    ".github/workflows/_security-suite.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "Unified security suite results (Trivy, SAST, dependency policy, supply chain)",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_security-suite.yml@v1"],
+      "known_limitations": "ephemeral-pr mode only on ephemeral runners"
+    },
+    ".github/workflows/_semantic-release.yml": {
+      "runner": ["hosted"],
+      "trust_boundary": "trusted-push",
+      "evidence": "Semantic release dry-run results with optional release badge update",
+      "known_limitations": "Consume via immutable SHA per governance contract"
+    },
+    ".github/workflows/_static-lint.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "Static lint results (ShellCheck, actionlint, composite metadata)",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_static-lint.yml@v1"]
+    },
+    ".github/workflows/_static-site-deploy.yml": {
+      "trust_boundary": "trusted-push",
+      "evidence": "Static site deployment evidence with candidate and rollback volumes"
+    },
+    ".github/workflows/_supply-chain-evidence.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "CycloneDX, SPDX and SLSA-compatible provenance evidence",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_supply-chain-evidence.yml@v1"]
+    },
+    ".github/workflows/_trivy-scan.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "Trivy filesystem/image scan report as an artifact",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_trivy-scan.yml@v1"]
+    },
+    ".github/workflows/_validate-pr.yml": {
+      "trust_boundary": "untrusted-pr",
+      "evidence": "PR convention validation results (title, body, commits)",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_validate-pr.yml@v1"]
+    },
+    ".github/workflows/_validation-gate.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "Exact-SHA validation attestation across repository validation and security suite",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_validation-gate.yml@v1"],
+      "known_limitations": "self-hosted path requires trusted main; ephemeral-pr only for PRs"
+    },
+    ".github/workflows/_vps-monorepo-deploy.yml": {
+      "runner": ["self-hosted-persistent"],
+      "trust_boundary": "trusted-push",
+      "evidence": "Monorepo deploy evidence through the governed VPS runner",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-monorepo-deploy.yml@v1"]
+    },
+    ".github/workflows/_vps-self-hosted-deploy.yml": {
+      "runner": ["self-hosted-persistent"],
+      "trust_boundary": "trusted-push",
+      "evidence": "Compose stack deployment evidence on a trusted VPS runner",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@v1"]
+    },
+    "templates/workflows/commitlint.yml": {
+      "runner": ["hosted"],
+      "trust_boundary": "untrusted-pr",
+      "evidence": "Commitlint workflow scaffold wiring the canonical reusable",
+      "known_limitations": "Template; copy into consumer repository"
+    },
+    "templates/workflows/dependabot-security-automerge.yml": {
+      "runner": ["hosted"],
+      "trust_boundary": "trusted-push",
+      "evidence": "Dependabot security automerge workflow scaffold",
+      "known_limitations": "Template; copy into consumer repository"
+    },
+    "templates/workflows/repository-validation-emergency.yml": {
+      "runner": ["hosted"],
+      "trust_boundary": "trusted-push",
+      "evidence": "Emergency repository validation workflow scaffold",
+      "known_limitations": "Template; copy into consumer repository"
+    },
+    "templates/workflows/validate-pr.yml": {
+      "runner": ["hosted"],
+      "trust_boundary": "untrusted-pr",
+      "evidence": "PR validation workflow scaffold wiring the canonical reusable",
+      "known_limitations": "Template; copy into consumer repository"
+    }
+  }
+}

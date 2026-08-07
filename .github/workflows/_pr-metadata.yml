@@ -4,12 +4,12 @@ on:
   workflow_call:
     inputs:
       runner_json:
-        description: Hosted runner or persistent read-only metadata runner labels
+        description: Hosted runner or self-hosted metadata runner labels; self-hosted PR metadata must be ephemeral
         required: false
         type: string
         default: '["ubuntu-latest"]'
       self_hosted_mode:
-        description: none for hosted or metadata-pr for self-hosted metadata-only execution
+        description: none for hosted, metadata-pr for persistent read-only metadata, or ephemeral-pr for disposable runners
         required: false
         type: string
         default: none
@@ -58,10 +58,14 @@ jobs:
           else:
               if "Linux" not in labels:
                   raise SystemExit("self-hosted metadata validation requires Linux")
-              if mode != "metadata-pr":
-                  raise SystemExit("self-hosted metadata validation requires mode metadata-pr")
-              if os.environ["EVENT_NAME"] != "pull_request":
-                  raise SystemExit("metadata-pr requires a pull_request event")
+              if mode == "metadata-pr":
+                  if os.environ["EVENT_NAME"] != "pull_request":
+                      raise SystemExit("metadata-pr requires a pull_request event")
+              elif mode == "ephemeral-pr":
+                  if os.environ["EVENT_NAME"] != "pull_request" or "ephemeral" not in labels:
+                      raise SystemExit("ephemeral-pr requires pull_request and an ephemeral runner label")
+              else:
+                  raise SystemExit("self-hosted metadata validation requires mode metadata-pr or ephemeral-pr")
           PY
 
       - name: Validate title, body and commit subjects

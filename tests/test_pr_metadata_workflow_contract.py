@@ -11,6 +11,7 @@ class PRMetadataWorkflowContractTests(unittest.TestCase):
     def test_workflow_is_read_only_and_metadata_only(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("metadata-pr", text)
+        self.assertIn("ephemeral-pr", text)
         self.assertIn("contents: read", text)
         self.assertIn("pull-requests: read", text)
         self.assertIn("pr-metadata-validation@v1", text)
