@@ -54,7 +54,7 @@
       "maturity": "stable-v1",
       "metadata_status": "unclassified",
       "path": ".github/actions/pnpm-setup/action.yml",
-      "source_sha256": "31989989977bf41a57d46ba4a9868197fd3771ef82784f82b9750830d232fa3a"
+      "source_sha256": "d124224ff144585e42c6e4b92f84d18da8816ccd86a839259f11964310bfd22b"
     },
     {
       "kind": "action",
