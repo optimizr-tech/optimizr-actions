@@ -180,8 +180,18 @@ def audit_workflows(repository: str, visibility: str, workflows: Mapping[str, st
                 if _has_event(on_block, event) and not _event_has_path_filter(on_block, event):
                     add("MISSING_PATH_FILTER", f"{event} trigger has no paths or paths-ignore filter.")
                     break
-        if _has_event(on_block, "pull_request") and ("self-hosted" in content or re.search(r"runner_json\s*:\s*.*self-hosted", content)):
-            add("SELF_HOSTED_PULL_REQUEST", "Pull-request workflow may route untrusted candidate code to a persistent self-hosted runner.")
+        if _has_event(on_block, "pull_request") and (
+            "self-hosted" in content
+            or re.search(r"runner_json\s*:\s*.*self-hosted", content)
+        ):
+            if not re.search(
+                r"self_hosted_mode\s*:\s*(?:metadata-pr|ephemeral-pr|trusted-main)\b",
+                content,
+            ):
+                add(
+                    "SELF_HOSTED_PR_WITHOUT_GOVERNED_MODE",
+                    "Pull-request workflow engages a self-hosted runner without a governed self_hosted_mode (metadata-pr/ephemeral-pr/trusted-main). Untrusted candidate code may reach a persistent runner outside the governed contract (directive #159).",
+                )
         basename = Path(path).name
         if basename == "update-badges.yml" and "_release-badge-recovery.yml@v1" not in content:
             add("DUPLICATED_BADGE_WORKFLOW", "Release badge recovery is implemented inline instead of calling the canonical reusable.")
@@ -189,19 +199,29 @@ def audit_workflows(repository: str, visibility: str, workflows: Mapping[str, st
             add("DUPLICATED_COMMITLINT_WORKFLOW", "Commitlint does not call the canonical optimizr-actions reusable.")
         if basename == "validate-pr.yml" and "optimizr-actions/.github/workflows/_validate-pr.yml@v1" not in content:
             add("DUPLICATED_PR_VALIDATION", "Pull-request validation does not call the canonical optimizr-actions reusable.")
-        if _has_event(on_block, "pull_request"):
+        if _has_event(on_block, "pull_request") and PR_BILLING_SKIP_GUARD_RE.search(content):
+            add(
+                "PR_BILLING_SKIP_GUARD",
+                "Caller-level [skip-tests] guard is prohibited by directive #159; validation must run on the governed self-hosted runner with real evidence and must never derive skip from billing state.",
+            )
+        repo_engages_self_hosted = any(
+            "self-hosted" in other_content for other_content in workflows.values()
+        )
+        if repo_engages_self_hosted and _has_event(on_block, "pull_request"):
             for job_name, job_block in _job_blocks(content):
-                hosted = (
+                if re.search(r"(?m)^\s+runs-on\s*:\s*.*self-hosted", job_block):
+                    continue
+                validates_candidate = (
                     "optimizr-actions/.github/workflows/" in job_block
-                    or re.search(
-                        r"(?m)^\s+runs-on:\s*.*(?:ubuntu|windows|macos)-",
-                        job_block,
+                    or bool(
+                        re.search(r"(?m)^\s*-\s+(?:run|uses)\s*:", job_block)
                     )
+                    or bool(re.search(r"(?m)^\s+(?:run|uses)\s*:", job_block))
                 )
-                if hosted and not PR_BILLING_SKIP_GUARD_RE.search(job_block):
+                if validates_candidate:
                     add(
-                        "MISSING_PR_BILLING_SKIP_GUARD",
-                        f"Hosted pull-request job `{job_name}` has no caller-level [skip-tests] guard, so a billing outage can fail before dependency-based skipping is resolved.",
+                        "HOSTED_PR_CODE_VALIDATION",
+                        f"Hosted pull-request job `{job_name}` validates candidate code while the repository runs governed self-hosted runners. Directive #159 requires PR code validation on the governed self-hosted runner (metadata-pr/ephemeral-pr).",
                     )
     return findings
 

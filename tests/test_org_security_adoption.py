@@ -141,7 +141,7 @@ jobs:
 
         self.assertEqual([], findings)
 
-    def test_reports_skip_tests_without_equivalent_validation(self) -> None:
+    def test_duplication_audit_does_not_emit_skip_tests_rules(self) -> None:
         workflows = {
             ".github/workflows/ci.yml": """
 on:
@@ -160,29 +160,7 @@ jobs:
         )
         rules = {finding.rule_id for finding in findings}
 
-        self.assertIn("SKIP_TESTS_WITHOUT_EQUIVALENT", rules)
-
-    def test_accepts_skip_tests_when_self_hosted_equivalent_is_called(self) -> None:
-        workflows = {
-            ".github/workflows/ci.yml": """
-on:
-  pull_request:
-jobs:
-  validate:
-    runs-on: ubuntu-latest
-    if: "! contains(github.event.pull_request.title, '[skip-tests]')"
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_repository-validation.yml@v1
-  emergency:
-    runs-on: self-hosted
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_validation-gate.yml@v1
-"""
-        }
-
-        findings = audit_functional_duplication(
-            "optimizr-tech/example", "private", workflows, catalog=None
-        )
-
-        self.assertEqual([], findings)
+        self.assertNotIn("SKIP_TESTS_WITHOUT_EQUIVALENT", rules)
 
     def test_reports_permanent_skip_on_mandatory_validation(self) -> None:
         workflows = {

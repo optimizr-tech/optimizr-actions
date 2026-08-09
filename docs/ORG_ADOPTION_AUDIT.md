@@ -12,10 +12,12 @@ Rules detect:
 - third-party actions not pinned to a 40-character SHA;
 - write permissions requiring least-privilege review;
 - CI/deploy triggers without path filters;
-- potential self-hosted pull-request execution;
+- potential self-hosted pull-request execution without a governed
+  `self_hosted_mode` (`metadata-pr`/`ephemeral-pr`/`trusted-main`);
 - duplicated badge, commitlint and PR-validation workflows;
-- canonical PR-validation callers missing the caller-level `[skip-tests]`
-  billing guard;
+- prohibited caller-level `[skip-tests]` guards (directive #159);
+- hosted pull-request code validation in repositories that already run
+  governed self-hosted jobs (directive #159);
 - missing `.github/dependabot.yml` organization configuration;
 - missing governed Dependabot native auto-merge caller;
 - deployment-like workflows that do not call an approved VPS deploy reusable.
@@ -34,9 +36,6 @@ anywhere in the repository:
 - local ShellCheck/actionlint/Ruff/mypy without `_static-lint.yml@v1`;
 - local quality gate without `_quality-gate.yml@v1` or
   `_quality-gate-pr.yml@v1`;
-- caller-level `[skip-tests]` guard without an equivalent self-hosted
-  validation path (`_repository-validation.yml@v1` or
-  `_validation-gate.yml@v1`);
 - permanent `skip: true` on mandatory canonical validation;
 - direct execution of `optimizr-actions/scripts/**` from a checkout instead
   of calling reusables (loses reusable outputs and evidence);
