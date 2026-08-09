@@ -84,6 +84,11 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
             2,
         )
 
+    def test_rabbitmq_service_avoids_deprecated_memory_environment(self):
+        text = (ROOT / ".github/workflows/_python-uv-test.yml").read_text()
+        self.assertIn("--memory 1g", text)
+        self.assertNotIn("RABBITMQ_VM_MEMORY_HIGH_WATERMARK", text)
+
 
 if __name__ == "__main__":
     unittest.main()
