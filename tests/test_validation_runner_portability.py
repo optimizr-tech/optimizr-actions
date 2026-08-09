@@ -93,7 +93,7 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
         text = (ROOT / ".github/workflows/_python-uv-test.yml").read_text()
         for image in (
             "postgres:16.14-alpine@sha256:e013e867e712fec275706a6c51c966f0bb0c93cfa8f51000f85a15f9865a28cb",
-            "redis:7.4.9-alpine@sha256:6ab0b0e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99",
+            "redis:7.4.9-alpine@sha256:b1addbe72465a718643cff9e60a58e6df1841e29d6d7d60c9a85d8d72f08d1a7",
             "rabbitmq:4.2.9-management-alpine@sha256:a51ed990cb4392ce136380fb01fdb8aab1203565953f5ea9711bf839b1b709db",
         ):
             with self.subTest(image=image):
