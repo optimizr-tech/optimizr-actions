@@ -189,7 +189,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:16.14-alpine@sha256:e013e867e712fec275706a6c51c966f0bb0c93cfa8f51000f85a15f9865a28cb
         env:
           POSTGRES_DB: serve_test
           POSTGRES_USER: serve_app
@@ -202,7 +202,7 @@ jobs:
           --health-timeout 3s
           --health-retries 5
       redis:
-        image: redis:7-alpine
+        image: redis:7.4.9-alpine@sha256:6ab0b0e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
         ports:
           - 6379:6379
         options: >-
@@ -211,11 +211,11 @@ jobs:
           --health-timeout 3s
           --health-retries 5
       rabbitmq:
-        image: rabbitmq:3.13-alpine
+        image: rabbitmq:4.2.9-management-alpine@sha256:a51ed990cb4392ce136380fb01fdb8aab1203565953f5ea9711bf839b1b709db
         ports:
           - 5672:5672
         # Explicit memory cap: on self-hosted runners the
-        # container can inherit a low default cgroup limit, and RabbitMQ 3.13
+        # container can inherit a low default cgroup limit, and RabbitMQ 4.2.9
         # reads the cgroup to derive vm_memory_high_watermark (0.6 by default)
         # - a boot that exceeds it fires system_memory_high_watermark and the
         # health check never turns healthy (optimizr-serve trusted-main battery).

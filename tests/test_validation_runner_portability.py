@@ -89,6 +89,16 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
         self.assertIn("--memory 1g", text)
         self.assertNotIn("RABBITMQ_VM_MEMORY_HIGH_WATERMARK", text)
 
+    def test_serve_integration_services_match_runtime_pins(self):
+        text = (ROOT / ".github/workflows/_python-uv-test.yml").read_text()
+        for image in (
+            "postgres:16.14-alpine@sha256:e013e867e712fec275706a6c51c966f0bb0c93cfa8f51000f85a15f9865a28cb",
+            "redis:7.4.9-alpine@sha256:6ab0b0e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99",
+            "rabbitmq:4.2.9-management-alpine@sha256:a51ed990cb4392ce136380fb01fdb8aab1203565953f5ea9711bf839b1b709db",
+        ):
+            with self.subTest(image=image):
+                self.assertIn(image, text)
+
 
 if __name__ == "__main__":
     unittest.main()
