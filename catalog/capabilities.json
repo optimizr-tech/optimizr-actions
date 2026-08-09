@@ -1831,6 +1831,7 @@
         "sast_baseline_file": "",
         "script_path": "",
         "security_profile": "",
+        "timeout_seconds": "",
         "validation_path": ""
       },
       "kind": "workflow",
@@ -1853,7 +1854,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "5e42bcbe5e0a90701a5a620514661f5c98696d04c2df0c4e4f674b3978082c69",
+      "source_sha256": "89c50f3912a5bc5768da14babb8d68f89ece1eff6affac002678a575a80c1b60",
       "trust_boundary": "trusted-pr"
     },
     {
