@@ -70,6 +70,11 @@ on:
         type: number
         required: false
         default: 30
+      timeout_seconds:
+        description: Repository validation command timeout
+        type: number
+        required: false
+        default: 900
     outputs:
       result:
         description: passed only when all required validation completed
@@ -168,6 +173,7 @@ jobs:
       allow_ephemeral_pr: ${{ inputs.validation_path == 'ephemeral-pr' }}
       artifact_name: validation-gate-repository
       retention_days: ${{ inputs.retention_days }}
+      timeout_seconds: ${{ inputs.timeout_seconds }}
 
   security-suite:
     needs: [preflight, emergency-preflight]
