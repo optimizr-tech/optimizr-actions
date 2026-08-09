@@ -10,7 +10,7 @@ capability catalog (`catalog/capabilities.json`).
 | --- | --- | --- |
 | `hosted` | Fresh GitHub-managed VM per job; no long-lived state | Default for validation, lint, tests and gates on trusted PRs; deterministic, no secret exposure beyond scoped secrets |
 | `self-hosted-persistent` | Long-lived machine; shared Docker daemon, caches and volumes; can hold deployment state | Deploy, post-deploy verification, negative probes, postgres migration and any step that needs persistent infrastructure or docker compose state |
-| `self-hosted-ephemeral` | Self-hosted image of the validation contract on disposable runners; no shared state | Billing-emergency and scale paths: `[skip-tests]` switching to the equivalent self-hosted validation contract with the same evidence |
+| `self-hosted-ephemeral` | Self-hosted image of the validation contract on disposable runners; no shared state | Self-hosted PR validation of candidate code (directive #159): the only self-hosted mode that may execute untrusted PR code, with the same evidence |
 
 ### Hosted
 
@@ -33,9 +33,10 @@ capability catalog (`catalog/capabilities.json`).
 
 - The same self-hosted execution surface on disposable runners: equivalent
   evidence, no shared state, no persistent exposure.
-- The correct replacement path when the caller-level `[skip-tests]` guard
-  drops hosted validation: the equivalent contract still runs here with the
-  same outputs (see `docs/CI_SKIP_CONTRACT.md`).
+- The correct mode for validating untrusted PR code on self-hosted runners
+  (directive #159); metadata-only PR validation uses `metadata-pr` instead
+  (see `docs/CI_SKIP_CONTRACT.md` for the historical `[skip-tests]`
+  contract, superseded by directive #159).
 
 ## Trust boundaries
 

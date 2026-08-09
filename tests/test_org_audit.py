@@ -48,7 +48,7 @@ jobs:
             "UNPINNED_THIRD_PARTY_ACTION",
             "BROAD_WORKFLOW_PERMISSION",
             "MISSING_PATH_FILTER",
-            "SELF_HOSTED_PULL_REQUEST",
+            "SELF_HOSTED_PR_WITHOUT_GOVERNED_MODE",
             "DUPLICATED_BADGE_WORKFLOW",
         }.issubset(rules))
 
@@ -73,37 +73,7 @@ jobs:
         self.assertNotIn("old", updated)
         self.assertEqual(update_marked_section(updated, "new report"), updated)
 
-    def test_detects_reusable_pr_checks_without_caller_billing_guard(self):
-        workflows = {
-            ".github/workflows/commitlint.yml": """
-on:
-  pull_request:
-jobs:
-  commitlint:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_commitlint.yml@v1
-""",
-            ".github/workflows/validate-pr.yml": """
-on:
-  pull_request:
-jobs:
-  validate-pr:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_validate-pr.yml@v1
-""",
-        }
-
-        findings = audit_workflows(
-            "optimizr-tech/example", "private", workflows
-        )
-
-        self.assertEqual(
-            2,
-            sum(
-                finding.rule_id == "MISSING_PR_BILLING_SKIP_GUARD"
-                for finding in findings
-            ),
-        )
-
-    def test_accepts_canonical_caller_level_skip_guard(self):
+    def test_reports_prohibited_caller_level_skip_guard(self):
         guard = """
     if: >-
       github.event_name != 'pull_request' ||
@@ -132,12 +102,15 @@ jobs:
             "optimizr-tech/example", "private", workflows
         )
 
-        self.assertNotIn(
-            "MISSING_PR_BILLING_SKIP_GUARD",
-            {finding.rule_id for finding in findings},
+        self.assertEqual(
+            2,
+            sum(
+                finding.rule_id == "PR_BILLING_SKIP_GUARD"
+                for finding in findings
+            ),
         )
 
-    def test_detects_unguarded_dependent_hosted_job(self):
+    def test_reports_hosted_pr_code_validation_when_repo_has_self_hosted(self):
         workflows = {
             ".github/workflows/test.yml": """
 on:
@@ -152,7 +125,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo validate
-"""
+""",
+            ".github/workflows/deploy.yml": """
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: [self-hosted, Linux, prod]
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@v1
+""",
         }
 
         findings = audit_workflows(
@@ -160,12 +142,47 @@ jobs:
         )
 
         self.assertEqual(
-            ["dependent"],
+            ["root", "dependent"],
             [
                 finding.message.split("job `", 1)[1].split("`", 1)[0]
                 for finding in findings
-                if finding.rule_id == "MISSING_PR_BILLING_SKIP_GUARD"
+                if finding.rule_id == "HOSTED_PR_CODE_VALIDATION"
             ],
+        )
+        self.assertIn(
+            "PR_BILLING_SKIP_GUARD",
+            {finding.rule_id for finding in findings},
+        )
+
+    def test_accepts_hosted_reusable_pr_checks_when_repo_has_no_self_hosted(self):
+        workflows = {
+            ".github/workflows/commitlint.yml": """
+on:
+  pull_request:
+jobs:
+  commitlint:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_commitlint.yml@v1
+""",
+            ".github/workflows/validate-pr.yml": """
+on:
+  pull_request:
+jobs:
+  validate-pr:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_validate-pr.yml@v1
+""",
+        }
+
+        findings = audit_workflows(
+            "optimizr-tech/example", "private", workflows
+        )
+
+        self.assertNotIn(
+            "HOSTED_PR_CODE_VALIDATION",
+            {finding.rule_id for finding in findings},
+        )
+        self.assertNotIn(
+            "PR_BILLING_SKIP_GUARD",
+            {finding.rule_id for finding in findings},
         )
 
 

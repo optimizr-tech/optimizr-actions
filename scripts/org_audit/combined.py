@@ -21,7 +21,6 @@ from scripts.org_audit.audit import (
     MAX_WORKFLOW_BYTES,
     AuditError,
     Finding,
-    PR_BILLING_SKIP_GUARD_RE,
     _api_json,
     _fetch_workflows,
     _job_blocks,
@@ -137,17 +136,6 @@ def audit_functional_duplication(
             add(
                 "DUPLICATED_QUALITY_GATE",
                 "A quality gate is implemented locally instead of the canonical one. Canonical: `_quality-gate.yml@v1`, `_quality-gate-pr.yml@v1` or `quality-gate-scripts/action.yml`. Risk: baseline and duplicate-collection evidence are lost. Migrate to the canonical gate; declare product-specific exceptions in docs/adoption.md.",
-            )
-        if (
-            "pull_request" in content
-            and PR_BILLING_SKIP_GUARD_RE.search(content)
-            and not canonical["repository_validation"]
-            and not canonical["validation_gate"]
-            and not SELF_HOSTED_RUNS_ON_RE.search(content)
-        ):
-            add(
-                "SKIP_TESTS_WITHOUT_EQUIVALENT",
-                "PR workflow has a caller-level [skip-tests] guard but no equivalent validation path. `[skip-tests]` switches infrastructure, not coverage. Canonical: `_repository-validation.yml@v1` or `_validation-gate.yml@v1` on a self-hosted runner. Risk: billing-outage path skips all validation. Add the equivalent self-hosted validation path.",
             )
         for job_name, job_block in _job_blocks(content):
             mandatory = (

@@ -1,9 +1,16 @@
 # CI skip contract
 
-`[skip-tests]` is the single organization marker for bypassing hosted test and
-pull-request validation jobs during a confirmed GitHub Actions billing outage.
-It does not bypass release, deployment, or the self-hosted deployment security
-gate.
+**Superseded by directive `optimizr-actions` #159.** `[skip-tests]` as a
+billing-outage muleta is prohibited org-wide: PR validation must run on the
+governed self-hosted runner (`self_hosted_mode: metadata-pr` for metadata,
+`ephemeral-pr`/`trusted-main` for code execution) with real evidence, and
+skip must never be derived from the account billing state. This document is
+kept as the historical contract.
+
+The `[skip-tests]` marker was the single organization marker for bypassing
+hosted test and pull-request validation jobs during a confirmed GitHub
+Actions billing outage. It did not bypass release, deployment, or the
+self-hosted deployment security gate.
 
 ## Event contract
 
@@ -39,9 +46,14 @@ tests are bypassed.
 
 ## Adoption audit
 
-The organization audit emits `MISSING_PR_BILLING_SKIP_GUARD` for every hosted
-pull-request job or canonical reusable caller that lacks its own title guard.
-Do not rely on a guarded root job and `needs`: during the July 2026 billing
-outage GitHub still rejected a Certbot workflow at startup before
-dependency-based skipping was resolved. This catches the failure mode before
-the next billing outage.
+The organization audit follows directive #159 instead of the historical
+billing-guard contract:
+
+- `PR_BILLING_SKIP_GUARD` — a caller-level `[skip-tests]` guard is present and
+  prohibited; validation must run on the governed self-hosted runner with real
+  evidence.
+- `SELF_HOSTED_PR_WITHOUT_GOVERNED_MODE` — a pull-request workflow engages a
+  self-hosted runner without `self_hosted_mode` (`metadata-pr`,
+  `ephemeral-pr`, `trusted-main`).
+- `HOSTED_PR_CODE_VALIDATION` — a pull-request job validates candidate code on
+  a hosted runner while the repository has governed self-hosted runners.
