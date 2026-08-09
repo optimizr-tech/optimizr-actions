@@ -214,7 +214,14 @@ jobs:
         image: rabbitmq:3.13-alpine
         ports:
           - 5672:5672
+        # Explicit memory cap + high watermark: on self-hosted runners the
+        # container can inherit a low default cgroup limit, and RabbitMQ 3.13
+        # reads the cgroup to derive vm_memory_high_watermark (~40%) - a boot
+        # that exceeds it fires system_memory_high_watermark and the health
+        # check never turns healthy (optimizr-serve trusted-main battery).
         options: >-
+          --memory 1g
+          --env RABBITMQ_VM_MEMORY_HIGH_WATERMARK=0.6
           --health-cmd "rabbitmq-diagnostics -q check_running"
           --health-interval 10s
           --health-timeout 5s
