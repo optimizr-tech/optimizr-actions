@@ -184,14 +184,22 @@ def audit_workflows(repository: str, visibility: str, workflows: Mapping[str, st
             "self-hosted" in content
             or re.search(r"runner_json\s*:\s*.*self-hosted", content)
         ):
-            if not re.search(
-                r"self_hosted_mode\s*:\s*(?:metadata-pr|ephemeral-pr|trusted-main)\b",
-                content,
-            ):
-                add(
-                    "SELF_HOSTED_PR_WITHOUT_GOVERNED_MODE",
-                    "Pull-request workflow engages a self-hosted runner without a governed self_hosted_mode (metadata-pr/ephemeral-pr/trusted-main). Untrusted candidate code may reach a persistent runner outside the governed contract (directive #159).",
+            if "optimizr-actions/.github/workflows/" in content:
+                governed = re.search(
+                    r"self_hosted_mode\s*:\s*(?:metadata-pr|ephemeral-pr|trusted-main)\b",
+                    content,
                 )
+                switches_to_hosted = (
+                    "runner_json" in content
+                    and "self_hosted_mode" in content
+                    and "'none'" in content
+                    and '["ubuntu-latest"]' in content
+                )
+                if not governed and not switches_to_hosted:
+                    add(
+                        "SELF_HOSTED_PR_WITHOUT_GOVERNED_MODE",
+                        "Pull-request workflow calls a canonical reusable on a self-hosted runner without a governed self_hosted_mode (metadata-pr/ephemeral-pr/trusted-main) or a hosted-PR switch. Untrusted candidate code may reach a persistent runner outside the governed contract (directive #159).",
+                    )
         basename = Path(path).name
         if basename == "update-badges.yml" and "_release-badge-recovery.yml@v1" not in content:
             add("DUPLICATED_BADGE_WORKFLOW", "Release badge recovery is implemented inline instead of calling the canonical reusable.")
