@@ -29,6 +29,9 @@ jobs:
       - uses: actions/checkout@main
       - uses: optimizr-tech/optimizr-infra-ops/.github/workflows/_trivy-scan.yml@v1
       - uses: optimizr-tech/optimizr-actions/.github/workflows/_semantic-release.yml@7925034d32f769326a45f6af155c95dac6aefc55
+  validate:
+    runs-on: [self-hosted, Linux, prod]
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_repository-validation.yml@v1
 """,
             ".github/workflows/update-badges.yml": """
 on: [workflow_dispatch]
@@ -153,6 +156,36 @@ jobs:
             "PR_BILLING_SKIP_GUARD",
             {finding.rule_id for finding in findings},
         )
+
+    def test_accepts_own_jobs_and_hosted_switch_on_governed_runners(self):
+        workflows = {
+            ".github/workflows/observability-contracts.yml": """
+on:
+  pull_request:
+jobs:
+  contracts:
+    runs-on: [self-hosted, Linux, corp-docs]
+    steps:
+      - run: echo contract check
+""",
+            ".github/workflows/node-validation.yml": """
+on:
+  pull_request:
+jobs:
+  node:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_python-uv-test.yml@v1
+    with:
+      runner_json: ${{ github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["self-hosted","Linux","corp-docs"]' }}
+      self_hosted_mode: ${{ github.event_name == 'pull_request' && 'none' || 'trusted-main' }}
+""",
+        }
+
+        findings = audit_workflows(
+            "optimizr-tech/corp-docs", "private", workflows
+        )
+        rules = {finding.rule_id for finding in findings}
+
+        self.assertNotIn("SELF_HOSTED_PR_WITHOUT_GOVERNED_MODE", rules)
 
     def test_accepts_hosted_reusable_pr_checks_when_repo_has_no_self_hosted(self):
         workflows = {
