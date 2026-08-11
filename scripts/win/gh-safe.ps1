@@ -45,11 +45,11 @@ function Resolve-InfraOpsRoot {
     throw 'Cannot find optimizr-infra-ops (set OPTIMIZR_INFRA_OPS or run from infra-ops checkout)'
 }
 
-function Invoke-BashValidator([string]$ScriptPath, [string[]]$Args) {
+function Invoke-BashValidator([string]$ScriptPath, [string[]]$ValidatorArgs) {
     if (-not (Get-Command bash -ErrorAction SilentlyContinue)) {
         throw "bash not found — install Git Bash to validate PR title/body locally"
     }
-    & bash $ScriptPath @Args
+    & bash $ScriptPath @ValidatorArgs
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }

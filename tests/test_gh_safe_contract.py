@@ -18,6 +18,8 @@ class GhSafeContractTests(unittest.TestCase):
         self.assertIn(r"'\\[nrt]'", content)
         self.assertIn("Read-Utf8File $bodyPath", content)
         self.assertIn("Read-Utf8File $BodyFile", content)
+        self.assertIn("[string[]]$ValidatorArgs", content)
+        self.assertIn("@ValidatorArgs", content)
 
 
 if __name__ == "__main__":
