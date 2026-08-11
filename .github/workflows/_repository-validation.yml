@@ -16,6 +16,21 @@ on:
         type: string
         required: false
         default: "[]"
+      node_version:
+        description: Optional controlled Node.js version for repository-owned scripts
+        type: string
+        required: false
+        default: ""
+      npm_version:
+        description: Optional controlled npm version for repository-owned scripts
+        type: string
+        required: false
+        default: ""
+      pnpm_version:
+        description: Optional controlled pnpm version for repository-owned scripts
+        type: string
+        required: false
+        default: ""
       candidate_sha:
         description: Exact candidate SHA; defaults to caller SHA
         type: string
@@ -139,6 +154,45 @@ jobs:
           ref: ${{ inputs.candidate_sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Validate requested Node toolchain
+        if: inputs.node_version != '' || inputs.npm_version != '' || inputs.pnpm_version != ''
+        shell: bash
+        env:
+          NODE_VERSION: ${{ inputs.node_version }}
+          NPM_VERSION: ${{ inputs.npm_version }}
+          PNPM_VERSION: ${{ inputs.pnpm_version }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$NODE_VERSION" && ( -n "$NPM_VERSION" || -n "$PNPM_VERSION" ) ]]; then
+            echo "::error::node_version is required when npm_version or pnpm_version is set"
+            exit 2
+          fi
+          case "$NPM_VERSION" in
+            ""|*[!0-9A-Za-z._+-]*)
+              echo "::error::npm_version contains unsupported characters"
+              exit 2
+              ;;
+          esac
+      - name: Setup Node.js for repository contract
+        if: inputs.node_version != ''
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: ${{ inputs.node_version }}
+      - name: Setup npm for repository contract
+        if: inputs.npm_version != ''
+        shell: bash
+        env:
+          NPM_VERSION: ${{ inputs.npm_version }}
+        run: |
+          set -euo pipefail
+          npm install --global --no-audit --no-fund "npm@${NPM_VERSION}"
+          node --version
+          npm --version
+      - name: Setup pnpm for repository contract
+        if: inputs.pnpm_version != ''
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271
+        with:
+          version: ${{ inputs.pnpm_version }}
       - name: Run repository contract
         id: contract
         uses: optimizr-tech/optimizr-actions/.github/actions/repository-validation@v1

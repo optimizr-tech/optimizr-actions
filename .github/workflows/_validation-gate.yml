@@ -55,6 +55,11 @@ on:
         type: string
         required: false
         default: "11"
+      pnpm_version:
+        description: Controlled pnpm version used by repository validation scripts
+        type: string
+        required: false
+        default: "11"
       sast_baseline_file:
         description: Optional SAST baseline file
         type: string
@@ -168,6 +173,9 @@ jobs:
       runner_json: ${{ inputs.runner_json }}
       script_path: ${{ inputs.script_path }}
       args_json: ${{ inputs.args_json }}
+      node_version: ${{ inputs.node_version }}
+      npm_version: ${{ inputs.npm_version }}
+      pnpm_version: ${{ inputs.pnpm_version }}
       candidate_sha: ${{ inputs.candidate_sha }}
       require_trusted_ref: ${{ inputs.validation_path == 'self-hosted' || inputs.validation_path == 'reviewed-emergency' }}
       allow_ephemeral_pr: ${{ inputs.validation_path == 'ephemeral-pr' }}

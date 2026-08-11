@@ -52,6 +52,14 @@ class ValidationGateContractTests(unittest.TestCase):
             text,
         )
 
+    def test_gate_propagates_node_toolchain_to_repository_validation(self):
+        text = (ROOT / ".github/workflows/_validation-gate.yml").read_text()
+        repository_validation = text.split("  repository-validation:", 1)[1].split(
+            "  security-suite:", 1
+        )[0]
+        for input_name in ("node_version", "npm_version", "pnpm_version"):
+            self.assertIn(f"{input_name}: ${{{{ inputs.{input_name} }}}}", repository_validation)
+
     def test_security_suite_exports_success_result(self):
         text = (ROOT / ".github/workflows/_security-suite.yml").read_text()
         self.assertIn("jobs.summary.outputs.result", text)

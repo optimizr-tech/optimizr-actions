@@ -29,6 +29,22 @@ class RepositoryValidationContractTests(unittest.TestCase):
         self.assertIn("steps.contract.outputs.result", text)
         self.assertIn("inputs.candidate_sha || github.sha", text)
 
+    def test_reusable_provisions_optional_node_toolchain_before_consumer_script(self):
+        text = (ROOT / ".github/workflows/_repository-validation.yml").read_text()
+
+        for input_name in ("node_version:", "npm_version:", "pnpm_version:"):
+            self.assertIn(input_name, text)
+
+        setup_node = text.index("actions/setup-node@")
+        setup_pnpm = text.index("pnpm/action-setup@")
+        run_contract = text.index("- name: Run repository contract")
+        self.assertLess(setup_node, run_contract)
+        self.assertLess(setup_pnpm, run_contract)
+        self.assertIn("npm install --global", text)
+        self.assertIn("NODE_VERSION: ${{ inputs.node_version }}", text)
+        self.assertIn("NPM_VERSION: ${{ inputs.npm_version }}", text)
+        self.assertIn("PNPM_VERSION: ${{ inputs.pnpm_version }}", text)
+
     def test_ephemeral_override_is_bounded_to_pull_request_runner_labels(self):
         text = (ROOT / ".github/workflows/_repository-validation.yml").read_text()
         self.assertIn("allow_ephemeral_pr:", text)
