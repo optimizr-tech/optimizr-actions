@@ -28,6 +28,12 @@ function Read-Utf8File([string]$Path) {
     return [System.IO.File]::ReadAllText($Path, $utf8).TrimEnd()
 }
 
+function Assert-NoLiteralShellEscape([string]$Value, [string]$Label) {
+    if ($Value -match '\\[nrt]') {
+        throw "$Label contains a literal \n, \r, or \t escape; use real line breaks in a UTF-8 file"
+    }
+}
+
 function Resolve-InfraOpsRoot {
     if ($env:OPTIMIZR_INFRA_OPS -and (Test-Path -LiteralPath "$env:OPTIMIZR_INFRA_OPS/scripts/git-hooks/validate-subject.sh")) {
         return (Resolve-Path -LiteralPath $env:OPTIMIZR_INFRA_OPS).Path
@@ -65,6 +71,9 @@ if ($Create) {
     if (-not $bodyPath -or -not (Test-Path -LiteralPath $bodyPath)) {
         throw 'Provide -BodyFile (UTF-8 markdown) for -Create — never gh pr create --body inline'
     }
+    $body = Read-Utf8File $bodyPath
+    Assert-NoLiteralShellEscape $title 'PR title'
+    Assert-NoLiteralShellEscape $body 'PR body'
 
     $env:VALIDATE_SUBJECT_LABEL = 'PR title'
     Invoke-BashValidator (Join-Path $infraOps 'scripts/git-hooks/validate-subject.sh') @($title)
@@ -85,6 +94,8 @@ if ($Pr -gt 0) {
     $payload = @{}
     $title = Read-Utf8File $TitleFile
     $body = Read-Utf8File $BodyFile
+    if ($title) { Assert-NoLiteralShellEscape $title 'PR title' }
+    if ($body) { Assert-NoLiteralShellEscape $body 'PR body' }
     if ($title) { $payload.title = $title }
     if ($body) { $payload.body = $body }
     if ($payload.Count -eq 0) {
@@ -105,6 +116,7 @@ if ($Pr -gt 0) {
 if ($Issue -gt 0) {
     $body = Read-Utf8File $CommentFile
     if (-not $body) { throw 'Provide -CommentFile for -Issue' }
+    Assert-NoLiteralShellEscape $body 'Issue comment'
     $jsonPath = Join-Path $env:TEMP "gh-issue-$Issue-$(Get-Random).json"
     [System.IO.File]::WriteAllText($jsonPath, (@{ body = $body } | ConvertTo-Json -Compress), $utf8)
     if ($Repo) {
