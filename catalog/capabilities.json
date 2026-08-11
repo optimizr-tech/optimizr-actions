@@ -1918,7 +1918,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "6f3a5104813e6b4b15d0a8ed3bc72227d1a939128524e229d28420e330b63a30",
+      "source_sha256": "f8bc1754b704bad8a816241d0382a1d17e3500e6dd0c742e2333ecd2724e3335",
       "trust_boundary": "trusted-push"
     },
     {
