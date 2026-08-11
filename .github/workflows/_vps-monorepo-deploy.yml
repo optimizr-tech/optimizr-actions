@@ -34,6 +34,11 @@ on:
         required: false
         type: string
         default: ""
+      services_build_no_cache:
+        description: Disable cache for the explicitly requested service build
+        required: false
+        type: boolean
+        default: false
       services_build_optional:
         description: Whitespace-separated optional services to build
         required: false
@@ -389,8 +394,12 @@ jobs:
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
+          build_flags=()
+          if [ "${{ inputs.services_build_no_cache }}" = true ]; then
+            build_flags+=(--no-cache)
+          fi
           for service in ${{ inputs.services_build }}; do
-            sudo docker compose -f "$COMPOSE_FILE" build --no-cache "$service"
+            sudo docker compose -f "$COMPOSE_FILE" build "${build_flags[@]}" "$service"
           done
 
       - name: Build optional services
@@ -400,9 +409,13 @@ jobs:
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
+          build_flags=()
+          if [ "${{ inputs.services_build_no_cache }}" = true ]; then
+            build_flags+=(--no-cache)
+          fi
           failed=0
           for service in ${{ inputs.services_build_optional }}; do
-            if ! sudo docker compose -f "$COMPOSE_FILE" build --no-cache "$service"; then
+            if ! sudo docker compose -f "$COMPOSE_FILE" build "${build_flags[@]}" "$service"; then
               echo "::warning title=${service} build failed::Keeping previous image"
               failed=1
             fi

@@ -70,10 +70,18 @@ The deployment job must depend on the applicable hosted or self-hosted job and m
 | `security_db_max_age_hours` | `30` | Maximum accepted database download age. |
 | `security_rebuild_retry_enabled` | `true` | Permit one deterministic pull, rebuild and rescan for actionable image findings. |
 | `security_rebuild_retry_no_cache` | `true` | Disable the build cache during the bounded remediation retry. |
+| `build_no_cache` | `false` | Self-hosted deploy only: explicitly rebuild all Compose images without cache. Normal deploys reuse Docker layers. |
+| `services_build_no_cache` | `false` | Monorepo deploy only: explicitly rebuild the services listed in `services_build` or `services_build_optional` without cache. |
 | `deploy_timeout_minutes` | `30` | Bounded deployment job timeout; accepted values are 30 through 120 minutes. The monorepo reusable keeps `timeout_minutes` as a compatibility alias when this is `0`. |
 | `security_rebuild_services` | empty | Self-hosted deploy only: whitespace-separated required Compose services for the remediation rebuild; empty preserves the all-buildable default. |
 
 The filesystem gate has no bypass input and always runs before the deploy workflow mutates the target environment. A consumer that intentionally deploys configuration without a Docker image may set `security_require_image_scan: false`; this is a visible policy exception and should be reviewed in the consumer pull request.
+
+Normal production builds keep Docker's layer cache enabled. Consumers should set
+`build_no_cache: true` or `services_build_no_cache: true` only for an explicitly
+approved full rebuild. Actionable image vulnerabilities use the separate
+`security_rebuild_retry_no_cache` path, which is bounded to one pull, rebuild and
+final scan before promotion.
 
 Before the initial image scan, both VPS deploy reusables pull every Compose service that declares an external `image:` while ignoring buildable services. This guarantees that digest-pinned sidecars and operational tools are locally available for immutable-ID discovery without replacing images built from the candidate source. A missing or unavailable declared image fails closed before rollout.
 

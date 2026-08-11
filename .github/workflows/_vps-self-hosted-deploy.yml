@@ -36,10 +36,10 @@ on:
         type: boolean
         default: true
       build_no_cache:
-        description: Build without cache when build_image is enabled
+        description: Build without cache when build_image is enabled (explicit rebuild)
         required: false
         type: boolean
-        default: true
+        default: false
       health_timeout:
         description: Seconds to wait for the primary container to become healthy
         required: false

@@ -1899,6 +1899,7 @@
         "security_trivy_version": "",
         "service_name": "",
         "services_build": "",
+        "services_build_no_cache": "",
         "services_build_optional": "",
         "services_up": "",
         "timeout_minutes": ""
@@ -1913,7 +1914,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "2b4b12991ec8304219b839883f618f2abf4566bb93a1ca06efc674179edfb927",
+      "source_sha256": "46198746cdcf402afb854b1ac9eaae6cffb152213ff3ce9070eecdea229c6ddb",
       "trust_boundary": "trusted-push"
     },
     {
@@ -1970,7 +1971,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "700afb8e4cb9424daceef269a133bc35046fdc9b89a76da087092cdb738d0016",
+      "source_sha256": "61fa00b1d23ef3b160607da8b36954f1cb257caa7b58e336c38a1a68acc28b39",
       "trust_boundary": "trusted-push"
     },
     {
