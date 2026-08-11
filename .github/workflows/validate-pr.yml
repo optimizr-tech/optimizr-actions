@@ -69,9 +69,11 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$BASE_SHA" ]; then
-            BASE_SHA="$(git rev-parse HEAD^)"
+            git fetch --no-tags --depth=1 origin main
+            BASE_SHA="$(git rev-parse origin/main)"
+          else
+            git fetch --no-tags --depth=1 origin "$BASE_SHA"
           fi
-          git fetch --no-tags --depth=1 origin "$BASE_SHA"
           git diff --check "$BASE_SHA" HEAD
 
       - name: Run actionlint
