@@ -45,6 +45,10 @@ MOJIBAKE_RE = re.compile(r"ðŸ|Ã.|â€")
 CORRUPT_PATH_RE = re.compile(r"\\(origin/|assets/|release\.yml|\.releaserc|main\\|dev\\)")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 SKIPPED_COMMIT_PREFIXES = ("Merge ", "Revert ", "fixup!", "squash!")
+AI_COAUTHOR_RE = re.compile(
+    r"(?im)^Co-authored-by:\s*(?:Cursor|Composer|Copilot|Claude|Codex|ChatGPT|OpenAI|GitHub Copilot)\b"
+    r"|^Co-authored-by:.*<(?:cursoragent@cursor\.com|codex@openai\.com|chatgpt@openai\.com)>"
+)
 
 
 @dataclass(frozen=True)
@@ -110,6 +114,17 @@ def validate_body(body: str) -> list[ValidationFailure]:
     if CORRUPT_PATH_RE.search(body):
         failures.append(ValidationFailure("PR body", "looks like corrupted PowerShell markdown"))
     return failures
+
+
+def validate_commit_message(message: str, label: str) -> list[ValidationFailure]:
+    if AI_COAUTHOR_RE.search(message):
+        return [
+            ValidationFailure(
+                label,
+                "AI co-authorship trailer is not allowed; recreate the commit without Co-authored-by",
+            )
+        ]
+    return []
 
 
 def _request_json(url: str, token: str) -> object:
@@ -321,6 +336,7 @@ def main() -> int:
     for index, item in enumerate(commits, start=1):
         commit = item.get("commit") or {}
         message = str(commit.get("message") or "")
+        failures.extend(validate_commit_message(message, f"commit {index}"))
         subject = message.splitlines()[0] if message else ""
         if not subject or subject.startswith(SKIPPED_COMMIT_PREFIXES):
             continue

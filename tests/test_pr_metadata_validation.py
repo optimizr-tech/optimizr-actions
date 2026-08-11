@@ -35,6 +35,15 @@ class PRMetadataValidationTests(unittest.TestCase):
         self.assertTrue(module.validate_body("ðŸ broken"))
         self.assertEqual([], module.validate_body("## Summary\nMetadata only."))
 
+    def test_ai_coauthorship_trailer_fails(self):
+        message = ":bug: fix(ci): protect commit authorship\n\nCo-authored-by: Codex <codex@openai.com>"
+        failures = module.validate_commit_message(message, "commit 1")
+        self.assertTrue(any("AI co-authorship" in item.message for item in failures))
+
+    def test_human_coauthorship_trailer_is_not_misclassified(self):
+        message = ":bug: fix(ci): protect commit authorship\n\nCo-authored-by: Human Reviewer <reviewer@example.com>"
+        self.assertEqual([], module.validate_commit_message(message, "commit 1"))
+
     def test_fetch_is_bounded_and_paginates(self):
         calls = []
         original = module._request_json
