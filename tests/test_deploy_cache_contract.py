@@ -49,6 +49,8 @@ class DeployCacheContractTests(unittest.TestCase):
         self.assertIn("sudo -n -v", step)
         self.assertIn("while sleep 30", step)
         self.assertIn("sudo_refresh_pid", step)
+        self.assertIn("pre_deploy_pid", step)
+        self.assertIn('kill -TERM "$pre_deploy_pid"', step)
         self.assertIn("trap", step)
         self.assertIn('eval "$PRE_DEPLOY_COMMANDS"', step)
 

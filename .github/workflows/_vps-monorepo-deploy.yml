@@ -394,6 +394,7 @@ jobs:
           # Fail closed before the build and refresh the non-interactive lease
           # while the caller-owned commands are running.
           sudo -n -v
+          pre_deploy_pid=$$
           sudo_refresh_pid=""
           stop_sudo_refresh() {
             if [ -n "$sudo_refresh_pid" ]; then
@@ -406,7 +407,7 @@ jobs:
             while sleep 30; do
               if ! sudo -n -v; then
                 echo "::error::non-interactive sudo access expired during pre-deploy commands" >&2
-                kill -TERM "$PPID" 2>/dev/null || true
+                kill -TERM "$pre_deploy_pid" 2>/dev/null || true
                 exit 1
               fi
             done
