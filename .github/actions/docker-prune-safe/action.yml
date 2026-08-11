@@ -23,6 +23,25 @@ runs:
         sudo docker system df || true
         echo "::endgroup::"
 
+        # All repository runners share one Docker daemon on the VPS. Serialize
+        # cleanup across those runners so one job cannot prune while another
+        # cleanup is inspecting the same daemon. If flock is unavailable or
+        # the host lock cannot be acquired, skip cleanup rather than guessing.
+        if ! command -v flock >/dev/null 2>&1; then
+          echo "::warning::flock is unavailable; skipping Docker cleanup"
+          exit 0
+        fi
+        umask 077
+        lock_file="${DOCKER_PRUNE_LOCK_FILE:-/tmp/optimizr-docker-prune-safe.lock}"
+        if ! exec 9>>"$lock_file"; then
+          echo "::warning::cannot open Docker cleanup lock; skipping cleanup"
+          exit 0
+        fi
+        if ! flock -w 60 9; then
+          echo "::warning::Docker cleanup lock is busy; skipping cleanup"
+          exit 0
+        fi
+
         sudo docker container prune -f
         sudo docker image prune -f
         sudo docker image prune -af --filter "until=${IMAGE_AGE}"
