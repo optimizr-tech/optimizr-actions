@@ -15,7 +15,19 @@ jobs:
       args_json: '["--ci"]'
       runner_json: '["self-hosted","Linux","security"]'
       require_trusted_ref: true
+      node_version: "24"
+      npm_version: "11"
+      pnpm_version: "11"
 ```
+
+`node_version`, `npm_version`, and `pnpm_version` are optional and are installed
+before the consumer executable when supplied. `npm_version` and `pnpm_version`
+require `node_version`; npm is installed globally at the requested controlled
+version, and pnpm is installed only when the consumer needs it. The
+`_validation-gate.yml@v1` wrapper supplies the organization defaults (Node 24,
+npm 11, and pnpm 11) and forwards them to this workflow, so a full consumer
+entrypoint such as `scripts/ci-local.sh all` can use both npm and pnpm without
+duplicating setup steps.
 
 The default trust boundary requires the candidate to be reachable from `refs/heads/main`. A persistent self-hosted runner cannot disable that requirement. Hosted pull-request callers may deliberately set `require_trusted_ref: false`, but must not reuse that caller on a persistent production runner.
 

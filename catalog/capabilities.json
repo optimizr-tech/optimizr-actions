@@ -1476,6 +1476,9 @@
         "base_sha": "",
         "candidate_sha": "",
         "image_refs_json": "",
+        "node_version": "",
+        "npm_version": "",
+        "pnpm_version": "",
         "require_trusted_ref": "",
         "retention_days": "",
         "runner_json": "",
@@ -1501,7 +1504,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "601c88ca3d4cc6a63a01a1568307c431e7306a84df2ca449f16432a711bbe0f5",
+      "source_sha256": "0633d59568ccd9d6d3a8b5184bf3fcf5c4f575a5927f8f506f438723fc79898c",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1826,6 +1829,7 @@
         "image_refs": "",
         "node_version": "",
         "npm_version": "",
+        "pnpm_version": "",
         "retention_days": "",
         "runner_json": "",
         "sast_baseline_file": "",
@@ -1854,7 +1858,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "89c50f3912a5bc5768da14babb8d68f89ece1eff6affac002678a575a80c1b60",
+      "source_sha256": "f4c8c6bf5770589077f31fb6a1d4b831c65bf9a28c2b94b56cbc37ab414a1f51",
       "trust_boundary": "trusted-pr"
     },
     {
