@@ -1173,7 +1173,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "1f0e4512f596924ed9f49f8ddf2a5d4d3ad88fbe6b4bc7d7d11e34906a1e397d",
+      "source_sha256": "0de37a9be23b304f15d1d6e7448a9739b78d1dc7d1b3d47dd94c975ffa6d0ca3",
       "trust_boundary": "trusted-push"
     },
     {
