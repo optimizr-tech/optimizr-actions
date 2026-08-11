@@ -383,10 +383,37 @@ jobs:
       - name: Pre-deploy commands
         if: inputs.pre_deploy_commands != ''
         shell: bash
+        env:
+          PRE_DEPLOY_COMMANDS: ${{ inputs.pre_deploy_commands }}
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          ${{ inputs.pre_deploy_commands }}
+
+          # Consumer pre-deploy commands may contain a cached Compose build
+          # that runs long enough for an interactive sudo timestamp to expire.
+          # Fail closed before the build and refresh the non-interactive lease
+          # while the caller-owned commands are running.
+          sudo -n -v
+          sudo_refresh_pid=""
+          stop_sudo_refresh() {
+            if [ -n "$sudo_refresh_pid" ]; then
+              kill "$sudo_refresh_pid" 2>/dev/null || true
+              wait "$sudo_refresh_pid" 2>/dev/null || true
+            fi
+          }
+          trap stop_sudo_refresh EXIT
+          (
+            while sleep 30; do
+              if ! sudo -n -v; then
+                echo "::error::non-interactive sudo access expired during pre-deploy commands" >&2
+                kill -TERM "$PPID" 2>/dev/null || true
+                exit 1
+              fi
+            done
+          ) &
+          sudo_refresh_pid=$!
+
+          eval "$PRE_DEPLOY_COMMANDS"
 
       - name: Build required services
         if: inputs.services_build != ''

@@ -39,6 +39,19 @@ class DeployCacheContractTests(unittest.TestCase):
                 self.assertIn("security_rebuild_retry_no_cache:", content)
                 self.assertIn("no_cache: ${{ inputs.security_rebuild_retry_no_cache }}", content)
 
+    def test_pre_deploy_keeps_noninteractive_sudo_available_during_long_builds(self) -> None:
+        content = read(".github/workflows/_vps-monorepo-deploy.yml")
+        step = content[content.index("      - name: Pre-deploy commands") : content.index(
+            "      - name: Build required services"
+        )]
+
+        self.assertIn("PRE_DEPLOY_COMMANDS:", step)
+        self.assertIn("sudo -n -v", step)
+        self.assertIn("while sleep 30", step)
+        self.assertIn("sudo_refresh_pid", step)
+        self.assertIn("trap", step)
+        self.assertIn('eval "$PRE_DEPLOY_COMMANDS"', step)
+
 
 if __name__ == "__main__":
     unittest.main()
