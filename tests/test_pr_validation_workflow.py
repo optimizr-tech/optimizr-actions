@@ -48,6 +48,13 @@ class PullRequestValidationWorkflowTests(unittest.TestCase):
             content,
         )
 
+    def test_dispatch_diff_check_does_not_require_a_shallow_parent_commit(self) -> None:
+        content = WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn('git fetch --no-tags --depth=1 origin main', content)
+        self.assertIn('BASE_SHA="$(git rev-parse origin/main)"', content)
+        self.assertNotIn('git rev-parse HEAD^', content)
+
 
 if __name__ == "__main__":
     unittest.main()
