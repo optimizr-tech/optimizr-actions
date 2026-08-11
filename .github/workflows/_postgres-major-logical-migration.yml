@@ -136,6 +136,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           persist-credentials: false
+          path: .caller-repository/${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Prepare sanitized migration evidence
         shell: bash
@@ -414,3 +415,19 @@ jobs:
           path: artifacts/postgres-major-migration
           if-no-files-found: warn
           retention-days: 30
+
+      - name: Remove run-scoped caller checkout
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          checkout_path="$GITHUB_WORKSPACE/.caller-repository/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          case "$checkout_path" in
+            "$GITHUB_WORKSPACE"/.caller-repository/*) ;;
+            *)
+              echo "::error::refusing to remove unexpected checkout path" >&2
+              exit 1
+              ;;
+          esac
+          rm -rf -- "$checkout_path"

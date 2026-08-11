@@ -72,6 +72,19 @@ class PostgresMajorLogicalMigrationContract(unittest.TestCase):
         ):
             self.assertIn(token, self.text)
 
+    def test_checkout_isolated_from_persistent_runner_workspace(self) -> None:
+        self.assertIn(
+            "path: .caller-repository/${{ github.run_id }}-${{ github.run_attempt }}",
+            self.text,
+        )
+        self.assertIn("Remove run-scoped caller checkout", self.text)
+        self.assertIn(
+            'checkout_path="$GITHUB_WORKSPACE/.caller-repository/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"',
+            self.text,
+        )
+        self.assertIn('rm -rf -- "$checkout_path"', self.text)
+        self.assertNotIn('rm -rf -- "$GITHUB_WORKSPACE"', self.text)
+
     def test_does_not_cut_over_or_delete_docker_volumes(self) -> None:
         for token in (
             "docker volume rm",

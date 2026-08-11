@@ -23,6 +23,13 @@ The reusable is intentionally **not a cutover workflow**. It never changes a con
 - Writes a sanitized migration marker to the target volume and uploads only sanitized evidence; database dumps, globals and raw verification values are never uploaded.
 - Preserves the source volume and does not perform a production cutover.
 
+The reusable workflow checks out the caller into a run-scoped directory below
+`.caller-repository/`, rather than into the runner's persistent workspace root.
+This prevents stale files from another run or repository from making
+`actions/checkout` fail during its Git cleanup. The directory is removed in an
+`always()` cleanup step with a path-boundary check; the workspace root and all
+Docker volumes remain untouched.
+
 ## Consumer with explicit Docker names
 
 ```yaml
