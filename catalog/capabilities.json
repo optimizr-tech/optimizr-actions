@@ -1867,6 +1867,7 @@
         "compose_file": "",
         "compose_up_flags": "",
         "container_name": "",
+        "create_missing_volumes": "",
         "deploy_manifest_enabled": "",
         "deploy_manifest_migration_result": "",
         "deploy_manifest_retention": "",
@@ -1912,7 +1913,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "1ba24b2a961bbb2321cff4424e5df5cde2d643e7ea6a743f141620717c4dfd1b",
+      "source_sha256": "2b4b12991ec8304219b839883f618f2abf4566bb93a1ca06efc674179edfb927",
       "trust_boundary": "trusted-push"
     },
     {
@@ -1926,6 +1927,7 @@
         "build_no_cache": "",
         "compose_file": "",
         "container_name": "",
+        "create_missing_volumes": "",
         "deploy_manifest_enabled": "",
         "deploy_manifest_migration_result": "",
         "deploy_manifest_retention": "",
@@ -1968,7 +1970,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "cd95e0d0deebfdd655b1931c2d8c74c693345b951d1938fbf4faf5112abae7bb",
+      "source_sha256": "700afb8e4cb9424daceef269a133bc35046fdc9b89a76da087092cdb738d0016",
       "trust_boundary": "trusted-push"
     },
     {

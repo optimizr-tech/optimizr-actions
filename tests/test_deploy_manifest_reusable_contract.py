@@ -41,6 +41,21 @@ class DeployManifestReusableContractTests(unittest.TestCase):
         self.assertIn("optional_build_result:", self.monorepo)
         self.assertIn("steps.optional-builds.outputs.result", self.monorepo)
 
+    def test_missing_production_volumes_fail_closed(self) -> None:
+        for workflow in (self.generic, self.monorepo):
+            with self.subTest(workflow=workflow):
+                self.assertIn("create_missing_volumes:", workflow)
+                self.assertIn("default: false", workflow)
+                self.assertIn('if [ "${{ inputs.create_missing_volumes }}" = true ]; then', workflow)
+                self.assertIn(
+                    'echo "::error::Required volume $volume is missing; refusing to create an empty replacement"',
+                    workflow,
+                )
+                self.assertNotIn(
+                    'docker volume inspect "$volume" >/dev/null 2>&1 || sudo docker volume create "$volume"',
+                    workflow,
+                )
+
     def test_third_party_actions_remain_pinned(self) -> None:
         for workflow in (self.generic, self.monorepo):
             self.assertNotIn("actions/checkout@v", workflow)

@@ -56,10 +56,15 @@ on:
         type: string
         default: optimizr_infra
       ensure_volumes:
-        description: Whitespace-separated Docker volumes to ensure
+        description: Whitespace-separated Docker volumes that must already exist
         required: false
         type: string
         default: ""
+      create_missing_volumes:
+        description: Explicitly allow creating missing empty Docker volumes; keep false for production data volumes
+        required: false
+        type: boolean
+        default: false
       run_prune:
         description: Run Docker and runner cleanup after deployment
         required: false
@@ -340,7 +345,7 @@ jobs:
           max_age_days: ${{ inputs.deploy_snapshot_retention_days }}
           max_total_bytes: ${{ inputs.deploy_snapshot_max_total_bytes }}
 
-      - name: Ensure networks and volumes exist
+      - name: Ensure networks and verify volumes
         if: inputs.ensure_networks != '' || inputs.ensure_volumes != ''
         shell: bash
         run: |
@@ -349,7 +354,16 @@ jobs:
             sudo docker network inspect "$network" >/dev/null 2>&1 || sudo docker network create "$network"
           done
           for volume in ${{ inputs.ensure_volumes }}; do
-            sudo docker volume inspect "$volume" >/dev/null 2>&1 || sudo docker volume create "$volume"
+            if sudo docker volume inspect "$volume" >/dev/null 2>&1; then
+              continue
+            fi
+            if [ "${{ inputs.create_missing_volumes }}" = true ]; then
+              echo "::warning::Creating explicitly authorized empty volume: $volume"
+              sudo docker volume create "$volume" >/dev/null
+            else
+              echo "::error::Required volume $volume is missing; refusing to create an empty replacement" >&2
+              exit 1
+            fi
           done
 
       - name: Build images
