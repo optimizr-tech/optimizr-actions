@@ -105,16 +105,22 @@ runs:
     - name: Ruff check
       if: inputs.ruff_check == 'true'
       shell: bash
+      env:
+        PYTHONDONTWRITEBYTECODE: "1"
       run: uv run ruff check ${{ inputs.ruff_paths }}
 
     - name: Type check (mypy)
       if: inputs.mypy_enabled == 'true'
       shell: bash
+      env:
+        PYTHONDONTWRITEBYTECODE: "1"
       run: uv run mypy ${{ inputs.mypy_target }}
 
     - name: Extra steps
       if: inputs.extra_steps != ''
       shell: bash
+      env:
+        PYTHONDONTWRITEBYTECODE: "1"
       run: |
         set -euo pipefail
         ${{ inputs.extra_steps }}
@@ -122,6 +128,7 @@ runs:
     - name: Pytest with coverage
       shell: bash
       env:
+        PYTHONDONTWRITEBYTECODE: "1"
         COVERAGE_MIN: ${{ inputs.coverage_min }}
         COV_PACKAGE: ${{ inputs.cov_package }}
         COVERAGE_BRANCH: ${{ inputs.coverage_branch }}
