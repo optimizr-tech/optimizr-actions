@@ -26,6 +26,9 @@ class DockerPruneContractTests(unittest.TestCase):
         self.assertNotIn("PRODUCTION_DEPLOY_HYGIENE.md", content)
         self.assertIn("Disk before cleanup", content)
         self.assertIn("Disk after cleanup", content)
+        self.assertIn("/tmp/optimizr-docker-prune-safe.lock", content)
+        self.assertIn("flock -w 60 9", content)
+        self.assertIn("skipping Docker cleanup", content)
         self.assertNotIn("docker volume prune", content)
         self.assertNotIn("docker network prune", content)
 
