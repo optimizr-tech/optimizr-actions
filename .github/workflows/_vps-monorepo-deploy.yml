@@ -25,7 +25,7 @@ on:
         type: string
         default: docker-compose.yml
       pre_deploy_commands:
-        description: Existing consumer-owned shell commands after synchronization
+        description: Existing consumer-owned shell commands after synchronization; requires non-interactive sudo access
         required: false
         type: string
         default: ""
