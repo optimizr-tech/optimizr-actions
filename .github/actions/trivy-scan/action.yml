@@ -1,0 +1,78 @@
+name: Optimizr Trivy scan
+description: Run a compatibility Trivy scan with the repository-scoped shared cache
+
+inputs:
+  scan_type:
+    description: "Trivy scan type: fs or image"
+    required: false
+    default: fs
+  scan_ref:
+    description: "Filesystem path or image reference"
+    required: false
+    default: "."
+  severity:
+    description: "Severities to report"
+    required: false
+    default: "CRITICAL,HIGH"
+  exit_code:
+    description: "Trivy exit code when findings match the selected severities"
+    required: false
+    default: "0"
+  trivy_version:
+    description: Controlled Trivy release
+    required: false
+    default: v0.70.0
+
+runs:
+  using: composite
+  steps:
+    - name: Install controlled Trivy
+      uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567
+      with:
+        version: ${{ inputs.trivy_version }}
+        cache: "false"
+        path: ${{ runner.temp }}/optimizr-trivy/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+    - name: Run compatibility scan with governed cache
+      shell: bash
+      env:
+        SCAN_TYPE: ${{ inputs.scan_type }}
+        SCAN_REF: ${{ inputs.scan_ref }}
+        SEVERITY: ${{ inputs.severity }}
+        EXIT_CODE: ${{ inputs.exit_code }}
+        TRIVY_VERSION: ${{ inputs.trivy_version }}
+      run: |
+        set -euo pipefail
+        action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        cache_root="$(python3 "$action_root/scripts/security_gate/cache.py" root --repository "$GITHUB_REPOSITORY")"
+        cache_dir="$(python3 "$action_root/scripts/security_gate/cache.py" path --repository "$GITHUB_REPOSITORY" --trivy-version "$TRIVY_VERSION")"
+        mkdir -p "$cache_root"
+        if [ -L "$cache_root" ] || [ -L "$cache_dir" ]; then
+          echo "::error::security cache path must not be a symbolic link" >&2
+          exit 2
+        fi
+        if [ "$(stat -c '%u' "$cache_root")" != "$(id -u)" ]; then
+          echo "::error::security cache is not owned by the runner user" >&2
+          exit 2
+        fi
+        chmod 700 "$cache_root"
+        command -v flock >/dev/null 2>&1 || {
+          echo "::error::flock is required to protect the shared Trivy cache" >&2
+          exit 2
+        }
+        exec 9>"$cache_root/gate.lock"
+        flock -x 9
+        python3 "$action_root/scripts/security_gate/cache.py" prepare \
+          --repository "$GITHUB_REPOSITORY" \
+          --trivy-version "$TRIVY_VERSION" \
+          --retention-days 14
+        chmod 700 "$cache_root" "$cache_dir"
+        case "$SCAN_TYPE" in
+          fs) command_name=filesystem ;;
+          image) command_name=image ;;
+          *) echo "::error::scan_type must be fs or image" >&2; exit 2 ;;
+        esac
+        trivy --cache-dir "$cache_dir" "$command_name" "$SCAN_REF" \
+          --format table \
+          --output "$GITHUB_WORKSPACE/trivy-results.txt" \
+          --severity "$SEVERITY" \
+          --exit-code "$EXIT_CODE"

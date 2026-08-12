@@ -30,10 +30,34 @@ runs:
       env:
         IMAGE_REFS: ${{ inputs.image_refs }}
         EVIDENCE_DIR: ${{ inputs.evidence_dir }}
+        TRIVY_VERSION: ${{ inputs.trivy_version }}
       run: |
         set -euo pipefail
         action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
         evidence_tool="$action_root/scripts/supply_chain/evidence.py"
+        cache_root="$(python3 "$action_root/scripts/security_gate/cache.py" root --repository "$GITHUB_REPOSITORY")"
+        cache_dir="$(python3 "$action_root/scripts/security_gate/cache.py" path --repository "$GITHUB_REPOSITORY" --trivy-version "$TRIVY_VERSION")"
+        mkdir -p "$cache_root"
+        if [ -L "$cache_root" ] || [ -L "$cache_dir" ]; then
+          echo "::error::security cache path must not be a symbolic link" >&2
+          exit 2
+        fi
+        if [ "$(stat -c '%u' "$cache_root")" != "$(id -u)" ]; then
+          echo "::error::security cache is not owned by the runner user" >&2
+          exit 2
+        fi
+        chmod 700 "$cache_root"
+        command -v flock >/dev/null 2>&1 || {
+          echo "::error::flock is required to protect the shared Trivy cache" >&2
+          exit 2
+        }
+        exec 9>"$cache_root/gate.lock"
+        flock -x 9
+        python3 "$action_root/scripts/security_gate/cache.py" prepare \
+          --repository "$GITHUB_REPOSITORY" \
+          --trivy-version "$TRIVY_VERSION" \
+          --retention-days 14
+        chmod 700 "$cache_root" "$cache_dir"
         mkdir -p "$EVIDENCE_DIR"
         mapfile -t targets < <(printf '%s\n' "$IMAGE_REFS" | tr '[:space:]' '\n' | sed '/^$/d')
         if [ "${#targets[@]}" -eq 0 ]; then
@@ -74,8 +98,8 @@ runs:
             scan_identity="$(python3 "$evidence_tool" resolve-local --inspect "$inspect_file")"
             image_input=("$scan_identity")
           fi
-          trivy image --format cyclonedx --output "$cyclonedx" "${image_input[@]}"
-          trivy image --format spdx-json --output "$spdx" "${image_input[@]}"
+          trivy --cache-dir "$cache_dir" image --format cyclonedx --output "$cyclonedx" "${image_input[@]}"
+          trivy --cache-dir "$cache_dir" image --format spdx-json --output "$spdx" "${image_input[@]}"
           python3 "$evidence_tool" write \
             --repository "$GITHUB_REPOSITORY" \
             --head-sha "$GITHUB_SHA" \

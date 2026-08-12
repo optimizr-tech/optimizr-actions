@@ -154,6 +154,7 @@ runs:
       id: scan
       shell: bash
       env:
+        TRIVY_VERSION: ${{ inputs.trivy_version }}
         INPUT_SCAN_TYPE: ${{ inputs.scan_type }}
         INPUT_SCAN_REF: ${{ inputs.scan_ref }}
         INPUT_IMAGE_REFS: ${{ inputs.image_refs }}
@@ -179,9 +180,8 @@ runs:
         remediation_window_tool="$action_root/scripts/security_gate/remediation_window.py"
         transport_tool="$action_root/scripts/security_gate/image_transport.py"
         repository="${GITHUB_REPOSITORY:-local/unknown}"
-        cache_namespace="$(printf '%s' "$repository" | sha256sum | cut -c1-24)"
-        cache_root="${XDG_CACHE_HOME:-${HOME:-/tmp}/.cache}/optimizr-security-gate/${cache_namespace}"
-        cache_dir="$cache_root/trivy"
+        cache_root="$(python3 "$action_root/scripts/security_gate/cache.py" root --repository "$repository")"
+        cache_dir="$(python3 "$action_root/scripts/security_gate/cache.py" path --repository "$repository" --trivy-version "$TRIVY_VERSION")"
         evidence_dir="$INPUT_EVIDENCE_DIR"
 
         {
@@ -218,12 +218,11 @@ runs:
             exit 2
           fi
         done
-        mkdir -p "$cache_dir" "$evidence_dir"
+        mkdir -p "$cache_root" "$evidence_dir"
         if [ "$(stat -c '%u' "$cache_root")" != "$(id -u)" ]; then
           echo "::error::security cache is not owned by the runner user: $cache_root" >&2
           exit 2
         fi
-        chmod 700 "$cache_root" "$cache_dir"
         if ! command -v flock >/dev/null 2>&1; then
           echo "failure_reason=missing_flock" >> "$GITHUB_OUTPUT"
           echo "::error title=Missing security-gate runner dependency::flock is required to protect the shared Trivy cache. Install util-linux on the self-hosted runner or use a runner image that provides flock; do not bypass the lock." >&2
@@ -231,6 +230,11 @@ runs:
         fi
         exec 9>"$cache_root/gate.lock"
         flock -x 9
+        python3 "$action_root/scripts/security_gate/cache.py" prepare \
+          --repository "$repository" \
+          --trivy-version "$TRIVY_VERSION" \
+          --retention-days 14
+        chmod 700 "$cache_root" "$cache_dir"
 
         case "$INPUT_SCAN_TYPE" in
           fs) scanners="vuln,misconfig,secret" ;;
@@ -427,7 +431,7 @@ runs:
           blocking_args=("${report_args[@]}" --ignore-unfixed)
 
           echo "::group::Trivy $INPUT_SCAN_TYPE scan: $target"
-          trivy "$command_name" "${report_args[@]}" \
+          trivy --cache-dir "$cache_dir" "$command_name" "${report_args[@]}" \
             --format table --exit-code 0 --output "$table_report" \
             "${target_args[@]}"
           if ! python3 - "$table_report" <<'PY'
@@ -458,10 +462,10 @@ runs:
           then
             echo "::warning::Unable to stream complete Trivy table report; full report remains in the security-gate artifact." >&2 || true
           fi
-          trivy "$command_name" "${report_args[@]}" \
+          trivy --cache-dir "$cache_dir" "$command_name" "${report_args[@]}" \
             --format sarif --exit-code 0 --output "$sarif_report" \
             "${target_args[@]}"
-          trivy "$command_name" "${report_args[@]}" \
+          trivy --cache-dir "$cache_dir" "$command_name" "${report_args[@]}" \
             --format json --exit-code 0 --output "$json_report" \
             "${target_args[@]}"
 
@@ -475,7 +479,7 @@ runs:
           python3 "$report_tool" "${complete_summary_args[@]}"
 
           set +e
-          trivy "$command_name" "${blocking_args[@]}" \
+          trivy --cache-dir "$cache_dir" "$command_name" "${blocking_args[@]}" \
             --format json --exit-code 1 --output "$blocking_json_report" \
             "${target_args[@]}"
           scan_status=$?

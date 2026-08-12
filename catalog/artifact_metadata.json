@@ -118,6 +118,12 @@
       "evidence": "CycloneDX, SPDX and SLSA-compatible provenance for immutable image identities",
       "examples": ["uses: optimizr-tech/optimizr-actions/.github/actions/supply-chain-evidence@v1"]
     },
+    ".github/actions/trivy-scan/action.yml": {
+      "trust_boundary": "trusted-pr",
+      "evidence": "Compatibility Trivy table report with repository-scoped versioned cache",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/actions/trivy-scan@v1"],
+      "known_limitations": "The legacy reusable workflow preserves report-only and exit-code inputs; governed blocking policy belongs to security-gate"
+    },
     ".github/actions/update-release-badge/action.yml": {
       "trust_boundary": "trusted-push",
       "evidence": "Release SVG badge patch with explicit target branch; optional commit and push"

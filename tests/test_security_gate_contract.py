@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import unittest
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -14,6 +13,30 @@ def read(path: str) -> str:
 
 
 class SecurityGateContractTests(unittest.TestCase):
+    def test_trivy_actions_use_one_versioned_repository_cache(self) -> None:
+        for action in (
+            ".github/actions/security-gate/action.yml",
+            ".github/actions/dependency-policy/action.yml",
+            ".github/actions/supply-chain-evidence/action.yml",
+            ".github/actions/trivy-scan/action.yml",
+        ):
+            with self.subTest(action=action):
+                content = read(action)
+                self.assertIn('cache.py" path', content)
+                self.assertIn('--trivy-version "$TRIVY_VERSION"', content)
+                self.assertIn("flock -x 9", content)
+                self.assertIn('cache.py" prepare', content)
+
+    def test_legacy_trivy_workflow_uses_the_shared_cache_contract(self) -> None:
+        content = read(".github/workflows/_trivy-scan.yml")
+        self.assertIn(
+            "uses: optimizr-tech/optimizr-actions/.github/actions/trivy-scan@v1",
+            content,
+        )
+        self.assertIn("exit_code", content)
+        self.assertIn("trivy-results.txt", content)
+        self.assertNotIn("aquasecurity/trivy-action@", content)
+
     def test_every_trivy_install_is_isolated_per_job(self) -> None:
         install_path = (
             "path: ${{ runner.temp }}/optimizr-trivy/"
@@ -40,7 +63,7 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertIn('default: "v0.70.0"', content)
         self.assertIn('default: "true"', content)
         self.assertIn("--download-db-only", content)
-        self.assertIn("optimizr-security-gate", content)
+        self.assertIn("scripts/security_gate/cache.py", content)
         self.assertIn("flock -x 9", content)
         self.assertIn("chmod 700", content)
         self.assertIn("validate-db", content)

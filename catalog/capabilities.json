@@ -28,7 +28,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "735926c8f8c9d79841fcddc2a36e9c8fcc1e48c9838fa462d4475d002e8a1694",
+      "source_sha256": "bcce5eec2bbb16c799ded97128784bb851d917fa4115f79d1622c0e37e0f6e62",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -548,7 +548,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "9e27a4719b13e6d9e5f8daa11a5a9a6a75049235a6502e475d90f3a7155612a5",
+      "source_sha256": "3f4cece0a4cc5b836fc8c80b9124ff26f86bf0a25f60fadd8da9247aaabd8fcb",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -708,7 +708,35 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "35ec7d2d8a05caa72fa7a22c66058035d0f784b83909c03bf8507e2d22e33dec",
+      "source_sha256": "4a783c7d99d5b7f5f66d2c2820811cf845c96cb692e4fd1beacbb7956757ee5b",
+      "trust_boundary": "trusted-pr"
+    },
+    {
+      "category": "security",
+      "evidence": "Compatibility Trivy table report with repository-scoped versioned cache",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/actions/trivy-scan@v1"
+      ],
+      "inputs": {
+        "exit_code": "",
+        "scan_ref": "",
+        "scan_type": "",
+        "severity": "",
+        "trivy_version": ""
+      },
+      "kind": "action",
+      "known_limitations": "The legacy reusable workflow preserves report-only and exit-code inputs; governed blocking policy belongs to security-gate",
+      "maturity": "stable-v1",
+      "metadata_status": "classified",
+      "outputs": {},
+      "path": ".github/actions/trivy-scan/action.yml",
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "e1d2c5a120d1e41de3566a338de9172ddee54a98f5fd7d3e3e641505c2ce4fa8",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1780,7 +1808,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "acde3e8b904190d60183366ef95fbb42405b39adf82f8d3c78a540848a3bda29",
+      "source_sha256": "c0dcb00c464a2563243c1541cb0c8bc90bb412257d6847ac7be6161bd47a6e12",
       "trust_boundary": "trusted-pr"
     },
     {

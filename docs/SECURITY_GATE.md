@@ -55,6 +55,17 @@ jobs:
 
 The deployment job must depend on the applicable hosted or self-hosted job and must never accept both paths as skipped.
 
+### Trivy cache lifecycle
+
+All Trivy-based composites use the repository-scoped cache helper at
+`scripts/security_gate/cache.py`. The database is stored under a versioned
+`trivy-v<version>` directory, protected by a repository-level `flock`, and
+retained for 14 days after the last use. The helper migrates the previous
+unversioned `trivy` directory once, so existing runner databases are reused.
+The setup action's binary download cache remains job-isolated; it is separate
+from the shared vulnerability database and is disabled for the compatibility
+scanner to avoid maintaining a second database cache.
+
 ## Deploy integration
 
 `_vps-self-hosted-deploy.yml` and `_vps-monorepo-deploy.yml` expose these additive inputs:
