@@ -127,6 +127,7 @@ class SecurityGateContractTests(unittest.TestCase):
         for workflow in (deploy, monorepo):
             self.assertIn("docker_mode:", workflow)
             self.assertIn("default: sudo", workflow)
+            self.assertIn("Local Docker access mode for deployment", workflow)
             self.assertIn("docker_mode: ${{ inputs.docker_mode }}", workflow)
 
         self.assertIn("docker_mode:", standalone)
@@ -203,11 +204,11 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertLess(rebuild, final)
         self.assertLess(final, enforce)
         self.assertLess(enforce, deploy)
-        self.assertIn('docker compose -f "$COMPOSE_FILE" config --images', content)
+        self.assertIn('docker_cmd compose -f "$COMPOSE_FILE" config --images', content)
         self.assertIn(
-            'docker compose -f "$COMPOSE_FILE" pull --ignore-buildable', content
+            'docker_cmd compose -f "$COMPOSE_FILE" pull --ignore-buildable', content
         )
-        self.assertIn("docker image inspect", content)
+        self.assertIn("docker_cmd image inspect", content)
         self.assertNotIn('docker compose -f "$COMPOSE_FILE" images --quiet', content)
         self.assertIn("Configured image unavailable after build", content)
         self.assertIn("No Compose images available for required security scan", content)
@@ -236,11 +237,11 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertLess(rebuild, final)
         self.assertLess(final, enforce)
         self.assertLess(enforce, rollout)
-        self.assertIn('docker compose -f "$COMPOSE_FILE" config --images', content)
+        self.assertIn('docker_cmd compose -f "$COMPOSE_FILE" config --images', content)
         self.assertIn(
-            'docker compose -f "$COMPOSE_FILE" pull --ignore-buildable', content
+            'docker_cmd compose -f "$COMPOSE_FILE" pull --ignore-buildable', content
         )
-        self.assertIn("docker image inspect", content)
+        self.assertIn("docker_cmd image inspect", content)
         self.assertIn("No Compose images available for required security scan", content)
         self.assertIn("Upload security evidence", content)
 

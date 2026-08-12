@@ -25,6 +25,10 @@ inputs:
     description: "Disable build cache during the single retry"
     required: false
     default: "true"
+  docker_mode:
+    description: "Local Docker access mode: direct, sudo, or auto"
+    required: false
+    default: "sudo"
 
 outputs:
   optional_build_result:
@@ -47,6 +51,7 @@ runs:
         INPUT_REQUIRED_SERVICES: ${{ inputs.required_services }}
         INPUT_OPTIONAL_SERVICES: ${{ inputs.optional_services }}
         INPUT_NO_CACHE: ${{ inputs.no_cache }}
+        INPUT_DOCKER_MODE: ${{ inputs.docker_mode }}
       run: |
         set -euo pipefail
         action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
@@ -57,4 +62,5 @@ runs:
           --required-services "$INPUT_REQUIRED_SERVICES" \
           --optional-services "$INPUT_OPTIONAL_SERVICES" \
           --no-cache "$INPUT_NO_CACHE" \
+          --docker-mode "$INPUT_DOCKER_MODE" \
           --github-output "$GITHUB_OUTPUT"

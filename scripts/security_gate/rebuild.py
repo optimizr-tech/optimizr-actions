@@ -14,6 +14,7 @@ from typing import Callable, Sequence
 _ALLOWED_ROOT = Path("/opt/optimizr")
 _SERVICE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _COMMAND_TIMEOUT = 1800
+_DOCKER_MODES = frozenset({"auto", "direct", "sudo"})
 
 
 class RebuildError(ValueError):
@@ -91,6 +92,7 @@ def run_remediation(
     required_services: str,
     optional_services: str,
     no_cache: bool,
+    docker_mode: str = "sudo",
     allowed_root: Path = _ALLOWED_ROOT,
     runner: Runner = _run,
 ) -> str:
@@ -102,7 +104,10 @@ def run_remediation(
     if build_all and (required or optional):
         raise RebuildError("build_all cannot be combined with service lists")
 
-    prefix = ["sudo", "docker", "compose", "-f", compose]
+    if docker_mode not in _DOCKER_MODES:
+        raise RebuildError("docker_mode must be auto, direct, or sudo")
+    prefix = (["docker"] if docker_mode == "direct" else ["sudo", "docker"])
+    prefix.extend(["compose", "-f", compose])
     if runner([*prefix, "pull", "--ignore-buildable"], root) != 0:
         raise RebuildError("Compose pull failed")
 
@@ -154,6 +159,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--required-services", default="")
     parser.add_argument("--optional-services", default="")
     parser.add_argument("--no-cache", type=_boolean, default=True)
+    parser.add_argument("--docker-mode", choices=sorted(_DOCKER_MODES), default="sudo")
     parser.add_argument("--github-output", default=None)
     return parser
 
@@ -185,6 +191,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             required_services=args.required_services,
             optional_services=args.optional_services,
             no_cache=args.no_cache,
+            docker_mode=args.docker_mode,
         )
         _publish_output(args.github_output, result)
         return 0

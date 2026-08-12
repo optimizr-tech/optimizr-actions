@@ -9,6 +9,10 @@ inputs:
     description: "Idade mínima pra image prune untagged (formato Docker filter, ex 24h)"
     required: false
     default: "24h"
+  docker_mode:
+    description: "Local Docker access mode: direct, sudo, or auto"
+    required: false
+    default: "sudo"
 
 runs:
   using: composite
@@ -16,11 +20,25 @@ runs:
     - shell: bash
       env:
         IMAGE_AGE: ${{ inputs.image_age_threshold }}
+        DOCKER_MODE: ${{ inputs.docker_mode }}
       run: |
         set -euo pipefail
+        case "$DOCKER_MODE" in
+          direct|sudo|auto) ;;
+          *)
+            echo "Unsupported docker_mode: $DOCKER_MODE" >&2
+            exit 2
+            ;;
+        esac
+        docker_cmd() {
+          case "$DOCKER_MODE" in
+            direct) command docker "$@" ;;
+            sudo|auto) command sudo docker "$@" ;;
+          esac
+        }
         echo "::group::Disk before cleanup"
         df -h / || true
-        sudo docker system df || true
+        docker_cmd system df || true
         echo "::endgroup::"
 
         # All repository runners share one Docker daemon on the VPS. Serialize
@@ -42,17 +60,21 @@ runs:
           exit 0
         fi
 
-        sudo docker container prune -f
-        sudo docker image prune -f
-        sudo docker image prune -af --filter "until=${IMAGE_AGE}"
-        sudo docker builder prune -af --filter "until=${IMAGE_AGE}"
+        docker_cmd container prune -f
+        docker_cmd image prune -f
+        docker_cmd image prune -af --filter "until=${IMAGE_AGE}"
+        docker_cmd builder prune -af --filter "until=${IMAGE_AGE}"
 
         if [ -n "${RUNNER_WORKSPACE:-}" ]; then
           runner_root="$(dirname "$RUNNER_WORKSPACE")"
-          sudo find "$runner_root/_temp" -mindepth 1 -maxdepth 1 -mmin +60 -exec rm -rf {} + 2>/dev/null || true
+          if [ "$DOCKER_MODE" = direct ]; then
+            find "$runner_root/_temp" -mindepth 1 -maxdepth 1 -mmin +60 -exec rm -rf {} + 2>/dev/null || true
+          else
+            sudo find "$runner_root/_temp" -mindepth 1 -maxdepth 1 -mmin +60 -exec rm -rf {} + 2>/dev/null || true
+          fi
         fi
 
         echo "::group::Disk after cleanup"
         df -h / || true
-        sudo docker system df || true
+        docker_cmd system df || true
         echo "::endgroup::"

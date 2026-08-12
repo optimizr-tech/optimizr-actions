@@ -131,6 +131,42 @@ class SecurityRebuildRuntimeTests(unittest.TestCase):
                 calls,
             )
 
+    def test_direct_mode_uses_docker_without_sudo(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            allowed_root = Path(temporary) / "optimizr"
+            deploy_path = allowed_root / "service"
+            deploy_path.mkdir(parents=True)
+            (deploy_path / "docker-compose.yml").write_text(
+                "services: {}\n", encoding="utf-8"
+            )
+            calls: list[list[str]] = []
+
+            def runner(argv: list[str], _cwd: Path) -> int:
+                calls.append(list(argv))
+                return 0
+
+            run_remediation(
+                deploy_path=deploy_path,
+                compose_file="docker-compose.yml",
+                build_all=False,
+                required_services="api",
+                optional_services="",
+                no_cache=True,
+                docker_mode="direct",
+                allowed_root=allowed_root,
+                runner=runner,
+            )
+
+            self.assertTrue(calls)
+            self.assertTrue(all(argv[:2] == ["docker", "compose"] for argv in calls))
+
+    def test_action_exposes_docker_mode_to_the_runtime(self) -> None:
+        payload = yaml.safe_load(ACTION.read_text(encoding="utf-8"))
+        self.assertIn("docker_mode", payload["inputs"])
+        step = payload["runs"]["steps"][0]
+        self.assertEqual("${{ inputs.docker_mode }}", step["env"]["INPUT_DOCKER_MODE"])
+        self.assertIn('--docker-mode "$INPUT_DOCKER_MODE"', step["run"])
+
     def test_optional_failure_is_non_blocking_and_explicit(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             allowed_root = Path(temporary) / "optimizr"
