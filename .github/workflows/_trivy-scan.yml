@@ -87,15 +87,13 @@ jobs:
         with:
           persist-credentials: false
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        uses: optimizr-tech/optimizr-actions/.github/actions/trivy-scan@v1
         with:
-          scan-type: ${{ inputs.scan_type }}
-          scan-ref: ${{ inputs.scan_ref }}
-          format: "table"
-          output: "trivy-results.txt"
+          scan_type: ${{ inputs.scan_type }}
+          scan_ref: ${{ inputs.scan_ref }}
           severity: ${{ inputs.severity }}
-          exit-code: ${{ inputs.exit_code }}
-          cache: "true"
+          exit_code: ${{ inputs.exit_code }}
+          trivy_version: v0.70.0
       - name: Upload Trivy scan results as artifact
         if: always() && inputs.upload_artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
