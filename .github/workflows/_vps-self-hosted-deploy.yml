@@ -40,6 +40,11 @@ on:
         required: false
         type: boolean
         default: false
+      recreate_services:
+        description: Whitespace-separated Compose services to recreate after file synchronization
+        required: false
+        type: string
+        default: ""
       health_timeout:
         description: Seconds to wait for the primary container to become healthy
         required: false
@@ -201,6 +206,7 @@ jobs:
       COMPOSE_FILE: ${{ inputs.compose_file }}
       HEALTH_TIMEOUT: ${{ inputs.health_timeout }}
       DEPLOY_TIMEOUT_MINUTES: ${{ inputs.deploy_timeout_minutes }}
+      RECREATE_SERVICES: ${{ inputs.recreate_services }}
 
     steps:
       - name: Validate effective deployment timeout
@@ -607,6 +613,28 @@ jobs:
               sudo docker compose -f "$COMPOSE_FILE" logs --no-color --tail=200 "$service" >&2 || true
             done
             exit "$compose_status"
+          fi
+
+          recreate_services=()
+          if [ -n "${RECREATE_SERVICES//[[:space:]]/}" ]; then
+            mapfile -t declared_services < <(
+              sudo docker compose -f "$COMPOSE_FILE" config --services
+            )
+            for service in $RECREATE_SERVICES; do
+              if ! [[ "$service" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$ ]]; then
+                echo "::error::Service name contains unsupported characters: $service" >&2
+                exit 2
+              fi
+              if ! printf '%s\n' "${declared_services[@]}" | grep -Fxq -- "$service"; then
+                echo "::error::Requested Compose service is not declared: $service" >&2
+                exit 2
+              fi
+              recreate_services+=("$service")
+            done
+          fi
+          if [ "${#recreate_services[@]}" -gt 0 ]; then
+            echo "Recreating explicitly declared Compose services: ${recreate_services[*]}"
+            sudo docker compose -f "$COMPOSE_FILE" up -d --no-deps --force-recreate --no-build "${recreate_services[@]}"
           fi
 
           elapsed=0
