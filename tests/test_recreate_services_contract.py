@@ -27,11 +27,11 @@ class RecreateServicesContractTests(unittest.TestCase):
             self.workflow,
         )
         self.assertIn(
-            'docker compose -f "$COMPOSE_FILE" config --services',
+            'docker_cmd compose -f "$COMPOSE_FILE" config --services',
             self.workflow,
         )
         self.assertIn(
-            'docker compose -f "$COMPOSE_FILE" up -d --no-deps --force-recreate --no-build',
+            'docker_cmd compose -f "$COMPOSE_FILE" up -d --no-deps --force-recreate --no-build',
             self.workflow,
         )
         self.assertNotIn("docker compose -f \"$COMPOSE_FILE\" down -v", self.workflow)
