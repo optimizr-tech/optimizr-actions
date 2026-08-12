@@ -12,6 +12,11 @@ on:
         description: Repository/deploy directory name under /opt/optimizr
         required: true
         type: string
+      homologation_environment:
+        description: Use the protected homologation Environment instead of production
+        required: false
+        type: boolean
+        default: false
       container_name:
         description: Primary Docker container used for health verification
         required: true
@@ -199,7 +204,7 @@ jobs:
       - ${{ inputs.runner_label }}
     timeout-minutes: ${{ inputs.deploy_timeout_minutes }}
     environment:
-      name: production
+      name: ${{ inputs.homologation_environment && 'homologation' || 'production' }}
     env:
       DEPLOY_PATH: /opt/optimizr/${{ inputs.service_name }}
       CONTAINER_NAME: ${{ inputs.container_name }}
