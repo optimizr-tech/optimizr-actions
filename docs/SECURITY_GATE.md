@@ -62,7 +62,7 @@ The deployment job must depend on the applicable hosted or self-hosted job and m
 | Input | Default | Meaning |
 |---|---:|---|
 | `security_require_image_scan` | `true` | Require at least one Compose image and scan it before rollout. |
-| `docker_mode` | `sudo` | Local image transport: `sudo` exports through non-interactive sudo, `direct` uses the runner's Docker access, and `auto` tries direct before the sudo archive fallback. |
+| `docker_mode` | `sudo` | Local Docker access for deploy lifecycle, image transport, security rebuild, prune, and manifest: `direct` uses the runner's Docker group, `sudo` uses non-interactive sudo, and `auto` preserves the sudo-compatible fallback. |
 | `security_severity` | `HIGH,CRITICAL` | Severities that block deployment. |
 | `security_ignore_unfixed` | `false` | Deprecated compatibility input; only the retry action's narrow `compatibility_allowed=true` result can use it. |
 | `security_exceptions_file` | empty | Optional Optimizr exception-policy JSON path. |
@@ -110,7 +110,10 @@ recovery path:
    then the controlled `sudo` archive path.
 
 The VPS deploy reusables default to `sudo` because their Docker lifecycle is
-already controlled through non-interactive sudo. Archive transport retains the
+already controlled through non-interactive sudo. Setting `docker_mode: direct`
+applies the runner's Docker-group access consistently to Compose lifecycle,
+image transport, the bounded security rebuild, cleanup, and deploy-manifest
+recording. Archive transport retains the
 resolved immutable image ID in the evidence even though Trivy runs
 unprivileged. If inspection, export, archive ownership, or identity validation
 fails, the gate emits a short `failure_reason`, removes the temporary archive,

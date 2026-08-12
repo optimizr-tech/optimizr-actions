@@ -86,7 +86,7 @@ on:
         type: boolean
         default: true
       docker_mode:
-        description: Local image access mode for the security gate and manifest
+        description: Local Docker access mode for deployment, security gate, and manifest
         required: false
         type: string
         default: sudo
@@ -207,6 +207,7 @@ jobs:
       HEALTH_TIMEOUT: ${{ inputs.health_timeout }}
       DEPLOY_TIMEOUT_MINUTES: ${{ inputs.deploy_timeout_minutes }}
       RECREATE_SERVICES: ${{ inputs.recreate_services }}
+      DOCKER_MODE: ${{ inputs.docker_mode }}
 
     steps:
       - name: Validate effective deployment timeout
@@ -224,6 +225,33 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Configure Docker access mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$DOCKER_MODE" in
+            direct|sudo|auto) ;;
+            *)
+              echo "::error::Unsupported docker_mode: $DOCKER_MODE (expected direct, sudo, or auto)" >&2
+              exit 2
+              ;;
+          esac
+          docker_mode_file="$RUNNER_TEMP/optimizr-docker-mode.sh"
+          cat > "$docker_mode_file" <<'EOF'
+          docker_cmd() {
+            case "${DOCKER_MODE:-sudo}" in
+              direct) command docker "$@" ;;
+              sudo|auto) command sudo docker "$@" ;;
+              *)
+                echo "Unsupported docker_mode: ${DOCKER_MODE:-}" >&2
+                return 2
+                ;;
+            esac
+          }
+          EOF
+          chmod 700 "$docker_mode_file"
+          echo "BASH_ENV=$docker_mode_file" >> "$GITHUB_ENV"
 
       - name: Security gate (filesystem)
         id: security-filesystem-gate
@@ -277,17 +305,25 @@ jobs:
         run: |
           set -euo pipefail
           BACKUP_ROOT="/opt/optimizr/backups/${{ inputs.service_name }}/deploys"
-          sudo mkdir -p "$DEPLOY_PATH" "$BACKUP_ROOT"
-          sudo chown "$(id -un):$(id -gn)" "$DEPLOY_PATH" "$BACKUP_ROOT"
-          while IFS= read -r -d '' path; do
-            sudo chown -R "$(id -un):$(id -gn)" "$path"
-          done < <(
-            find "$DEPLOY_PATH" \
-              -mindepth 1 \
-              -maxdepth 1 \
-              -not -name '.secrets' -print0
-          )
-          sudo chmod 750 "$BACKUP_ROOT"
+          if [ "$DOCKER_MODE" = direct ]; then
+            mkdir -p "$DEPLOY_PATH" "$BACKUP_ROOT"
+          else
+            sudo mkdir -p "$DEPLOY_PATH" "$BACKUP_ROOT"
+            sudo chown "$(id -un):$(id -gn)" "$DEPLOY_PATH" "$BACKUP_ROOT"
+            while IFS= read -r -d '' path; do
+              sudo chown -R "$(id -un):$(id -gn)" "$path"
+            done < <(
+              find "$DEPLOY_PATH" \
+                -mindepth 1 \
+                -maxdepth 1 \
+                -not -name '.secrets' -print0
+            )
+          fi
+          if [ "$DOCKER_MODE" = direct ]; then
+            chmod 750 "$BACKUP_ROOT"
+          else
+            sudo chmod 750 "$BACKUP_ROOT"
+          fi
 
           rsync_args=(
             -a --delete
@@ -357,15 +393,15 @@ jobs:
         run: |
           set -euo pipefail
           for network in ${{ inputs.ensure_networks }}; do
-            sudo docker network inspect "$network" >/dev/null 2>&1 || sudo docker network create "$network"
+            docker_cmd network inspect "$network" >/dev/null 2>&1 || docker_cmd network create "$network"
           done
           for volume in ${{ inputs.ensure_volumes }}; do
-            if sudo docker volume inspect "$volume" >/dev/null 2>&1; then
+            if docker_cmd volume inspect "$volume" >/dev/null 2>&1; then
               continue
             fi
             if [ "${{ inputs.create_missing_volumes }}" = true ]; then
               echo "::warning::Creating explicitly authorized empty volume: $volume"
-              sudo docker volume create "$volume" >/dev/null
+              docker_cmd volume create "$volume" >/dev/null
             else
               echo "::error::Required volume $volume is missing; refusing to create an empty replacement" >&2
               exit 1
@@ -379,9 +415,9 @@ jobs:
           set -euo pipefail
           cd "$DEPLOY_PATH"
           if [ "${{ inputs.build_no_cache }}" = true ]; then
-            sudo docker compose -f "$COMPOSE_FILE" build --no-cache
+            docker_cmd compose -f "$COMPOSE_FILE" build --no-cache
           else
-            sudo docker compose -f "$COMPOSE_FILE" build
+            docker_cmd compose -f "$COMPOSE_FILE" build
           fi
 
       - name: Pull declared runtime images
@@ -390,7 +426,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          sudo docker compose -f "$COMPOSE_FILE" pull --ignore-buildable
+          docker_cmd compose -f "$COMPOSE_FILE" pull --ignore-buildable
 
       - name: Discover declarative Compose images
         id: security-images-initial
@@ -400,7 +436,7 @@ jobs:
           set -euo pipefail
           cd "$DEPLOY_PATH"
           mapfile -t configured_images < <(
-            sudo docker compose -f "$COMPOSE_FILE" config --images | sed '/^$/d' | sort -u
+            docker_cmd compose -f "$COMPOSE_FILE" config --images | sed '/^$/d' | sort -u
           )
           [ "${#configured_images[@]}" -gt 0 ] || {
             echo "::error::No Compose images available for required security scan" >&2
@@ -408,7 +444,7 @@ jobs:
           }
           image_ids=()
           for image_ref in "${configured_images[@]}"; do
-            image_id="$(sudo docker image inspect --format '{{.Id}}' "$image_ref" 2>/dev/null || true)"
+            image_id="$(docker_cmd image inspect --format '{{.Id}}' "$image_ref" 2>/dev/null || true)"
             [ -n "$image_id" ] || {
               echo "::warning::Configured image unavailable after build: $image_ref" >&2
               continue
@@ -459,6 +495,7 @@ jobs:
         with:
           deploy_path: ${{ env.DEPLOY_PATH }}
           compose_file: ${{ inputs.compose_file }}
+          docker_mode: ${{ inputs.docker_mode }}
           build_all: ${{ inputs.security_rebuild_services == '' }}
           required_services: ${{ inputs.security_rebuild_services }}
           no_cache: ${{ inputs.security_rebuild_retry_no_cache }}
@@ -470,9 +507,9 @@ jobs:
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          sudo docker compose -f "$COMPOSE_FILE" pull --ignore-buildable || true
+          docker_cmd compose -f "$COMPOSE_FILE" pull --ignore-buildable || true
           mapfile -t configured_images < <(
-            sudo docker compose -f "$COMPOSE_FILE" config --images | sed '/^$/d' | sort -u
+            docker_cmd compose -f "$COMPOSE_FILE" config --images | sed '/^$/d' | sort -u
           )
           [ "${#configured_images[@]}" -gt 0 ] || {
             echo "::error::No Compose images available after security rebuild" >&2
@@ -480,7 +517,7 @@ jobs:
           }
           image_ids=()
           for image_ref in "${configured_images[@]}"; do
-            image_id="$(sudo docker image inspect --format '{{.Id}}' "$image_ref" 2>/dev/null || true)"
+            image_id="$(docker_cmd image inspect --format '{{.Id}}' "$image_ref" 2>/dev/null || true)"
             [ -n "$image_id" ] || {
               echo "::error::Remediated image unavailable after build: $image_ref" >&2
               exit 1
@@ -589,7 +626,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          sudo docker compose -f "$COMPOSE_FILE" run --rm --no-deps --entrypoint '' nginx nginx -t
+          docker_cmd compose -f "$COMPOSE_FILE" run --rm --no-deps --entrypoint '' nginx nginx -t
 
       - name: Roll out and verify primary container
         shell: bash
@@ -597,20 +634,20 @@ jobs:
           set -euo pipefail
           cd "$DEPLOY_PATH"
           set +e
-          sudo docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+          docker_cmd compose -f "$COMPOSE_FILE" up -d --remove-orphans
           compose_status=$?
           set -e
           if [ "$compose_status" -ne 0 ]; then
-            sudo docker compose -f "$COMPOSE_FILE" ps -a >&2 || true
+            docker_cmd compose -f "$COMPOSE_FILE" ps -a >&2 || true
             mapfile -t exited_services < <(
-              sudo docker compose -f "$COMPOSE_FILE" ps -a --status exited --services 2>/dev/null
+              docker_cmd compose -f "$COMPOSE_FILE" ps -a --status exited --services 2>/dev/null
             )
             for service in "${exited_services[@]}"; do
-              container_id="$(sudo docker compose -f "$COMPOSE_FILE" ps -a -q "$service" 2>/dev/null || true)"
+              container_id="$(docker_cmd compose -f "$COMPOSE_FILE" ps -a -q "$service" 2>/dev/null || true)"
               [ -n "$container_id" ] || continue
-              service_exit="$(sudo docker inspect -f '{{.State.ExitCode}}' "$container_id" 2>/dev/null || echo unknown)"
+              service_exit="$(docker_cmd inspect -f '{{.State.ExitCode}}' "$container_id" 2>/dev/null || echo unknown)"
               [ "$service_exit" != 0 ] || continue
-              sudo docker compose -f "$COMPOSE_FILE" logs --no-color --tail=200 "$service" >&2 || true
+              docker_cmd compose -f "$COMPOSE_FILE" logs --no-color --tail=200 "$service" >&2 || true
             done
             exit "$compose_status"
           fi
@@ -618,7 +655,7 @@ jobs:
           recreate_services=()
           if [ -n "${RECREATE_SERVICES//[[:space:]]/}" ]; then
             mapfile -t declared_services < <(
-              sudo docker compose -f "$COMPOSE_FILE" config --services
+              docker_cmd compose -f "$COMPOSE_FILE" config --services
             )
             for service in $RECREATE_SERVICES; do
               if ! [[ "$service" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$ ]]; then
@@ -634,24 +671,24 @@ jobs:
           fi
           if [ "${#recreate_services[@]}" -gt 0 ]; then
             echo "Recreating explicitly declared Compose services: ${recreate_services[*]}"
-            sudo docker compose -f "$COMPOSE_FILE" up -d --no-deps --force-recreate --no-build "${recreate_services[@]}"
+            docker_cmd compose -f "$COMPOSE_FILE" up -d --no-deps --force-recreate --no-build "${recreate_services[@]}"
           fi
 
           elapsed=0
           while [ "$elapsed" -lt "$HEALTH_TIMEOUT" ]; do
-            status="$(sudo docker inspect -f '{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo 'not found')"
+            status="$(docker_cmd inspect -f '{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo 'not found')"
             if [ "$status" = healthy ]; then
               echo "$CONTAINER_NAME is healthy"
               exit 0
             fi
             if [ "$status" = 'not found' ] || [ -z "$status" ]; then
-              sudo docker compose -f "$COMPOSE_FILE" logs --tail=50 >&2 || true
+              docker_cmd compose -f "$COMPOSE_FILE" logs --tail=50 >&2 || true
               exit 1
             fi
             sleep 5
             elapsed=$((elapsed + 5))
           done
-          sudo docker compose -f "$COMPOSE_FILE" logs --tail=50 >&2 || true
+          docker_cmd compose -f "$COMPOSE_FILE" logs --tail=50 >&2 || true
           exit 1
 
       - name: Upload security evidence
@@ -668,6 +705,7 @@ jobs:
         uses: optimizr-tech/optimizr-actions/.github/actions/docker-prune-safe@v1
         with:
           image_age_threshold: ${{ inputs.image_age_threshold }}
+          docker_mode: ${{ inputs.docker_mode }}
 
       - name: Clean runner workspace
         if: always()
