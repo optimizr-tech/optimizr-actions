@@ -71,6 +71,7 @@ The deployment job must depend on the applicable hosted or self-hosted job and m
 | `security_rebuild_retry_enabled` | `true` | Permit one deterministic pull, rebuild and rescan for actionable image findings. |
 | `security_rebuild_retry_no_cache` | `true` | Disable the build cache during the bounded remediation retry. |
 | `build_no_cache` | `false` | Self-hosted deploy only: explicitly rebuild all Compose images without cache. Normal deploys reuse Docker layers. |
+| `recreate_services` | empty | Self-hosted deploy only: explicitly recreate the listed Compose services after synchronization when bind-mounted configuration changed; uses `--no-deps --force-recreate --no-build` and never removes volumes. |
 | `services_build_no_cache` | `false` | Monorepo deploy only: explicitly rebuild the services listed in `services_build` or `services_build_optional` without cache. |
 | `deploy_timeout_minutes` | `30` | Bounded deployment job timeout; accepted values are 30 through 120 minutes. The monorepo reusable keeps `timeout_minutes` as a compatibility alias when this is `0`. |
 | `security_rebuild_services` | empty | Self-hosted deploy only: whitespace-separated required Compose services for the remediation rebuild; empty preserves the all-buildable default. |
@@ -82,6 +83,14 @@ Normal production builds keep Docker's layer cache enabled. Consumers should set
 approved full rebuild. Actionable image vulnerabilities use the separate
 `security_rebuild_retry_no_cache` path, which is bounded to one pull, rebuild and
 final scan before promotion.
+
+Configuration-only changes to bind-mounted files do not necessarily change the
+Compose service definition. Consumers that need the running service to reopen
+such a file may set `recreate_services` to the reviewed service name(s). The
+reusable validates each name against `docker compose config --services` and
+recreates only those services without restarting dependencies or deleting
+volumes. An empty value preserves the previous deployment behavior for all
+existing consumers.
 
 Before the initial image scan, both VPS deploy reusables pull every Compose service that declares an external `image:` while ignoring buildable services. This guarantees that digest-pinned sidecars and operational tools are locally available for immutable-ID discovery without replacing images built from the candidate source. A missing or unavailable declared image fails closed before rollout.
 

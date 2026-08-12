@@ -1947,6 +1947,7 @@
         "health_timeout": "",
         "image_age_threshold": "",
         "pre_deploy_validation": "",
+        "recreate_services": "",
         "run_prune": "",
         "runner_label": "",
         "security_baseline_file": "",
@@ -1975,7 +1976,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "61fa00b1d23ef3b160607da8b36954f1cb257caa7b58e336c38a1a68acc28b39",
+      "source_sha256": "3c78df8401ec90604f139df2648ae055f37da21e22890c30b4ea29f51dfa4370",
       "trust_boundary": "trusted-push"
     },
     {
