@@ -14,6 +14,14 @@ class NodeProjectContractTests(unittest.TestCase):
         self.assertIn("pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271", text)
         self.assertIn("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a", text)
 
+    def test_pnpm_uses_controlled_node_before_bootstrap(self):
+        text = (ROOT / ".github/workflows/_node-project-test.yml").read_text()
+        setup_node = text.index("actions/setup-node@")
+        pnpm_setup = text.index("pnpm/action-setup@")
+        self.assertLess(setup_node, pnpm_setup)
+        self.assertLess(pnpm_setup, text.index("cache: pnpm"))
+        self.assertIn("cache-dependency-path:", text)
+
     def test_contract_is_read_only_and_has_no_arbitrary_command_input(self):
         text = (ROOT / ".github/workflows/_node-project-test.yml").read_text()
         action = (ROOT / ".github/actions/node-project-test/action.yml").read_text()
