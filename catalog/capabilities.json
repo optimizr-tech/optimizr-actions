@@ -1975,6 +1975,7 @@
         "ensure_networks": "",
         "ensure_volumes": "",
         "health_timeout": "",
+        "homologation_environment": "",
         "image_age_threshold": "",
         "pre_deploy_validation": "",
         "recreate_services": "",
@@ -2006,7 +2007,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "8fcfec28f36545768ea085acec8ef09f2760a1fb4582170f453504db7942e5d2",
+      "source_sha256": "9a72612ef9b3078ac791842f54c1653981462b43f807c1a4e3e698249f7cf04a",
       "trust_boundary": "trusted-push"
     },
     {
