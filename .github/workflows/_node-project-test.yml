@@ -166,12 +166,26 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           persist-credentials: false
+      - name: Install Node.js before pnpm bootstrap
+        if: matrix.project.package_manager == 'pnpm'
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: ${{ inputs.node_version }}
       - name: Install pnpm
         if: matrix.project.package_manager == 'pnpm'
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271
         with:
           version: ${{ inputs.pnpm_version }}
-      - name: Install Node.js
+          standalone: true
+      - name: Initialize pnpm cache
+        if: matrix.project.package_manager == 'pnpm'
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: pnpm
+          cache-dependency-path: ${{ matrix.project.working_directory }}/${{ matrix.project.lockfile }}
+      - name: Install Node.js for npm projects
+        if: matrix.project.package_manager == 'npm'
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: ${{ inputs.node_version }}
