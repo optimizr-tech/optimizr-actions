@@ -203,7 +203,7 @@
       "runner": [
         "hosted"
       ],
-      "source_sha256": "d124224ff144585e42c6e4b92f84d18da8816ccd86a839259f11964310bfd22b",
+      "source_sha256": "9e081c0d85fa4b6fc663623eb8f5831af70c1da0d3b92681abdd80e11bbf4142",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1135,7 +1135,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "c89a55a96f72f9477385f26da04a39dd6be80d6737247519ec0c262f3d4a9e50",
+      "source_sha256": "8b9f11c1ede4f607545d598f94ac5c9f4d93a5bba7ab0a1f22b1e81be5855e42",
       "trust_boundary": "trusted-pr"
     },
     {
