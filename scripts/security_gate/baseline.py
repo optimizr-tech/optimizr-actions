@@ -124,8 +124,11 @@ def apply_baseline(
         if fingerprint in approved:
             raise BaselineError(f"duplicate baseline fingerprint at findings[{index}]")
         approved.add(fingerprint)
-    if not approved:
-        raise BaselineError(f"baseline has no reviewed findings for image scope {scope}")
+    # A single baseline file may cover only one member of a multi-image
+    # Compose scan. An unrepresented scope must not receive any suppression,
+    # but it also must not be classified as a scanner error: the original
+    # report remains the enforcement report and its findings stay blocking.
+    status = "validated" if approved else "not-applicable"
 
     filtered = deepcopy(report)
     raw_results = filtered.get("Results", [])
@@ -170,7 +173,7 @@ def apply_baseline(
 
     summary = {
         "schema_version": 1,
-        "status": "validated",
+        "status": status,
         "scope": scope.lower(),
         "owner": owner,
         "reviewed_at": reviewed_at_text,
