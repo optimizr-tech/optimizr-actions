@@ -20,7 +20,7 @@ inputs:
   npm_version:
     description: Controlled npm version used for package-lock validation
     required: false
-    default: "11"
+    default: "12.0.2"
   evidence_dir:
     description: Sanitized repository-relative evidence directory
     required: false

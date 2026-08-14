@@ -54,7 +54,7 @@ on:
         description: Controlled npm version used by package-lock validation
         type: string
         required: false
-        default: "11"
+        default: "12.0.2"
       pnpm_version:
         description: Controlled pnpm version used by repository validation scripts
         type: string

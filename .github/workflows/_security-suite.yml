@@ -61,7 +61,7 @@ on:
         description: Controlled npm version used by package-lock validation
         required: false
         type: string
-        default: "11"
+        default: "12.0.2"
       retention_days:
         description: Evidence retention period
         required: false

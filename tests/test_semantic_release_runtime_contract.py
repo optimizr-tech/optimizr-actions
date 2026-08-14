@@ -12,7 +12,7 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         self.assertIn("node_version:", text)
         self.assertIn('default: "24"', text)
         self.assertIn("npm_version:", text)
-        self.assertIn('default: "11"', text)
+        self.assertIn('default: "12.0.2"', text)
         self.assertRegex(text, r"actions/setup-node@[0-9a-f]{40}")
         self.assertIn("Setup controlled npm", text)
         self.assertIn('npm install --global --no-audit --no-fund "npm@${NPM_VERSION}"', text)
@@ -49,7 +49,7 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
     def test_documentation_defines_runtime_migration_and_rollback(self):
         text = DOC.read_text(encoding="utf-8")
         self.assertIn("Node 24", text)
-        self.assertIn("npm 11", text)
+        self.assertIn("npm 12.0.2", text)
         self.assertIn("controlled npm", text)
         self.assertIn("does not regenerate `package-lock.json`", text)
         self.assertIn("optimizr-infra-ops", text)
