@@ -655,7 +655,7 @@ jobs:
           elif [ "$IGNORE_UNFIXED" = true ] && [ "$COMPATIBILITY_ALLOWED" = true ]; then
             echo "::warning title=Unremediated Base Image::Proceeding under the narrow ignore_unfixed compatibility policy for classification=$SECURITY_CLASSIFICATION rebuild=$REBUILD_RESULT."
           else
-            failure_reason="${REMEDIATION_WINDOW_FAILURE_REASON:-${FINAL_FAILURE_REASON:-${INITIAL_FAILURE_REASON:-${REBUILD_FAILURE_REASON:-none}}}}"
+            failure_reason="${REMEDIATION_WINDOW_FAILURE_REASON:-${FINAL_FAILURE_REASON:-${INITIAL_FAILURE_REASON:-${REBUILD_FAILURE_REASON:-${REBUILD_RESULT:-none}}}}}"
             echo "::error::Image security gate blocked deployment: classification=${SECURITY_CLASSIFICATION} failure_reason=${failure_reason} rebuild=${REBUILD_RESULT} fixable=${FIXABLE_COUNT} unfixed=${UNFIXED_COUNT} misconfigurations=${MISCONFIGURATION_COUNT} secrets=${SECRET_COUNT}" >&2
             exit 1
           fi
