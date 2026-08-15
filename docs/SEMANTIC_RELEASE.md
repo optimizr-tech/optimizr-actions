@@ -4,7 +4,7 @@
 
 ## Controlled runtime
 
-The default release runtime is Node 24 with npm 11. The reusable installs the controlled npm version immediately after `actions/setup-node` and before the caller dependency install command. It prints only the resolved Node and npm versions.
+The default release runtime is Node 24 with npm 12.0.2. The reusable installs the controlled npm version immediately after `actions/setup-node` and before the caller dependency install command. It prints only the resolved Node and npm versions.
 
 The default dependency command remains `npm ci`. A reviewed consumer may override `install_command`, `node_version`, or `npm_version`, but the override belongs in the caller and must remain compatible with its committed lockfile.
 
@@ -17,7 +17,7 @@ jobs:
     with:
       runs_on: '["self-hosted", "Linux", "service"]'
       node_version: "24"
-      npm_version: "11"
+      npm_version: "12.0.2"
       releaserc_source: canonical
       actions_ref: v1
       update_release_badge: true

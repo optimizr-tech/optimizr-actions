@@ -157,6 +157,35 @@ class SecurityBaselineTests(unittest.TestCase):
         self.assertEqual(result["approved"], 1)
         self.assertEqual(result["matched"], 1)
 
+    def test_unrepresented_image_scope_keeps_findings_blocking(self) -> None:
+        scope = "sha256:" + "a" * 64
+        other_scope = "sha256:" + "b" * 64
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            report = self._report(directory, [self._finding("CVE-2026-0001")])
+            baseline = self._baseline(
+                directory,
+                [self._baseline_finding("CVE-2026-9999", scope=other_scope)],
+                "2026-08-22",
+            )
+            output = directory / "enforced.json"
+            summary = directory / "baseline-summary.json"
+            result = baseline_module.apply_baseline(
+                report,
+                baseline,
+                output,
+                summary,
+                scope=scope,
+                today=date(2026, 7, 22),
+            )
+            payload = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(result["status"], "not-applicable")
+        self.assertEqual(result["approved"], 0)
+        self.assertEqual(result["matched"], 0)
+        self.assertEqual(result["remaining"], 1)
+        self.assertEqual(len(payload["Results"][0]["Vulnerabilities"]), 1)
+
     def test_expired_baseline_is_rejected(self) -> None:
         scope = "sha256:" + "a" * 64
         with tempfile.TemporaryDirectory() as temporary:

@@ -8,8 +8,10 @@ It is not a severity reduction and does not disable Trivy. The complete table, J
 - any changed package, installed version or fixed version;
 - secrets and misconfigurations;
 - scanner, database or evidence failures;
-- missing, malformed, stale or expired baseline entries;
-- an image ID not explicitly represented in the baseline.
+- missing, malformed, stale or expired baseline entries.
+
+An image ID not explicitly represented in the baseline receives no suppression
+and its findings remain blocking under the normal policy.
 
 ## Schema
 
@@ -34,7 +36,7 @@ It is not a severity reduction and does not disable Trivy. The complete table, J
 }
 ```
 
-`scope` is the exact immutable Docker image ID discovered by the deployment workflow. The remaining fields are copied from the blocking Trivy JSON report. A baseline must be reviewed again whenever an image ID or package fingerprint changes.
+`scope` is the exact immutable Docker image ID discovered by the deployment workflow. The remaining fields are copied from the blocking Trivy JSON report. A baseline must be reviewed again whenever an image ID or package fingerprint changes. The same file may be used for a multi-image Compose scan: entries are applied only to their exact `scope`; an unrepresented image is evaluated against the normal blocking policy.
 
 ## Adoption
 

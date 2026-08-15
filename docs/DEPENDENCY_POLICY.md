@@ -13,7 +13,7 @@ as `>=3.14` or `>=3.14,<3.15`. The action normalizes that lower bound to the
 concrete runtime passed to uv (`3.14`); a constraint without a lower bound
 fails closed.
 
-For Node projects, the organization defaults are Node 24 and npm 11. The
+For Node projects, the organization defaults are Node 24 and npm 12.0.2. The
 versions are explicit reusable inputs and can be overridden only by a reviewed
 consumer contract. npm projects are validated with the immutable command
 `npm ci --ignore-scripts --no-audit --no-fund`; the gate never regenerates `package-lock.json`.
@@ -35,11 +35,11 @@ jobs:
       working_directory: frontend/apps/admin
       policy_file: .github/dependency-policy.json
       node_version: "24"
-      npm_version: "11"
+      npm_version: "12.0.2"
 ```
 
 The same `node_version` and `npm_version` inputs are propagated through `_security-suite.yml@v1` and `_validation-gate.yml@v1`, allowing one reviewed organization contract to select the runtime without copying setup logic into consumers.
 
 Policy exceptions are exact by kind, advisory/license identifier and package. Every exception requires owner, statement and ISO expiry. Evidence records lockfile and policy hashes, repository/SHA, the Trivy report hash, suppressed findings and blocking findings; it does not serialize credentials or package-manager environments.
 
-The bundled policy blocks High/Critical advisories plus `AGPL-3.0-only` and `SSPL-1.0`. Consumers may replace it with a reviewed repository policy. Rollback requires pinning the prior Actions commit and retaining equivalent lock, advisory and license checks, including Node 24/npm 11 immutable npm validation for repositories that require that toolchain.
+The bundled policy blocks High/Critical advisories plus `AGPL-3.0-only` and `SSPL-1.0`. Consumers may replace it with a reviewed repository policy. Rollback requires pinning the prior Actions commit and retaining equivalent lock, advisory and license checks, including Node 24/npm 12.0.2 immutable npm validation for repositories that require that toolchain.
