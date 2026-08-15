@@ -39,6 +39,7 @@ class SecurityGateDiagnosticOutputTests(unittest.TestCase):
                 self.assertIn("REBUILD_FAILURE_REASON:", content)
                 self.assertIn("classification=${SECURITY_CLASSIFICATION}", content)
                 self.assertIn("failure_reason=${failure_reason}", content)
+                self.assertIn("REBUILD_FAILURE_REASON:-${REBUILD_RESULT:-none}", content)
                 self.assertIn("fixable=${FIXABLE_COUNT}", content)
                 self.assertIn("unfixed=${UNFIXED_COUNT}", content)
                 self.assertIn("misconfigurations=${MISCONFIGURATION_COUNT}", content)
