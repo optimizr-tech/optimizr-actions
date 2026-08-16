@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
 import hashlib
 import json
-from pathlib import Path
 import shutil
 import subprocess
 import tempfile
 import unittest
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 
 try:
     from scripts.security_gate import evidence
@@ -131,6 +131,105 @@ class SecurityGateEvidenceTests(unittest.TestCase):
         self.assertEqual(
             datetime.fromisoformat(expired_at.replace("Z", "+00:00")).tzinfo,
             timezone.utc,
+        )
+
+    def test_exception_policy_filters_only_matching_misconfiguration_paths(self) -> None:
+        source = self._write_json(
+            "exceptions.json",
+            {
+                "version": 1,
+                "vulnerabilities": [
+                    {
+                        "id": "DS-0002",
+                        "owner": "security@example.invalid",
+                        "statement": "Official PostgreSQL entrypoint requires root",
+                        "compensating_control": "Private network and no published port",
+                        "expires": "2026-08-19",
+                        "targets": ["."],
+                        "paths": ["docker/postgres/Dockerfile"],
+                    }
+                ],
+            },
+        )
+        policy_output = self.root / "generated-policy.json"
+        report = self._write_json(
+            "trivy.json",
+            {
+                "Results": [
+                    {
+                        "Target": "docker/postgres/Dockerfile",
+                        "Misconfigurations": [{"ID": "DS-0002", "Status": "FAIL"}],
+                    },
+                    {
+                        "Target": "Dockerfile",
+                        "Misconfigurations": [{"ID": "DS-0002", "Status": "FAIL"}],
+                    },
+                ]
+            },
+        )
+        filtered = self.root / "filtered.json"
+
+        evidence.render_exception_policy(
+            source,
+            target=".",
+            output=policy_output,
+            today=date(2026, 7, 19),
+        )
+
+        evidence.filter_report(report, policy_output, filtered)
+
+        rendered = json.loads(filtered.read_text(encoding="utf-8"))
+        self.assertEqual(
+            rendered["Results"][0]["Misconfigurations"],
+            [],
+        )
+        self.assertEqual(
+            rendered["Results"][1]["Misconfigurations"][0]["ID"],
+            "DS-0002",
+        )
+
+    def test_exception_policy_filters_only_matching_vulnerability_purls(self) -> None:
+        policy = self._write_json(
+            "policy.json",
+            {
+                "vulnerabilities": [
+                    {
+                        "id": "CVE-2026-0001",
+                        "purls": ["pkg:pypi/example@1.0"],
+                    }
+                ]
+            },
+        )
+        report = self._write_json(
+            "trivy.json",
+            {
+                "Results": [
+                    {
+                        "Vulnerabilities": [
+                            {
+                                "VulnerabilityID": "CVE-2026-0001",
+                                "PkgIdentifier": {"PURL": "pkg:pypi/example@1.0"},
+                            },
+                            {
+                                "VulnerabilityID": "CVE-2026-0001",
+                                "PkgIdentifier": {"PURL": "pkg:pypi/other@1.0"},
+                            },
+                        ]
+                    }
+                ]
+            },
+        )
+        output = self.root / "filtered.json"
+
+        evidence.filter_report(report, policy, output)
+
+        vulnerabilities = json.loads(output.read_text(encoding="utf-8"))["Results"][0][
+            "Vulnerabilities"
+        ]
+        self.assertEqual(len(vulnerabilities), 1)
+        self.assertEqual(
+            vulnerabilities[0]["PkgIdentifier"]["PURL"],
+            "pkg:pypi/other@1.0",
         )
 
     def test_rendered_exception_policy_is_accepted_by_trivy(self) -> None:

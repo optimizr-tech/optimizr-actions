@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import argparse
-from datetime import date, datetime, timezone
 import hashlib
 import json
-from pathlib import Path
 import re
-from typing import Any, Mapping, Sequence
-
+from collections.abc import Mapping, Sequence
+from datetime import date, datetime, timezone
+from pathlib import Path
+from typing import Any
 
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _IMAGE_DIGEST_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$", re.IGNORECASE)
@@ -115,7 +115,7 @@ def _digest_list(entry: Mapping[str, Any], field: str, index: int) -> list[str]:
         raise ValueError(
             f"vulnerabilities[{index}].{field} must contain full sha256 digests"
         )
-    return sorted(set(value.lower() for value in values))
+    return sorted({value.lower() for value in values})
 
 
 def render_exception_policy(
@@ -140,7 +140,7 @@ def render_exception_policy(
         raise ValueError("exception policy vulnerabilities must be an array")
 
     reference_date = today or datetime.now(timezone.utc).date()
-    normalized_lineage = sorted(set(digest.lower() for digest in lineage_digests))
+    normalized_lineage = sorted({digest.lower() for digest in lineage_digests})
     if any(not _IMAGE_DIGEST_PATTERN.fullmatch(digest) for digest in normalized_lineage):
         raise ValueError("lineage_digests must contain full sha256 digests")
     rendered: list[dict[str, Any]] = []
@@ -205,6 +205,125 @@ def render_exception_policy(
         "matched_lineage_digests": sorted(matched_lineage),
         "status": "validated",
     }
+
+
+def _normalize_path(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value.replace("\\", "/").lstrip("./")
+
+
+def _path_matches(candidates: Sequence[Any], expected: Sequence[Any]) -> bool:
+    normalized_candidates = {_normalize_path(value) for value in candidates}
+    normalized_expected = {_normalize_path(value) for value in expected}
+    normalized_candidates.discard("")
+    normalized_expected.discard("")
+    return any(
+        candidate == path
+        or candidate.endswith(f"/{path}")
+        for candidate in normalized_candidates
+        for path in normalized_expected
+    )
+
+
+def _finding_id(finding: Mapping[str, Any]) -> str:
+    for field in ("ID", "VulnerabilityID", "RuleID"):
+        value = finding.get(field)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _finding_purls(finding: Mapping[str, Any]) -> list[str]:
+    identifier = finding.get("PkgIdentifier")
+    if isinstance(identifier, Mapping):
+        return [
+            value
+            for value in (identifier.get("PURL"), identifier.get("Purl"))
+            if isinstance(value, str)
+        ]
+    return [
+        value
+        for value in (finding.get("PURL"), finding.get("PkgIdentifier"))
+        if isinstance(value, str)
+    ]
+
+
+def _finding_matches_exception(
+    finding: Mapping[str, Any],
+    exception: Mapping[str, Any],
+    *,
+    path_candidates: Sequence[Any],
+) -> bool:
+    if _finding_id(finding) != exception.get("id"):
+        return False
+    paths = exception.get("paths") or []
+    if paths and not _path_matches(path_candidates, paths):
+        return False
+    purls = exception.get("purls") or []
+    return not purls or bool(set(_finding_purls(finding)).intersection(purls))
+
+
+def filter_report(report: Path, policy: Path, output: Path) -> dict[str, int]:
+    """Remove only active, path/PURL-scoped exceptions from a Trivy report.
+
+    Trivy's native ``--ignorefile`` is line-oriented and cannot preserve the
+    reviewed ``paths``/``purls`` scope of the Optimizr JSON policy for
+    misconfigurations. This filter runs after scanning and keeps the raw
+    report available as evidence while producing the blocking view.
+    """
+    try:
+        report_payload = json.loads(report.read_text(encoding="utf-8"))
+        policy_payload = json.loads(policy.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("Trivy report or exception policy is invalid") from exc
+    if not isinstance(report_payload, dict) or not isinstance(policy_payload, dict):
+        raise TypeError("Trivy report and exception policy must be objects")
+    entries = policy_payload.get("vulnerabilities", [])
+    if not isinstance(entries, list) or any(not isinstance(item, dict) for item in entries):
+        raise TypeError("exception policy vulnerabilities must be an array of objects")
+
+    removed = {"vulnerabilities": 0, "misconfigurations": 0, "secrets": 0}
+    results = report_payload.get("Results", [])
+    if not isinstance(results, list):
+        raise TypeError("Trivy Results must be an array")
+
+    for result in results:
+        if not isinstance(result, dict):
+            continue
+        target = result.get("Target", "")
+        for field, count_key in (
+            ("Vulnerabilities", "vulnerabilities"),
+            ("Misconfigurations", "misconfigurations"),
+            ("Secrets", "secrets"),
+        ):
+            findings = result.get(field)
+            if not isinstance(findings, list):
+                continue
+            kept: list[Any] = []
+            for finding in findings:
+                if not isinstance(finding, dict):
+                    kept.append(finding)
+                    continue
+                path_candidates = [target, finding.get("Target"), finding.get("PkgPath")]
+                if any(
+                    _finding_matches_exception(
+                        finding,
+                        exception,
+                        path_candidates=path_candidates,
+                    )
+                    for exception in entries
+                ):
+                    removed[count_key] += 1
+                else:
+                    kept.append(finding)
+            result[field] = kept
+            summary = result.get("MisconfSummary")
+            if field == "Misconfigurations" and isinstance(summary, dict):
+                summary["Failures"] = len(kept)
+
+    _atomic_write_json(output, report_payload)
+    return removed
 
 
 def resolve_image_identity(report_path: Path) -> str:
@@ -329,6 +448,11 @@ def _command_render_exceptions(args: argparse.Namespace) -> int:
     return 0
 
 
+def _command_filter_report(args: argparse.Namespace) -> int:
+    filter_report(args.report, args.policy, args.output)
+    return 0
+
+
 def _command_resolve_image(args: argparse.Namespace) -> int:
     identity = resolve_image_identity(args.report)
     if not identity:
@@ -379,6 +503,12 @@ def _build_parser() -> argparse.ArgumentParser:
     render.add_argument("--summary-output", type=Path, required=True)
     render.add_argument("--lineage-digest", action="append", default=[])
     render.set_defaults(handler=_command_render_exceptions)
+
+    filter_parser = subparsers.add_parser("filter-report")
+    filter_parser.add_argument("--report", type=Path, required=True)
+    filter_parser.add_argument("--policy", type=Path, required=True)
+    filter_parser.add_argument("--output", type=Path, required=True)
+    filter_parser.set_defaults(handler=_command_filter_report)
 
     resolve = subparsers.add_parser("resolve-image")
     resolve.add_argument("--report", type=Path, required=True)

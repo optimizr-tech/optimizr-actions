@@ -68,6 +68,8 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertIn("chmod 700", content)
         self.assertIn("validate-db", content)
         self.assertIn("render-exceptions", content)
+        self.assertIn("filter-report", content)
+        self.assertIn('filtered_blocking_json_report="${prefix}-filtered.json"', content)
         self.assertIn("scripts/security_gate/report.py", content)
         self.assertIn("scripts/security_gate/aggregate.py", content)
         self.assertIn("scripts/security_gate/remediation_window.py", content)
