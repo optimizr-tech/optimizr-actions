@@ -470,6 +470,9 @@ jobs:
             --exclude='*.tar.gz'
             --exclude=backup/
           )
+          if [ "$DEPLOYMENT_MODE" = prebuilt-images ]; then
+            rsync_args+=(--exclude="$PREBUILT_COMPOSE_FILE")
+          fi
           if [ -f "$GITHUB_WORKSPACE/.deployignore" ]; then
             rsync_args+=(--exclude-from="$GITHUB_WORKSPACE/.deployignore")
           fi

@@ -65,6 +65,13 @@
       "evidence": "uv sync, ruff, optional mypy, pytest coverage results and coverage artifacts",
       "known_limitations": "Composite intended for _python-uv-test.yml; prefer the reusable workflow"
     },
+    ".github/actions/resolve-image-manifest/action.yml": {
+      "category": "deploy",
+      "trust_boundary": "trusted-push",
+      "evidence": "Sanitized service-to-RepoDigest manifest for pull-only immutable deployments",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/actions/resolve-image-manifest@v1"],
+      "known_limitations": "Requires Docker Compose and registry pull access for every declared service image"
+    },
     ".github/actions/quality-gate-scripts/action.yml": {
       "trust_boundary": "trusted-pr",
       "evidence": "Materialized quality_gate package pinned to this optimizr-actions revision",

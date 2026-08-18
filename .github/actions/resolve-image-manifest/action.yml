@@ -1,0 +1,98 @@
+name: Resolve immutable image manifest
+description: Resolve every Compose service image to the exact Docker RepoDigest
+
+inputs:
+  compose_file:
+    description: Repository-relative Compose file used to discover service images
+    required: false
+    default: docker-compose.yml
+  evidence_path:
+    description: Path for the sanitized service-to-digest JSON manifest
+    required: false
+    default: ""
+
+outputs:
+  prebuilt_images_json:
+    description: Compact service/image digest pairs for a pull-only deployment
+    value: ${{ steps.resolve.outputs.prebuilt_images_json }}
+  evidence_path:
+    description: Path of the sanitized image manifest
+    value: ${{ steps.resolve.outputs.evidence_path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve exact image digests
+      id: resolve
+      shell: bash
+      env:
+        INPUT_COMPOSE_FILE: ${{ inputs.compose_file }}
+        INPUT_EVIDENCE_PATH: ${{ inputs.evidence_path }}
+      run: |
+        set -euo pipefail
+        EVIDENCE_PATH="$INPUT_EVIDENCE_PATH" python3 - "$INPUT_COMPOSE_FILE" <<'PY'
+        import json
+        import os
+        from pathlib import Path
+        import subprocess
+        import sys
+
+        workspace = Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+        compose = Path(sys.argv[1])
+        if compose.is_absolute() or ".." in compose.parts or "\\" in str(compose):
+            raise SystemExit("compose_file must remain repository-relative")
+        compose = (workspace / compose).resolve()
+        if workspace not in compose.parents or not compose.is_file() or compose.is_symlink():
+            raise SystemExit("compose_file must be a regular file inside the workspace")
+
+        evidence_raw = os.environ.get("EVIDENCE_PATH", "")
+        evidence = Path(evidence_raw) if evidence_raw else workspace / "artifacts/image-manifest.json"
+        if evidence.exists() and evidence.is_symlink():
+            raise SystemExit("evidence_path must not be a symbolic link")
+        evidence.parent.mkdir(parents=True, exist_ok=True)
+
+        config = json.loads(
+            subprocess.check_output(
+                ["docker", "compose", "-f", str(compose), "config", "--format", "json"],
+                text=True,
+            )
+        )
+        services = config.get("services")
+        if not isinstance(services, dict) or not services:
+            raise SystemExit("Compose configuration has no services")
+
+        manifest = []
+        for service, definition in sorted(services.items()):
+            image = definition.get("image") if isinstance(definition, dict) else None
+            if not isinstance(image, str) or not image:
+                raise SystemExit(f"service {service} must declare an image")
+            subprocess.run(["docker", "pull", image], check=True)
+            raw = subprocess.check_output(
+                ["docker", "image", "inspect", "--format", "{{json .RepoDigests}}", image],
+                text=True,
+            )
+            digests = json.loads(raw)
+            repository_ref = image.rsplit("@", 1)[0]
+            last_slash = repository_ref.rfind("/")
+            repository = (
+                repository_ref.rsplit(":", 1)[0]
+                if ":" in repository_ref[last_slash + 1:]
+                else repository_ref
+            )
+            matches = [
+                value for value in digests
+                if isinstance(value, str) and value.startswith(repository + "@sha256:")
+            ]
+            if len(matches) != 1:
+                raise SystemExit(f"could not resolve one immutable digest for service {service}")
+            manifest.append({"service": service, "image": matches[0]})
+
+        payload = json.dumps(manifest, separators=(",", ":"), sort_keys=True)
+        evidence.write_text(payload + "\n", encoding="utf-8")
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+            output.write("prebuilt_images_json<<JSON\n")
+            output.write(payload + "\n")
+            output.write("JSON\n")
+            output.write(f"evidence_path={evidence}\n")
+        print(f"Resolved {len(manifest)} immutable runtime image digests")
+        PY

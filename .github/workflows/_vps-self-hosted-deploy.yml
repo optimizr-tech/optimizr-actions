@@ -30,6 +30,26 @@ on:
         required: false
         type: string
         default: docker-compose.yml
+      deployment_mode:
+        description: build keeps legacy VPS builds; prebuilt-images pulls immutable registry images
+        required: false
+        type: string
+        default: build
+      registry:
+        description: OCI registry hostname used by prebuilt-images when credentials are supplied
+        required: false
+        type: string
+        default: ghcr.io
+      prebuilt_images_json:
+        description: JSON array of service/image digest pairs for prebuilt-images
+        required: false
+        type: string
+        default: ""
+      prebuilt_compose_file:
+        description: Generated Compose override filename used for immutable image references
+        required: false
+        type: string
+        default: .optimizr-prebuilt-images.yml
       pre_deploy_validation:
         description: Run nginx -t before rollout
         required: false
@@ -195,6 +215,13 @@ on:
         required: false
         type: number
         default: 2147483648
+    secrets:
+      registry_username:
+        description: Optional read-only registry username used only by prebuilt-images
+        required: false
+      registry_password:
+        description: Optional read-only registry token used only by prebuilt-images
+        required: false
 
 jobs:
   deploy:
@@ -213,6 +240,9 @@ jobs:
       DEPLOY_TIMEOUT_MINUTES: ${{ inputs.deploy_timeout_minutes }}
       RECREATE_SERVICES: ${{ inputs.recreate_services }}
       DOCKER_MODE: ${{ inputs.docker_mode }}
+      DEPLOYMENT_MODE: ${{ inputs.deployment_mode }}
+      REGISTRY: ${{ inputs.registry }}
+      PREBUILT_COMPOSE_FILE: ${{ inputs.prebuilt_compose_file }}
 
     steps:
       - name: Validate effective deployment timeout
@@ -254,9 +284,106 @@ jobs:
                 ;;
             esac
           }
+          compose_cmd() {
+            local compose_args=(-f "$COMPOSE_FILE")
+            if [ "${DEPLOYMENT_MODE:-build}" = prebuilt-images ]; then
+              compose_args+=(-f "$PREBUILT_COMPOSE_FILE")
+            fi
+            docker_cmd compose "${compose_args[@]}" "$@"
+          }
           EOF
           chmod 700 "$docker_mode_file"
           echo "BASH_ENV=$docker_mode_file" >> "$GITHUB_ENV"
+
+      - name: Validate deployment mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$DEPLOYMENT_MODE" in
+            build|prebuilt-images) ;;
+            *)
+              echo "::error::Unsupported deployment_mode: $DEPLOYMENT_MODE (expected build or prebuilt-images)" >&2
+              exit 2
+              ;;
+          esac
+
+      - name: Prepare immutable registry images
+        if: inputs.deployment_mode == 'prebuilt-images'
+        shell: bash
+        env:
+          PREBUILT_IMAGES_JSON: ${{ inputs.prebuilt_images_json }}
+          PREBUILT_TSV: ${{ runner.temp }}/optimizr-prebuilt-images.tsv
+          REGISTRY_USERNAME: ${{ secrets.registry_username }}
+          REGISTRY_PASSWORD: ${{ secrets.registry_password }}
+        run: |
+          set -euo pipefail
+          [ -n "$PREBUILT_IMAGES_JSON" ] || {
+            echo "::error::prebuilt-images mode requires prebuilt_images_json" >&2
+            exit 2
+          }
+          if [ -n "$REGISTRY_USERNAME" ] || [ -n "$REGISTRY_PASSWORD" ]; then
+            [ -n "$REGISTRY_USERNAME" ] && [ -n "$REGISTRY_PASSWORD" ] || {
+              echo "::error::registry credentials must be supplied together" >&2
+              exit 2
+            }
+            docker_cmd login "$REGISTRY" --username "$REGISTRY_USERNAME" --password-stdin <<< "$REGISTRY_PASSWORD"
+          else
+            echo "Using anonymous pulls for public prebuilt images"
+          fi
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import re
+
+          deploy_path = Path(os.environ["DEPLOY_PATH"]).resolve()
+          relative = os.environ["PREBUILT_COMPOSE_FILE"]
+          candidate = Path(relative)
+          if not relative or candidate.is_absolute() or ".." in candidate.parts or "\\" in relative:
+              raise SystemExit("prebuilt_compose_file must remain below the deployment directory")
+          override = (deploy_path / candidate).resolve()
+          if deploy_path not in override.parents:
+              raise SystemExit("prebuilt_compose_file escaped the deployment directory")
+
+          items = json.loads(os.environ["PREBUILT_IMAGES_JSON"])
+          if not isinstance(items, list) or not items:
+              raise SystemExit("prebuilt_images_json must be a non-empty JSON array")
+          services = []
+          names = set()
+          for item in items:
+              if not isinstance(item, dict):
+                  raise SystemExit("prebuilt image entries must be objects")
+              service = item.get("service")
+              image = item.get("image")
+              if not isinstance(service, str) or not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,62}", service):
+                  raise SystemExit("prebuilt image service is invalid")
+              if service in names:
+                  raise SystemExit(f"duplicate prebuilt image service: {service}")
+              if not isinstance(image, str) or not re.fullmatch(r"[A-Za-z0-9./:_-]+@sha256:[0-9a-f]{64}", image):
+                  raise SystemExit("Refusing to deploy an image without an immutable digest")
+              names.add(service)
+              services.append((service, image))
+
+          lines = ["services:"]
+          for service, image in services:
+              lines.extend([f"  {service}:", f"    image: {json.dumps(image)}"])
+          override.parent.mkdir(parents=True, exist_ok=True)
+          override.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          Path(os.environ["PREBUILT_TSV"]).write_text(
+              "".join(f"{service}\t{image}\n" for service, image in services),
+              encoding="utf-8",
+          )
+          PY
+
+          while IFS=$'\t' read -r service image_ref; do
+            [ -n "$service" ] && [ -n "$image_ref" ] || continue
+            docker_cmd pull "$image_ref" >/dev/null
+            actual_repo_digest="$(docker_cmd image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$image_ref" 2>/dev/null | grep -Fx "$image_ref" || true)"
+            [ "$actual_repo_digest" = "$image_ref" ] || {
+              echo "::error::Pulled image digest does not match requested digest for $service" >&2
+              exit 1
+            }
+          done < "$PREBUILT_TSV"
 
       - name: Security gate (filesystem)
         id: security-filesystem-gate
@@ -338,6 +465,9 @@ jobs:
             --exclude='*.tar.gz'
             --exclude=backup/
           )
+          if [ "$DEPLOYMENT_MODE" = prebuilt-images ]; then
+            rsync_args+=(--exclude="$PREBUILT_COMPOSE_FILE")
+          fi
           if [ -f "$GITHUB_WORKSPACE/.deployignore" ]; then
             rsync_args+=(--exclude-from="$GITHUB_WORKSPACE/.deployignore")
           fi
@@ -414,15 +544,15 @@ jobs:
           done
 
       - name: Build images
-        if: inputs.build_image
+        if: inputs.build_image && inputs.deployment_mode != 'prebuilt-images'
         shell: bash
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
           if [ "${{ inputs.build_no_cache }}" = true ]; then
-            docker_cmd compose -f "$COMPOSE_FILE" build --no-cache
+            compose_cmd build --no-cache
           else
-            docker_cmd compose -f "$COMPOSE_FILE" build
+            compose_cmd build
           fi
 
       - name: Pull declared runtime images
@@ -431,7 +561,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          docker_cmd compose -f "$COMPOSE_FILE" pull --ignore-buildable
+          compose_cmd pull --ignore-buildable
 
       - name: Discover declarative Compose images
         id: security-images-initial
@@ -441,7 +571,7 @@ jobs:
           set -euo pipefail
           cd "$DEPLOY_PATH"
           mapfile -t configured_images < <(
-            docker_cmd compose -f "$COMPOSE_FILE" config --images | sed '/^$/d' | sort -u
+            compose_cmd config --images | sed '/^$/d' | sort -u
           )
           [ "${#configured_images[@]}" -gt 0 ] || {
             echo "::error::No Compose images available for required security scan" >&2
@@ -492,6 +622,7 @@ jobs:
         id: security-rebuild
         if: >-
           inputs.security_require_image_scan &&
+          inputs.deployment_mode != 'prebuilt-images' &&
           inputs.security_rebuild_retry_enabled &&
           steps.security-images-initial-gate.outcome == 'failure' &&
           steps.security-images-initial-gate.outputs.classification == 'actionable_vulnerability'
@@ -507,14 +638,14 @@ jobs:
 
       - name: Discover remediated Compose images
         id: security-images-remediated
-        if: steps.security-rebuild.outcome == 'success'
+        if: steps.security-rebuild.outcome == 'success' && inputs.deployment_mode != 'prebuilt-images'
         shell: bash
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          docker_cmd compose -f "$COMPOSE_FILE" pull --ignore-buildable || true
+          compose_cmd pull --ignore-buildable || true
           mapfile -t configured_images < <(
-            docker_cmd compose -f "$COMPOSE_FILE" config --images | sed '/^$/d' | sort -u
+            compose_cmd config --images | sed '/^$/d' | sort -u
           )
           [ "${#configured_images[@]}" -gt 0 ] || {
             echo "::error::No Compose images available after security rebuild" >&2
@@ -631,7 +762,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          docker_cmd compose -f "$COMPOSE_FILE" run --rm --no-deps --entrypoint '' nginx nginx -t
+          compose_cmd run --rm --no-deps --entrypoint '' nginx nginx -t
 
       - name: Roll out and verify primary container
         shell: bash
@@ -639,20 +770,20 @@ jobs:
           set -euo pipefail
           cd "$DEPLOY_PATH"
           set +e
-          docker_cmd compose -f "$COMPOSE_FILE" up -d --remove-orphans
+          compose_cmd up -d --remove-orphans ${{ inputs.deployment_mode == 'prebuilt-images' && '--no-build' || '' }}
           compose_status=$?
           set -e
           if [ "$compose_status" -ne 0 ]; then
-            docker_cmd compose -f "$COMPOSE_FILE" ps -a >&2 || true
+            compose_cmd ps -a >&2 || true
             mapfile -t exited_services < <(
-              docker_cmd compose -f "$COMPOSE_FILE" ps -a --status exited --services 2>/dev/null
+              compose_cmd ps -a --status exited --services 2>/dev/null
             )
             for service in "${exited_services[@]}"; do
-              container_id="$(docker_cmd compose -f "$COMPOSE_FILE" ps -a -q "$service" 2>/dev/null || true)"
+              container_id="$(compose_cmd ps -a -q "$service" 2>/dev/null || true)"
               [ -n "$container_id" ] || continue
               service_exit="$(docker_cmd inspect -f '{{.State.ExitCode}}' "$container_id" 2>/dev/null || echo unknown)"
               [ "$service_exit" != 0 ] || continue
-              docker_cmd compose -f "$COMPOSE_FILE" logs --no-color --tail=200 "$service" >&2 || true
+              compose_cmd logs --no-color --tail=200 "$service" >&2 || true
             done
             exit "$compose_status"
           fi
@@ -660,7 +791,7 @@ jobs:
           recreate_services=()
           if [ -n "${RECREATE_SERVICES//[[:space:]]/}" ]; then
             mapfile -t declared_services < <(
-              docker_cmd compose -f "$COMPOSE_FILE" config --services
+              compose_cmd config --services
             )
             for service in $RECREATE_SERVICES; do
               if ! [[ "$service" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$ ]]; then
@@ -676,7 +807,7 @@ jobs:
           fi
           if [ "${#recreate_services[@]}" -gt 0 ]; then
             echo "Recreating explicitly declared Compose services: ${recreate_services[*]}"
-            docker_cmd compose -f "$COMPOSE_FILE" up -d --no-deps --force-recreate --no-build "${recreate_services[@]}"
+            compose_cmd up -d --no-deps --force-recreate --no-build "${recreate_services[@]}"
           fi
 
           elapsed=0
@@ -687,13 +818,13 @@ jobs:
               exit 0
             fi
             if [ "$status" = 'not found' ] || [ -z "$status" ]; then
-              docker_cmd compose -f "$COMPOSE_FILE" logs --tail=50 >&2 || true
+              compose_cmd logs --tail=50 >&2 || true
               exit 1
             fi
             sleep 5
             elapsed=$((elapsed + 5))
           done
-          docker_cmd compose -f "$COMPOSE_FILE" logs --tail=50 >&2 || true
+          compose_cmd logs --tail=50 >&2 || true
           exit 1
 
       - name: Upload security evidence
@@ -773,6 +904,7 @@ jobs:
         with:
           deploy_path: ${{ env.DEPLOY_PATH }}
           compose_file: ${{ inputs.compose_file }}
+          compose_override_file: ${{ inputs.deployment_mode == 'prebuilt-images' && inputs.prebuilt_compose_file || '' }}
           container_name: ${{ inputs.container_name }}
           docker_mode: ${{ inputs.docker_mode }}
           status: ${{ job.status == 'success' && 'success' || 'failure' }}

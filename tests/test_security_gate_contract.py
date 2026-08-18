@@ -227,9 +227,9 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertLess(rebuild, final)
         self.assertLess(final, enforce)
         self.assertLess(enforce, deploy)
-        self.assertIn('docker_cmd compose -f "$COMPOSE_FILE" config --images', content)
+        self.assertIn('compose_cmd config --images', content)
         self.assertIn(
-            'docker_cmd compose -f "$COMPOSE_FILE" pull --ignore-buildable', content
+            'compose_cmd pull --ignore-buildable', content
         )
         self.assertIn("docker_cmd image inspect", content)
         self.assertNotIn('docker compose -f "$COMPOSE_FILE" images --quiet', content)
