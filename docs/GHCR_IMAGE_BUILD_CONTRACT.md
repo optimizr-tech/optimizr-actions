@@ -171,4 +171,3 @@ behavior until the migration is reviewed and complete.
   artifacts.
 - Whether consumers can opt into GHCR publication independently or require a
   reusable workflow major version.
-
