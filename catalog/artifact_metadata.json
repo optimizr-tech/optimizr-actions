@@ -161,6 +161,14 @@
       "evidence": "Commitlint results over the PR commit range",
       "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_commitlint.yml@v1"]
     },
+    ".github/workflows/_container-build-publish.yml": {
+      "category": "build",
+      "runner": ["hosted", "self-hosted-persistent", "self-hosted-ephemeral"],
+      "trust_boundary": "trusted-push",
+      "evidence": "Matrix BuildKit images, immutable digest manifest, cache evidence and optional registry provenance",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_container-build-publish.yml@v1"],
+      "known_limitations": "Private GitHub artifact attestations require Enterprise Cloud; BuildKit provenance and SBOM remain enabled by default"
+    },
     ".github/workflows/_dependabot-security-automerge.yml": {
       "runner": ["hosted"],
       "trust_boundary": "trusted-push",

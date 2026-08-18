@@ -1,0 +1,313 @@
+name: _container-build-publish
+
+on:
+  workflow_call:
+    inputs:
+      runner_json:
+        description: JSON labels for the build runner
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      registry:
+        description: OCI registry hostname
+        required: false
+        type: string
+        default: ghcr.io
+      image_namespace:
+        description: Registry namespace below the registry hostname
+        required: true
+        type: string
+      candidate_sha:
+        description: Exact source commit used for every image
+        required: true
+        type: string
+      services_json:
+        description: JSON array of service build definitions
+        required: true
+        type: string
+      push:
+        description: Publish images and provenance to the registry
+        required: false
+        type: boolean
+        default: false
+      cache_scope_prefix:
+        description: Prefix for isolated BuildKit GHA cache scopes
+        required: false
+        type: string
+        default: optimizr-container
+      provenance:
+        description: Emit BuildKit provenance metadata
+        required: false
+        type: boolean
+        default: true
+      sbom:
+        description: Emit BuildKit SBOM metadata
+        required: false
+        type: boolean
+        default: true
+      github_attestation:
+        description: Publish a GitHub artifact attestation; requires Enterprise Cloud for private repositories
+        required: false
+        type: boolean
+        default: false
+      artifact_retention_days:
+        description: Retention for release manifest artifacts
+        required: false
+        type: number
+        default: 30
+    secrets:
+      registry_username:
+        description: Registry username used only when push is true
+        required: false
+      registry_password:
+        description: Registry write token used only when push is true
+        required: false
+    outputs:
+      manifest_artifact:
+        description: Name of the immutable release manifest artifact
+        value: ${{ jobs.aggregate.outputs.manifest_artifact }}
+      manifest_json:
+        description: Compact release manifest with image digest references
+        value: ${{ jobs.aggregate.outputs.manifest_json }}
+      prebuilt_images_json:
+        description: Service/image digest pairs ready for a pull-only deploy
+        value: ${{ jobs.aggregate.outputs.prebuilt_images_json }}
+
+permissions:
+  contents: read
+  packages: write
+  attestations: write
+  id-token: write
+
+jobs:
+  validate:
+    name: Validate container build contract
+    runs-on: ubuntu-latest
+    outputs:
+      services_json: ${{ steps.validate.outputs.services_json }}
+    steps:
+      - name: Validate service definitions and image namespace
+        id: validate
+        shell: bash
+        env:
+          SERVICES_JSON: ${{ inputs.services_json }}
+          IMAGE_NAMESPACE: ${{ inputs.image_namespace }}
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          REGISTRY: ${{ inputs.registry }}
+          CACHE_SCOPE_PREFIX: ${{ inputs.cache_scope_prefix }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+
+          sha = os.environ["CANDIDATE_SHA"]
+          if not re.fullmatch(r"[0-9a-f]{40,64}", sha):
+              raise SystemExit("candidate_sha must be a full hexadecimal commit SHA")
+
+          for key in ("REGISTRY", "IMAGE_NAMESPACE", "CACHE_SCOPE_PREFIX"):
+              value = os.environ[key]
+              if not value or len(value) > 255 or any(char in value for char in "\r\n $`'"):
+                  raise SystemExit(f"{key} contains an unsafe or empty value")
+
+          services = json.loads(os.environ["SERVICES_JSON"])
+          if not isinstance(services, list) or not services:
+              raise SystemExit("services_json must be a non-empty JSON array")
+          names = set()
+          for service in services:
+              if not isinstance(service, dict):
+                  raise SystemExit("each service definition must be an object")
+              name = service.get("name")
+              context = service.get("context")
+              dockerfile = service.get("dockerfile")
+              if not isinstance(name, str) or not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,62}", name):
+                  raise SystemExit("service names must be bounded lowercase identifiers")
+              if name in names:
+                  raise SystemExit(f"duplicate service definition: {name}")
+              names.add(name)
+              for field, value in (("context", context), ("dockerfile", dockerfile)):
+                  if not isinstance(value, str) or not value or value.startswith("/") or ".." in value.split("/"):
+                      raise SystemExit(f"service {name} has an unsafe {field}")
+              target = service.get("target", "")
+              if not isinstance(target, str) or "\n" in target:
+                  raise SystemExit(f"service {name} has an invalid target")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("services_json=" + json.dumps(services, separators=(",", ":")) + "\n")
+          PY
+
+  build:
+    name: Build ${{ matrix.service.name }}
+    needs: validate
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        service: ${{ fromJSON(needs.validate.outputs.services_json) }}
+    env:
+      IMAGE_NAME: ${{ inputs.registry }}/${{ inputs.image_namespace }}/${{ matrix.service.name }}
+      SERVICE_NAME: ${{ matrix.service.name }}
+      CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      - name: Log in to GHCR for publish
+        if: inputs.push
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ secrets.registry_username }}
+          password: ${{ secrets.registry_password }}
+
+      - name: Build image
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: ${{ matrix.service.context }}
+          file: ${{ matrix.service.dockerfile }}
+          target: ${{ matrix.service.target || '' }}
+          build-args: ${{ matrix.service.build_args || '' }}
+          push: ${{ inputs.push }}
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ inputs.candidate_sha }}
+            ${{ env.IMAGE_NAME }}:sha-${{ inputs.candidate_sha }}
+          cache-from: type=gha,scope=${{ inputs.cache_scope_prefix }}-${{ matrix.service.name }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.cache_scope_prefix }}-${{ matrix.service.name }}
+          provenance: ${{ inputs.provenance }}
+          sbom: ${{ inputs.sbom }}
+
+      - name: Attest published image provenance
+        if: inputs.push && inputs.provenance && inputs.github_attestation
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Write image digest fragment
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE_TAG: ${{ env.IMAGE_NAME }}:${{ inputs.candidate_sha }}
+          PUBLISHED: ${{ inputs.push }}
+          FRAGMENT_DIR: ${{ runner.temp }}/optimizr-container-manifest
+        run: |
+          set -euo pipefail
+          mkdir -p "$FRAGMENT_DIR"
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          digest = os.environ["IMAGE_DIGEST"]
+          if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+              raise SystemExit("Buildx did not return an immutable image digest")
+          image_tag = os.environ["IMAGE_TAG"]
+          image_name = image_tag.rsplit(":", 1)[0]
+          payload = {
+              "service": os.environ["SERVICE_NAME"],
+              "image": f"{image_name}@{digest}",
+              "tag": image_tag,
+              "digest": digest,
+              "published": os.environ["PUBLISHED"] == "true",
+          }
+          Path(os.environ["FRAGMENT_DIR"], "release-fragment.json").write_text(
+              json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          PY
+
+      - name: Upload image digest fragment
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: container-manifest-${{ matrix.service.name }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/optimizr-container-manifest/release-fragment.json
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact_retention_days }}
+
+  aggregate:
+    name: Aggregate release manifest
+    needs: build
+    if: needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      manifest_artifact: ${{ steps.manifest.outputs.manifest_artifact }}
+      manifest_json: ${{ steps.manifest.outputs.manifest_json }}
+      prebuilt_images_json: ${{ steps.manifest.outputs.prebuilt_images_json }}
+    steps:
+      - name: Download image digest fragments
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: container-manifest-*-${{ github.run_id }}
+          merge-multiple: true
+          path: fragments
+
+      - name: Create release manifest
+        id: manifest
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          IMAGE_NAMESPACE: ${{ inputs.image_namespace }}
+          REGISTRY: ${{ inputs.registry }}
+          SERVICES_JSON: ${{ inputs.services_json }}
+          PUSHED: ${{ inputs.push }}
+          REPOSITORY: ${{ github.repository }}
+          FRAGMENTS_DIR: fragments
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          expected = json.loads(os.environ["SERVICES_JSON"])
+          expected_names = {item["name"] for item in expected}
+          fragments = []
+          for path in sorted(Path(os.environ["FRAGMENTS_DIR"]).glob("release-fragment.json")):
+              fragments.append(json.loads(path.read_text(encoding="utf-8")))
+          if {item.get("service") for item in fragments} != expected_names:
+              raise SystemExit("release manifest does not contain exactly the requested services")
+          for item in fragments:
+              if not re.fullmatch(r"sha256:[0-9a-f]{64}", item.get("digest", "")):
+                  raise SystemExit("release manifest contains a non-immutable digest")
+              if item.get("image", "").rsplit("@", 1)[-1] != item["digest"]:
+                  raise SystemExit("release manifest image reference does not match its digest")
+
+          manifest = {
+              "schema_version": "1.0",
+              "repository": os.environ["REPOSITORY"],
+              "commit_sha": os.environ["CANDIDATE_SHA"],
+              "registry": os.environ["REGISTRY"],
+              "image_namespace": os.environ["IMAGE_NAMESPACE"],
+              "published": os.environ["PUSHED"] == "true",
+              "images": sorted(fragments, key=lambda item: item["service"]),
+          }
+          path = Path("release-manifest.json")
+          path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          compact = json.dumps(manifest, separators=(",", ":"), sort_keys=True)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("manifest_artifact=release-manifest-${GITHUB_SHA}\n".replace("${GITHUB_SHA}", os.environ["CANDIDATE_SHA"]))
+              output.write("manifest_json=" + compact + "\n")
+              output.write("prebuilt_images_json=" + json.dumps(
+                  [{"service": item["service"], "image": item["image"]} for item in manifest["images"]],
+                  separators=(",", ":"),
+              ) + "\n")
+          PY
+
+      - name: Upload immutable release manifest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: release-manifest-${{ inputs.candidate_sha }}
+          path: release-manifest.json
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact_retention_days }}

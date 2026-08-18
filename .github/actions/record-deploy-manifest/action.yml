@@ -9,6 +9,10 @@ inputs:
     description: Compose file relative to deploy_path
     required: false
     default: docker-compose.yml
+  compose_override_file:
+    description: Optional second Compose file relative to deploy_path
+    required: false
+    default: ""
   container_name:
     description: Primary container used for the health result
     required: true
@@ -71,6 +75,7 @@ runs:
       env:
         INPUT_DEPLOY_PATH: ${{ inputs.deploy_path }}
         INPUT_COMPOSE_FILE: ${{ inputs.compose_file }}
+        INPUT_COMPOSE_OVERRIDE_FILE: ${{ inputs.compose_override_file }}
         INPUT_CONTAINER_NAME: ${{ inputs.container_name }}
         INPUT_SERVICES: ${{ inputs.services }}
         INPUT_DOCKER_MODE: ${{ inputs.docker_mode }}
@@ -89,6 +94,7 @@ runs:
         record_output="$(python3 "$action_root/scripts/deploy_manifest/record.py" \
           --deploy-path "$INPUT_DEPLOY_PATH" \
           --compose-file "$INPUT_COMPOSE_FILE" \
+          --compose-override-file "$INPUT_COMPOSE_OVERRIDE_FILE" \
           --container-name "$INPUT_CONTAINER_NAME" \
           --services "$INPUT_SERVICES" \
           --docker-mode "$INPUT_DOCKER_MODE" \

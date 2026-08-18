@@ -64,6 +64,8 @@ class DeployManifestActionTests(unittest.TestCase):
         self.assertNotIn("eval ", content)
         self.assertIn("optional_build_result:", content)
         self.assertIn("migration_result:", content)
+        self.assertIn("compose_override_file:", content)
+        self.assertIn("--compose-override-file", content)
 
     def test_outputs_are_forwarded(self) -> None:
         for action, step in ((WRITER_ACTION, "write"), (RECORDER_ACTION, "record")):
