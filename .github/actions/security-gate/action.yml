@@ -323,7 +323,7 @@ runs:
         for target in "${targets[@]}"; do
           slug="$(printf '%s' "$target" | sha256sum | cut -c1-16)"
           prefix="$evidence_dir/${INPUT_SCAN_TYPE}-${slug}"
-          ignore_file="${prefix}-ignore.yaml"
+          exception_policy_file="${prefix}-exceptions-policy.json"
           exception_summary="${prefix}-exceptions.json"
           baseline_summary="${prefix}-baseline.json"
           table_report="${prefix}.txt"
@@ -412,7 +412,7 @@ runs:
           exception_args=(
             render-exceptions
             --target "$target"
-            --output "$ignore_file"
+            --output "$exception_policy_file"
             --summary-output "$exception_summary"
             "${lineage_args[@]}"
           )
@@ -424,7 +424,6 @@ runs:
           report_args=(
             --cache-dir "$cache_dir"
             --severity "$INPUT_SEVERITY"
-            --ignorefile "$ignore_file"
             --show-suppressed
             --scanners "$scanners"
           )
@@ -485,10 +484,38 @@ runs:
           scan_status=$?
           set -e
 
+          filtered_blocking_json_report="${prefix}-filtered.json"
+          python3 "$evidence_tool" filter-report \
+            --report "$blocking_json_report" \
+            --policy "$exception_policy_file" \
+            --output "$filtered_blocking_json_report"
+          filtered_summary="${prefix}-filtered-summary.json"
+          python3 "$report_tool" \
+            --report "$filtered_blocking_json_report" \
+            --output "$filtered_summary"
+          if python3 - "$filtered_summary" <<'PY'
+        import json
+        import sys
+
+        with open(sys.argv[1], encoding="utf-8") as stream:
+            summary = json.load(stream)
+        blocked = (
+            summary["vulnerabilities"]["fixable"]
+            or summary["misconfigurations"]
+            or summary["secrets"]
+        )
+        raise SystemExit(1 if blocked else 0)
+        PY
+          then
+            scan_status=0
+          else
+            scan_status=1
+          fi
+
           if [ -n "$INPUT_BASELINE_FILE" ]; then
             set +e
             python3 "$baseline_tool" \
-              --report "$blocking_json_report" \
+              --report "$filtered_blocking_json_report" \
               --baseline "$INPUT_BASELINE_FILE" \
               --scope "$target" \
               --output "$enforced_json_report" \
@@ -571,6 +598,7 @@ runs:
             --report "json=$json_report"
             --report "complete_summary=$complete_summary"
             --report "blocking_json=$blocking_json_report"
+            --report "filtered_blocking_json=$filtered_blocking_json_report"
             --report "enforced_json=$enforced_json_report"
             --report "baseline=$baseline_summary"
             --report "sarif=$sarif_report"
