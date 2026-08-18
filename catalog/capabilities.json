@@ -364,6 +364,7 @@
       ],
       "inputs": {
         "compose_file": "",
+        "compose_override_file": "",
         "container_name": "",
         "deploy_path": "",
         "docker_mode": "",
@@ -393,7 +394,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "7e5aa02186d2f9ec85e1a0743b45ee79ea9a3dd13753722a393720726e19ba14",
+      "source_sha256": "79d845e0795953f5b82f28d5218e558873ca04b3a5a07bfe390b036bab4c2f4a",
       "trust_boundary": "trusted-push"
     },
     {
@@ -458,6 +459,34 @@
       ],
       "source_sha256": "fead6db205d3daa9c965b2c652d5898eaf0393d981343895522822d4d724efc5",
       "trust_boundary": "trusted-pr"
+    },
+    {
+      "category": "deploy",
+      "evidence": "Sanitized service-to-RepoDigest manifest for pull-only immutable deployments",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/actions/resolve-image-manifest@v1"
+      ],
+      "inputs": {
+        "compose_file": "",
+        "evidence_path": ""
+      },
+      "kind": "action",
+      "known_limitations": "Requires Docker Compose and registry pull access for every declared service image",
+      "maturity": "stable-v1",
+      "metadata_status": "classified",
+      "outputs": {
+        "evidence_path": "",
+        "prebuilt_images_json": ""
+      },
+      "path": ".github/actions/resolve-image-manifest/action.yml",
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "b1c766cbf85599bdca6b9e6b18ac8555f3d89b4894f342e9faf23e97eefccd3c",
+      "trust_boundary": "trusted-push"
     },
     {
       "category": "security",
@@ -989,6 +1018,47 @@
       ],
       "source_sha256": "5b4701b18a0494ba763f5cf81f34fbf9f0930c57ba36926923e346365971dd7d",
       "trust_boundary": "untrusted-pr"
+    },
+    {
+      "category": "build",
+      "evidence": "Matrix BuildKit images, immutable digest manifest, cache evidence and optional registry provenance",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_container-build-publish.yml@v1"
+      ],
+      "inputs": {
+        "artifact_retention_days": "",
+        "cache_scope_prefix": "",
+        "candidate_sha": "",
+        "github_attestation": "",
+        "image_namespace": "",
+        "provenance": "",
+        "push": "",
+        "registry": "",
+        "runner_json": "",
+        "sbom": "",
+        "security_db_max_age_hours": "",
+        "security_severity": "",
+        "security_trivy_version": "",
+        "services_json": ""
+      },
+      "kind": "workflow",
+      "known_limitations": "Private GitHub artifact attestations require Enterprise Cloud; BuildKit provenance and SBOM remain enabled by default",
+      "maturity": "stable-v1",
+      "metadata_status": "classified",
+      "outputs": {
+        "manifest_artifact": "",
+        "manifest_json": "",
+        "prebuilt_images_json": ""
+      },
+      "path": ".github/workflows/_container-build-publish.yml",
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "fcf29670ddaa590e27c3e681cd2c382adb96a8a6d26766b5ab50df4d4a570f3b",
+      "trust_boundary": "trusted-push"
     },
     {
       "category": "security",
@@ -1910,6 +1980,7 @@
         "deploy_snapshot_retention_count": "",
         "deploy_snapshot_retention_days": "",
         "deploy_timeout_minutes": "",
+        "deployment_mode": "",
         "docker_mode": "",
         "ensure_networks": "",
         "ensure_volumes": "",
@@ -1917,6 +1988,9 @@
         "image_age_threshold": "",
         "post_deploy_commands": "",
         "pre_deploy_commands": "",
+        "prebuilt_compose_file": "",
+        "prebuilt_images_json": "",
+        "registry": "",
         "run_prune": "",
         "runner_label": "",
         "security_db_max_age_hours": "",
@@ -1948,7 +2022,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "335b0512d60626e27b00568efeb5fd9aeecd66fe2baeedb8abe8dff37a1563ce",
+      "source_sha256": "7af7bd3ec0fed054798ba9685015be4f4a1bf461e9d49e8917c4235613304c64",
       "trust_boundary": "trusted-push"
     },
     {
@@ -1971,6 +2045,7 @@
         "deploy_snapshot_retention_count": "",
         "deploy_snapshot_retention_days": "",
         "deploy_timeout_minutes": "",
+        "deployment_mode": "",
         "docker_mode": "",
         "ensure_networks": "",
         "ensure_volumes": "",
@@ -1978,7 +2053,10 @@
         "homologation_environment": "",
         "image_age_threshold": "",
         "pre_deploy_validation": "",
+        "prebuilt_compose_file": "",
+        "prebuilt_images_json": "",
         "recreate_services": "",
+        "registry": "",
         "run_prune": "",
         "runner_label": "",
         "security_baseline_file": "",
@@ -2007,7 +2085,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "a124328e47c0daba1e8ee25d0f7429c11dbb697fd519dfc6324d4c79fa50ba05",
+      "source_sha256": "938c7d938360962bc3ef2e81ead20df0332e7645e3b0f4f94cad5ce1d2e73dd2",
       "trust_boundary": "trusted-push"
     },
     {

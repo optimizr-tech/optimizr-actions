@@ -18,7 +18,7 @@ class DeployCacheContractTests(unittest.TestCase):
         build_input = content[content.index("      build_no_cache:") :]
         self.assertIn("default: false", build_input.split("health_timeout:", 1)[0])
         self.assertIn('if [ "${{ inputs.build_no_cache }}" = true ]; then', content)
-        self.assertIn("docker_cmd compose -f \"$COMPOSE_FILE\" build", content)
+        self.assertIn("compose_cmd build", content)
 
     def test_monorepo_service_build_uses_cache_by_default(self) -> None:
         content = read(".github/workflows/_vps-monorepo-deploy.yml")

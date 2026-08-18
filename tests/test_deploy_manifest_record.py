@@ -24,6 +24,7 @@ class DeployManifestRecordTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             deploy_path = Path(temporary)
             (deploy_path / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+            (deploy_path / "prebuilt-images.yml").write_text("services: {}\n", encoding="utf-8")
             calls: list[list[str]] = []
 
             def runner(argv: list[str], *, cwd: Path) -> Result:
@@ -41,6 +42,7 @@ class DeployManifestRecordTests(unittest.TestCase):
             services, images, healthchecks = collect_state(
                 deploy_path=deploy_path,
                 compose_file="docker-compose.yml",
+                compose_override_file="prebuilt-images.yml",
                 container_name="api-container",
                 services="",
                 docker_mode="direct",
@@ -55,6 +57,7 @@ class DeployManifestRecordTests(unittest.TestCase):
             self.assertNotIn("-c", flattened)
             self.assertIn("config", flattened)
             self.assertIn("inspect", flattened)
+            self.assertTrue(any(argument.endswith("prebuilt-images.yml") for argument in flattened))
 
     def test_rejects_compose_traversal(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

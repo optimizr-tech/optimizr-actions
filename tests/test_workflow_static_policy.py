@@ -134,11 +134,11 @@ class WorkflowStaticPolicyTests(unittest.TestCase):
     def test_failed_compose_diagnostics_include_stopped_services(self) -> None:
         content = read(".github/workflows/_vps-self-hosted-deploy.yml")
         self.assertIn(
-            'docker_cmd compose -f "$COMPOSE_FILE" ps -a --status exited --services',
+            "compose_cmd ps -a --status exited --services",
             content,
         )
         self.assertIn(
-            'docker_cmd compose -f "$COMPOSE_FILE" ps -a -q "$service"',
+            'compose_cmd ps -a -q "$service"',
             content,
         )
 

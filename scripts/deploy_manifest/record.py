@@ -76,6 +76,7 @@ def collect_state(
     deploy_path: Path,
     compose_file: str,
     container_name: str,
+    compose_override_file: str = "",
     services: str,
     docker_mode: str,
     runner: Any = _run,
@@ -84,6 +85,9 @@ def collect_state(
     compose = _compose_path(deploy_root, compose_file)
     prefix = _docker_prefix(docker_mode)
     compose_prefix = [*prefix, "compose", "-f", str(compose)]
+    if compose_override_file:
+        override = _compose_path(deploy_root, compose_override_file)
+        compose_prefix.extend(("-f", str(override)))
 
     selected_services = _split_services(services)
     if not selected_services:
@@ -144,6 +148,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--deploy-path", type=Path, required=True)
     parser.add_argument("--compose-file", required=True)
+    parser.add_argument("--compose-override-file", default="")
     parser.add_argument("--container-name", required=True)
     parser.add_argument("--services", default="")
     parser.add_argument("--docker-mode", choices=sorted(_ALLOWED_DOCKER_MODES), default="sudo")
@@ -169,6 +174,7 @@ def main(argv: list[str] | None = None) -> int:
         services, images, healthchecks = collect_state(
             deploy_path=args.deploy_path,
             compose_file=args.compose_file,
+            compose_override_file=args.compose_override_file,
             container_name=args.container_name,
             services=args.services,
             docker_mode=args.docker_mode,
