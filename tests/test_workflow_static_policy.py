@@ -88,6 +88,20 @@ class WorkflowStaticPolicyTests(unittest.TestCase):
         self.assertIn('"${baseline_args[@]}"', content)
         self.assertIn('"${post_args[@]}"', content)
 
+    def test_quality_gate_pnpm_collectors_bootstrap_node_before_pnpm(self) -> None:
+        for workflow_name in (
+            "_quality-gate-collect-security.yml",
+            "_quality-gate-collect-dup.yml",
+        ):
+            content = read(f".github/workflows/{workflow_name}")
+            with self.subTest(workflow=workflow_name):
+                self.assertLess(
+                    content.index("Install Node.js"),
+                    content.index("Install pnpm"),
+                )
+                self.assertIn("node-version: 20", content)
+                self.assertNotIn("standalone: true", content)
+
     def test_release_gate_pins_validation_images_by_digest(self) -> None:
         content = read(".github/workflows/move-v1.yml")
         self.assertIn(
