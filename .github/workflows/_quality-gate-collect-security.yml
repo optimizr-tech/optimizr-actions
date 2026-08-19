@@ -124,13 +124,19 @@ jobs:
         if: matrix.tool != 'pnpm-audit'
         run: uv sync ${{ inputs.uv_sync_args }}
 
+      - name: Install Node.js before pnpm bootstrap
+        if: matrix.tool == 'pnpm-audit'
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20
+
       - name: Install pnpm
         if: matrix.tool == 'pnpm-audit'
         uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093
         with:
           version: 10
 
-      - name: Install Node.js
+      - name: Initialize pnpm cache
         if: matrix.tool == 'pnpm-audit'
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
