@@ -32,6 +32,17 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         self.assertIn("npx semantic-release --dry-run", text)
         self.assertIn("run: npx semantic-release", text)
 
+    def test_workflow_rejects_incompatible_conventional_commits_preset(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("Validate changelog preset compatibility", text)
+        self.assertIn("conventional-changelog-conventionalcommits", text)
+        self.assertIn("package-lock.json", text)
+        self.assertIn("major version 9", text)
+
+        compatibility_index = text.index("Validate changelog preset compatibility")
+        dry_run_index = text.index("npx semantic-release --dry-run")
+        self.assertLess(compatibility_index, dry_run_index)
+
     def test_existing_release_and_badge_contracts_are_preserved(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("releaserc_source:", text)
