@@ -10,6 +10,10 @@ The default dependency command remains `npm ci`. A reviewed consumer may overrid
 
 The semantic-release runtime and plugins are installed ephemerally with `--package-lock=false`. The reusable does not regenerate `package-lock.json` and does not use `npm install --package-lock-only`.
 
+## Changelog preset compatibility
+
+Consumers that set `preset: conventionalcommits` in a local `.releaserc.json` must declare and lock `conventional-changelog-conventionalcommits` on major version 9. The current `@semantic-release/release-notes-generator` 14 runtime uses `conventional-changelog-writer` 8; the preset 10 templates require writer 9 and fail while generating notes. The reusable checks the manifest and lockfile before the dry-run and fails with the dependency mismatch instead of allowing Release to fail later.
+
 ```yaml
 jobs:
   release:

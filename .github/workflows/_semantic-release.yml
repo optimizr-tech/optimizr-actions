@@ -211,6 +211,50 @@ jobs:
           printf 'Installing semantic-release runtime packages:\n%s\n' "${install_packages[@]}"
           npm install --no-save --package-lock=false --no-audit --no-fund "${install_packages[@]}"
 
+      - name: Validate changelog preset compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+
+          const releaseConfig = JSON.parse(fs.readFileSync(".releaserc.json", "utf8"));
+          const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const packageLock = JSON.parse(fs.readFileSync("package-lock.json", "utf8"));
+          const plugins = Array.isArray(releaseConfig.plugins) ? releaseConfig.plugins : [];
+          const usesConventionalCommitsPreset = plugins.some((plugin) => {
+            const options = Array.isArray(plugin) && plugin.length > 1 ? plugin[1] : null;
+            return options && options.preset === "conventionalcommits";
+          });
+
+          if (!usesConventionalCommitsPreset) {
+            console.log("No conventionalcommits preset selected; compatibility check is not required.");
+            process.exit(0);
+          }
+
+          const dependencies = {
+            ...(packageJson.dependencies || {}),
+            ...(packageJson.devDependencies || {}),
+          };
+          const presetSpec = dependencies["conventional-changelog-conventionalcommits"];
+          const lockedPreset = packageLock.packages?.[
+            "node_modules/conventional-changelog-conventionalcommits"
+          ]?.version;
+          const declaredMajor = String(presetSpec || "").match(/(?:^|[^0-9])(\d+)/)?.[1];
+          const lockedMajor = String(lockedPreset || "").match(/^(\d+)/)?.[1];
+
+          if (declaredMajor !== "9" || lockedMajor !== "9") {
+            console.error(
+              "::error::preset=conventionalcommits requires conventional-changelog-conventionalcommits major version 9 " +
+                "with @semantic-release/release-notes-generator@14 (writer 8 compatibility). " +
+                `Found manifest=${presetSpec || "missing"}, lockfile=${lockedPreset || "missing"}.`
+            );
+            process.exit(1);
+          }
+
+          console.log(`Compatible conventionalcommits preset ${lockedPreset} selected.`);
+          NODE
+
       - name: Verify release plan
         env:
           GITHUB_TOKEN: ${{ github.token }}
