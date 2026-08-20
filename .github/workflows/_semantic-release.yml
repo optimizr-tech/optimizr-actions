@@ -237,22 +237,41 @@ jobs:
             ...(packageJson.devDependencies || {}),
           };
           const presetSpec = dependencies["conventional-changelog-conventionalcommits"];
+          const writerSpec = dependencies["conventional-changelog-writer"];
           const lockedPreset = packageLock.packages?.[
             "node_modules/conventional-changelog-conventionalcommits"
           ]?.version;
-          const declaredMajor = String(presetSpec || "").match(/(?:^|[^0-9])(\d+)/)?.[1];
-          const lockedMajor = String(lockedPreset || "").match(/^(\d+)/)?.[1];
+          const lockedWriter = packageLock.packages?.[
+            "node_modules/conventional-changelog-writer"
+          ]?.version;
+          const declaredPresetMajor = String(presetSpec || "").match(/(?:^|[^0-9])(\d+)/)?.[1];
+          const lockedPresetMajor = String(lockedPreset || "").match(/^(\d+)/)?.[1];
+          const declaredWriterMajor = String(writerSpec || "").match(/(?:^|[^0-9])(\d+)/)?.[1];
+          const lockedWriterMajor = String(lockedWriter || "").match(/^(\d+)/)?.[1];
+          const compatibleWriterByPreset = { "9": "8", "10": "9" };
+          const requiredWriterMajor = compatibleWriterByPreset[lockedPresetMajor];
+          const writerDeclarationMatches =
+            declaredWriterMajor === requiredWriterMajor ||
+            (lockedPresetMajor === "9" && !writerSpec);
 
-          if (declaredMajor !== "9" || lockedMajor !== "9") {
+          if (
+            !requiredWriterMajor ||
+            declaredPresetMajor !== lockedPresetMajor ||
+            !writerDeclarationMatches ||
+            lockedWriterMajor !== requiredWriterMajor
+          ) {
             console.error(
-              "::error::preset=conventionalcommits requires conventional-changelog-conventionalcommits major version 9 " +
-                "with @semantic-release/release-notes-generator@14 (writer 8 compatibility). " +
-                `Found manifest=${presetSpec || "missing"}, lockfile=${lockedPreset || "missing"}.`
+              "::error::unsupported conventionalcommits compatibility pair. " +
+                "Supported pairs are preset 9.x + writer 8.x, or preset 10.x + writer 9.x. " +
+                `Found preset manifest=${presetSpec || "missing"}, preset lockfile=${lockedPreset || "missing"}, ` +
+                `writer manifest=${writerSpec || "missing"}, writer lockfile=${lockedWriter || "missing"}.`
             );
             process.exit(1);
           }
 
-          console.log(`Compatible conventionalcommits preset ${lockedPreset} selected.`);
+          console.log(
+            `Compatible conventionalcommits preset ${lockedPreset} + writer ${lockedWriter} selected.`
+          );
           NODE
 
       - name: Verify release plan
