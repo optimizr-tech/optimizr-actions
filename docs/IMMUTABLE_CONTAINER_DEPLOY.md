@@ -16,6 +16,15 @@ same digest to the SHA tags. A candidate that fails either check cannot be
 promoted. The published SHA tags are convenience references; production must
 consume the manifest's `image@sha256:...` values.
 
+The reusable accepts `runner_json` for the matrix build and
+`control_runner_json` for service-definition validation and release-manifest
+aggregation. Both default to `["ubuntu-latest"]` for backwards compatibility.
+Organizations that do not rely on GitHub-hosted billing should set both inputs
+to a dedicated self-hosted container-builder label with Docker, Buildx, Python,
+and artifact-download support. Do not point these jobs at a production service
+runner by default: the image matrix can contend for CPU, memory, disk, and
+Docker cache.
+
 `_vps-monorepo-deploy.yml` and `_vps-self-hosted-deploy.yml` keep
 `deployment_mode: build` as their compatible default. Their
 `deployment_mode: prebuilt-images` mode requires a non-empty
@@ -53,19 +62,22 @@ first consuming the release manifest and then opting into
 
 Repositories that consume upstream images can use the canonical composite
 action `resolve-image-manifest@v1`. It converts Compose service image tags
-into a sanitized service-to-`RepoDigest` manifest on a hosted runner, so the
-shared self-hosted deploy reusable can consume the same immutable contract
-without duplicating Docker-resolution logic in each repository.
+into a sanitized service-to-`RepoDigest` manifest on the caller-selected runner
+with Docker, so the shared self-hosted deploy reusable can consume the same
+immutable contract without duplicating Docker-resolution logic in each
+repository.
 
 Migration checklist:
 
 1. Add a caller build workflow with the exact source SHA and service matrix.
-2. Store the resulting release manifest as the only deployment input.
-3. Configure a read-only registry token on the self-hosted deployment
+2. Select a dedicated self-hosted builder through both `runner_json` and
+   `control_runner_json` when hosted billing is not available.
+3. Store the resulting release manifest as the only deployment input.
+4. Configure a read-only registry token on the self-hosted deployment
    environment.
-4. Run the prebuilt path in staging and prove a missing or mismatched digest
+5. Run the prebuilt path in staging and prove a missing or mismatched digest
    fails before Compose rollout.
-5. Keep the previous successful manifest for rollback; rollback means rerunning
+6. Keep the previous successful manifest for rollback; rollback means rerunning
    the same pull-only deploy with that manifest. Database rollback is separate.
 
 Serve integration is deliberately gated by the repository variable
