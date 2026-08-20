@@ -8,6 +8,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD_WORKFLOW = ROOT / ".github/workflows/_container-build-publish.yml"
+BUILD_DOC = ROOT / "docs/IMMUTABLE_CONTAINER_DEPLOY.md"
 DEPLOY_WORKFLOW = ROOT / ".github/workflows/_vps-monorepo-deploy.yml"
 SELF_HOSTED_DEPLOY_WORKFLOW = ROOT / ".github/workflows/_vps-self-hosted-deploy.yml"
 
@@ -61,6 +62,25 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
         self.assertIn("registry_password", content)
         self.assertIn("load: ${{ !inputs.push }}", content)
         self.assertIn("candidate-", content)
+
+    def test_control_jobs_can_run_on_self_hosted_without_changing_build_runner(self) -> None:
+        content = BUILD_WORKFLOW.read_text(encoding="utf-8")
+        documentation = BUILD_DOC.read_text(encoding="utf-8")
+
+        for needle in (
+            "control_runner_json:",
+            "JSON labels for validation and manifest aggregation",
+            "default: '[\"ubuntu-latest\"]'",
+            "runs-on: ${{ fromJSON(inputs.control_runner_json) }}",
+        ):
+            self.assertIn(needle, content)
+
+        self.assertEqual(
+            content.count("runs-on: ${{ fromJSON(inputs.control_runner_json) }}"),
+            2,
+        )
+        self.assertIn("`control_runner_json`", documentation)
+        self.assertIn("dedicated self-hosted container-builder", documentation)
 
     def test_build_contract_records_and_requires_security_evidence(self) -> None:
         content = BUILD_WORKFLOW.read_text(encoding="utf-8")

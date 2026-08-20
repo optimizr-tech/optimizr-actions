@@ -8,6 +8,11 @@ on:
         required: false
         type: string
         default: '["ubuntu-latest"]'
+      control_runner_json:
+        description: JSON labels for validation and manifest aggregation
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
       registry:
         description: OCI registry hostname
         required: false
@@ -91,7 +96,7 @@ on:
 jobs:
   validate:
     name: Validate container build contract
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.control_runner_json) }}
     permissions:
       contents: read
     outputs:
@@ -386,7 +391,7 @@ jobs:
     name: Aggregate release manifest
     needs: build
     if: needs.build.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.control_runner_json) }}
     permissions:
       contents: read
     outputs:

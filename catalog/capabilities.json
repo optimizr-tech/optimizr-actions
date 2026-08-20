@@ -1029,6 +1029,7 @@
         "artifact_retention_days": "",
         "cache_scope_prefix": "",
         "candidate_sha": "",
+        "control_runner_json": "",
         "github_attestation": "",
         "image_namespace": "",
         "provenance": "",
@@ -1057,7 +1058,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "fcf29670ddaa590e27c3e681cd2c382adb96a8a6d26766b5ab50df4d4a570f3b",
+      "source_sha256": "d342d3504de58b620dbbb85c792234780e49cdbc8591580ebf238f44cce27e4c",
       "trust_boundary": "trusted-push"
     },
     {
