@@ -12,7 +12,14 @@ The semantic-release runtime and plugins are installed ephemerally with `--packa
 
 ## Changelog preset compatibility
 
-Consumers that set `preset: conventionalcommits` in a local `.releaserc.json` must declare and lock `conventional-changelog-conventionalcommits` on major version 9. The current `@semantic-release/release-notes-generator` 14 runtime uses `conventional-changelog-writer` 8; the preset 10 templates require writer 9 and fail while generating notes. The reusable checks the manifest and lockfile before the dry-run and fails with the dependency mismatch instead of allowing Release to fail later.
+Consumers that set `preset: conventionalcommits` in a local `.releaserc.json` must declare and lock one of the supported pairs:
+
+| Preset | Writer |
+| --- | --- |
+| `conventional-changelog-conventionalcommits` 9.x | `conventional-changelog-writer` 8.x |
+| `conventional-changelog-conventionalcommits` 10.x | `conventional-changelog-writer` 9.x |
+
+The 10.x preset is the current consumer target. It uses the modern template API and fails with the writer 8 that `@semantic-release/release-notes-generator` 14 otherwise resolves. Consumers on 10.x must therefore declare `conventional-changelog-writer` 9.x directly, add an npm override for the transitive writer, and commit the resulting lockfile without a writer 8 nested under the release-notes generator. Legacy consumers on preset 9.x may continue using the generator's transitive writer 8. The reusable checks the manifest and lockfile before the dry-run and fails with an unsupported pair instead of allowing Release to fail later.
 
 ```yaml
 jobs:
