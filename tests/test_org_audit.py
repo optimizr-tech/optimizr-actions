@@ -284,6 +284,37 @@ jobs:
         self.assertNotIn("HOSTED_PR_CODE_VALIDATION", rules)
         self.assertNotIn("SELF_HOSTED_PR_WITHOUT_GOVERNED_MODE", rules)
 
+    def test_accepts_dynamic_governed_mode_expressions(self):
+        workflows = {
+            ".github/workflows/node-validation.yml": """
+on:
+  pull_request:
+jobs:
+  node:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_node-project-test.yml@v1
+    with:
+      runner_json: ${{ github.event_name == 'pull_request' && '["self-hosted","Linux","monitoring","ephemeral"]' || '["self-hosted","Linux","monitoring"]' }}
+      self_hosted_mode: ${{ github.event_name == 'pull_request' && 'ephemeral-pr' || 'trusted-main' }}
+""",
+            ".github/workflows/deploy.yml": """
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: [self-hosted, Linux, monitoring]
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@v1
+""",
+        }
+
+        findings = audit_workflows(
+            "optimizr-tech/monitoring", "private", workflows
+        )
+        self.assertNotIn(
+            "SELF_HOSTED_PR_WITHOUT_GOVERNED_MODE",
+            {finding.rule_id for finding in findings},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -186,7 +186,7 @@ def audit_workflows(repository: str, visibility: str, workflows: Mapping[str, st
         ):
             if "optimizr-actions/.github/workflows/" in content:
                 governed = re.search(
-                    r"self_hosted_mode\s*:\s*(?:metadata-pr|ephemeral-pr|trusted-main|trusted-pr)\b",
+                    r"self_hosted_mode\s*:\s*[^\n]*(?:metadata-pr|ephemeral-pr|trusted-main|trusted-pr)\b",
                     content,
                 )
                 switches_to_hosted = (
