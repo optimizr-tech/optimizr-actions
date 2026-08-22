@@ -50,13 +50,15 @@ product-specific extension is legitimate; consumers declare it in their
 
 The Dependabot file itself is optional to GitHub security updates, but Optimizr-managed repositories use it as a source-controlled adoption marker and to declare supported package ecosystems. Repository security settings that the contents API cannot prove remain manual organization controls and are not guessed by the auditor.
 
-The artifact created in the public repository replaces private repository names with deterministic aliases and stores no source snippets, secret names, environment values, hosts or deployment paths. An optional second job reruns the audit and updates a marker-delimited report in a private repository using `ORG_AUDIT_ISSUE_REF` and a separately scoped issue token.
+The artifact created in the public repository replaces private repository names with deterministic aliases and stores no source snippets, secret names, environment values, hosts or deployment paths. A second job reruns the audit and updates a marker-delimited report in a private repository using `ORG_AUDIT_ISSUE_REF` and a separately scoped issue token. Both jobs validate their configuration before making API calls; a missing value fails the workflow and is never reported as a successful or skipped audit.
 
 Required secrets:
 
 - `ORG_AUDIT_REPOSITORIES`: newline/comma-separated `owner/name` allowlist;
 - `ORG_AUDIT_TOKEN`: read-only metadata/contents access to those repositories;
-- optional `ORG_AUDIT_ISSUE_REF`: `owner/private-repo#123`;
-- optional `ORG_AUDIT_ISSUE_TOKEN`: issue-write access only to the private report repository.
+- `ORG_AUDIT_ISSUE_REF`: `owner/private-repo#123`;
+- `ORG_AUDIT_ISSUE_TOKEN`: issue-write access only to the private report repository.
+
+All four values are required for a successful scheduled or manual run. Store them as organization or repository Actions secrets according to the owner-approved trust boundary, never print them in logs, and rotate the tokens without changing the allowlist format. The private report job does not silently skip when the issue reference is absent.
 
 The auditor never edits consumer repositories, enables Dependabot settings, creates pull requests, merges changes or receives production secrets.
