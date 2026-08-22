@@ -276,7 +276,7 @@
       "trust_boundary": "trusted-pr",
       "evidence": "Unified security suite results (Trivy, SAST, dependency policy, supply chain)",
       "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_security-suite.yml@v1"],
-      "known_limitations": "ephemeral-pr mode only on ephemeral runners"
+      "known_limitations": "trusted-pr requires an explicitly authorized persistent runner; the reusable validates the pull_request event and runner labels but not actor approval"
     },
     ".github/workflows/_semantic-release.yml": {
       "runner": ["hosted"],

@@ -38,6 +38,20 @@ capability catalog (`catalog/capabilities.json`).
   (see `docs/CI_SKIP_CONTRACT.md` for the historical `[skip-tests]`
   contract, superseded by directive #159).
 
+### Authorized persistent pull request
+
+```text
+runner_json = ["self-hosted", "Linux", "<service>"]
+self_hosted_mode = trusted-pr
+```
+
+This mode is for pull requests that have already passed the consumer's
+reviewed authorization boundary. It does not require the `ephemeral` label,
+but it still requires a self-hosted Linux runner and the `pull_request` event.
+The reusable validates runner shape and event only; the caller remains
+responsible for actor approval, fork policy, protected environments and the
+absence of production secrets. Do not use `trusted-pr` for untrusted forks.
+
 ## Trust boundaries
 
 | Boundary | Meaning |
