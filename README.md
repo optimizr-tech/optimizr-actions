@@ -64,6 +64,16 @@ Run the repository regression suite with:
 python -m unittest discover -v
 ```
 
+For a branch and environment preflight followed by the canonical local
+validation sequence, run:
+
+```powershell
+python -m scripts.dev.preflight validate
+```
+
+See [`docs/DEVELOPMENT_WORKFLOW.md`](docs/DEVELOPMENT_WORKFLOW.md) for the
+isolated-worktree, review and consumer-rollout checkpoints.
+
 The portable local validation contract and Fiscal preset are documented in [`docs/LOCAL_VALIDATION.md`](docs/LOCAL_VALIDATION.md) once released.
 
 The canonical semantic-release configuration emits an organization-compliant `:bookmark_tabs: chore(release): <version> [skip ci]` commit subject.
