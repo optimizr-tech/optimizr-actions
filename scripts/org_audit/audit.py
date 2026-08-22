@@ -186,7 +186,7 @@ def audit_workflows(repository: str, visibility: str, workflows: Mapping[str, st
         ):
             if "optimizr-actions/.github/workflows/" in content:
                 governed = re.search(
-                    r"self_hosted_mode\s*:\s*(?:metadata-pr|ephemeral-pr|trusted-main)\b",
+                    r"self_hosted_mode\s*:\s*(?:metadata-pr|ephemeral-pr|trusted-main|trusted-pr)\b",
                     content,
                 )
                 switches_to_hosted = (
@@ -218,6 +218,20 @@ def audit_workflows(repository: str, visibility: str, workflows: Mapping[str, st
         if repo_engages_self_hosted and _has_event(on_block, "pull_request"):
             for job_name, job_block in _job_blocks(content):
                 if re.search(r"(?m)^\s+runs-on\s*:\s*.*self-hosted", job_block):
+                    continue
+                governed_pr_caller = (
+                    re.search(
+                        r"(?m)^\s+runner_json\s*:\s*[^\n]*self-hosted[^\n]*$",
+                        job_block,
+                    )
+                    and "ubuntu-latest" not in job_block
+                    and re.search(
+                        r"(?m)^\s+self_hosted_mode\s*:\s*[^\n]*"
+                        r"(?:metadata-pr|ephemeral-pr|trusted-pr)\b",
+                        job_block,
+                    )
+                )
+                if governed_pr_caller:
                     continue
                 validates_candidate = (
                     "optimizr-actions/.github/workflows/" in job_block

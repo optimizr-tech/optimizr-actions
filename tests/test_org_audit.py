@@ -218,6 +218,38 @@ jobs:
             {finding.rule_id for finding in findings},
         )
 
+    def test_accepts_governed_persistent_pr_reusable_callers(self):
+        workflows = {
+            ".github/workflows/commitlint.yml": """
+on:
+  pull_request:
+jobs:
+  commitlint:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_commitlint.yml@v1
+    with:
+      runner_json: '["self-hosted", "Linux", "monitoring"]'
+      self_hosted_mode: trusted-pr
+""",
+            ".github/workflows/validate-pr.yml": """
+on:
+  pull_request:
+jobs:
+  validate-pr:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_validate-pr.yml@v1
+    with:
+      runner_json: '["self-hosted", "Linux", "monitoring"]'
+      self_hosted_mode: trusted-pr
+""",
+        }
+
+        findings = audit_workflows(
+            "optimizr-tech/monitoring", "private", workflows
+        )
+        rules = {finding.rule_id for finding in findings}
+
+        self.assertNotIn("HOSTED_PR_CODE_VALIDATION", rules)
+        self.assertNotIn("SELF_HOSTED_PR_WITHOUT_GOVERNED_MODE", rules)
+
 
 if __name__ == "__main__":
     unittest.main()
