@@ -239,6 +239,26 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertIn("No Compose images available for required security scan", content)
         self.assertIn("Upload security evidence", content)
 
+    def test_actionable_image_classification_triggers_rebuild_independent_of_step_outcome(self) -> None:
+        for workflow in (
+            ".github/workflows/_vps-self-hosted-deploy.yml",
+            ".github/workflows/_vps-monorepo-deploy.yml",
+        ):
+            with self.subTest(workflow=workflow):
+                content = read(workflow)
+                rebuild_start = content.index("id: security-rebuild")
+                rebuild_end = content.index("continue-on-error: true", rebuild_start)
+                rebuild_condition = content[rebuild_start:rebuild_end]
+
+                self.assertIn(
+                    "steps.security-images-initial-gate.outputs.classification == 'actionable_vulnerability'",
+                    rebuild_condition,
+                )
+                self.assertNotIn(
+                    "steps.security-images-initial-gate.outcome == 'failure'",
+                    rebuild_condition,
+                )
+
     def test_monorepo_deploy_gates_filesystem_and_final_images_before_rollout(self) -> None:
         content = read(".github/workflows/_vps-monorepo-deploy.yml")
 
