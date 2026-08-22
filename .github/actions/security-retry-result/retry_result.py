@@ -126,30 +126,35 @@ def evaluate_retry(
         }
 
     if initial_outcome == "success":
-        if initial not in {"clean", "unfixed_warning"} or not before:
+        if initial in {"clean", "unfixed_warning"} and before:
             return {
                 "initial_result": initial,
                 "rebuild_attempted": False,
                 "rebuild_result": "skipped",
-                "final_result": "scanner_error",
+                "final_result": initial,
+                "passed": True,
+                "compatibility_allowed": _compatibility_allowed(
+                    final_result=initial,
+                    rebuild_attempted=False,
+                    rebuild_result="skipped",
+                    counts=initial_evidence,
+                ),
+                **initial_evidence,
+            }
+        if initial != "actionable_vulnerability" or not retry_enabled:
+            return {
+                "initial_result": initial,
+                "rebuild_attempted": False,
+                "rebuild_result": "skipped",
+                "final_result": (
+                    initial
+                    if initial == "actionable_vulnerability"
+                    else "scanner_error"
+                ),
                 "passed": False,
                 "compatibility_allowed": False,
                 **initial_evidence,
             }
-        return {
-            "initial_result": initial,
-            "rebuild_attempted": False,
-            "rebuild_result": "skipped",
-            "final_result": initial,
-            "passed": True,
-            "compatibility_allowed": _compatibility_allowed(
-                final_result=initial,
-                rebuild_attempted=False,
-                rebuild_result="skipped",
-                counts=initial_evidence,
-            ),
-            **initial_evidence,
-        }
 
     if initial != "actionable_vulnerability" or not retry_enabled:
         return {
@@ -164,6 +169,17 @@ def evaluate_retry(
                 rebuild_result="skipped",
                 counts=initial_evidence,
             ),
+            **initial_evidence,
+        }
+
+    if rebuild_outcome == "skipped":
+        return {
+            "initial_result": initial,
+            "rebuild_attempted": False,
+            "rebuild_result": "skipped",
+            "final_result": initial,
+            "passed": False,
+            "compatibility_allowed": False,
             **initial_evidence,
         }
 

@@ -136,8 +136,34 @@ class SecurityRetryResultTests(unittest.TestCase):
             final_classification="",
             remediated_refs="",
         )
-        self.assertEqual("scanner_error", rejected["final_result"])
+        self.assertEqual("actionable_vulnerability", rejected["final_result"])
         self.assertFalse(rejected["passed"])
+
+        not_attempted = evaluate(
+            initial_outcome="failure",
+            initial_classification="actionable_vulnerability",
+            rebuild_outcome="skipped",
+            final_outcome="skipped",
+            final_classification="",
+            remediated_refs="",
+        )
+        self.assertFalse(not_attempted["rebuild_attempted"])
+        self.assertEqual("actionable_vulnerability", not_attempted["final_result"])
+        self.assertFalse(not_attempted["passed"])
+
+        remediated = evaluate(
+            initial_outcome="success",
+            initial_classification="actionable_vulnerability",
+            rebuild_outcome="success",
+            final_outcome="success",
+            final_classification="clean",
+            remediated_refs=IMAGE_B,
+            final_counts=(0, 0, 0, 0),
+        )
+        self.assertTrue(remediated["rebuild_attempted"])
+        self.assertEqual("passed", remediated["rebuild_result"])
+        self.assertEqual("clean", remediated["final_result"])
+        self.assertTrue(remediated["passed"])
 
     def test_retry_outcomes_are_fail_closed_until_changed_images_pass(self) -> None:
         failed_rebuild = evaluate(rebuild_outcome="failure", remediated_refs="")

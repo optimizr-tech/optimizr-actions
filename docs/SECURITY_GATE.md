@@ -134,11 +134,17 @@ transport or scanner error.
 
 ## Bounded automatic remediation
 
-The deploy reusables capture the first image-gate outcome without promoting the candidate. A retry is attempted only when all of the following are true:
+The deploy reusables capture the first image-gate classification without promoting the candidate. A retry is attempted only when all of the following are true:
 
-- the image gate failed;
-- its sanitized `classification` is exactly `actionable_vulnerability`;
+- the image gate reports `classification=actionable_vulnerability`;
 - `security_rebuild_retry_enabled` is `true`.
+
+The classification, rather than the step outcome or conclusion, controls this
+decision. The gate step uses `continue-on-error` so its sanitized outputs remain
+available for diagnostics; depending on the runner result surface, an
+actionable classification can therefore accompany a successful step outcome.
+An actionable classification with no attempted rebuild remains an actionable
+failure, never a generic `scanner_error`.
 
 The retry calls the reviewed `security-rebuild` composite once. It pulls referenced images, builds with `--pull`, optionally disables cache, resolves the rebuilt immutable image IDs, and invokes the same security gate again. The final enforcement step is ordered before every `docker compose up` command. The effective deployment timeout is printed in the job log and is bounded to 30-120 minutes; a rejected value fails before checkout. A rebuild command that reaches its bounded execution limit publishes the sanitized `failure_reason=security_rebuild_timeout` instead of leaving a generic cancellation diagnosis.
 

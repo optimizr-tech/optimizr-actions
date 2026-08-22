@@ -662,7 +662,6 @@ jobs:
           inputs.security_require_image_scan &&
           inputs.security_rebuild_retry_enabled &&
           inputs.deployment_mode != 'prebuilt-images' &&
-          steps.security-images-initial-gate.outcome == 'failure' &&
           steps.security-images-initial-gate.outputs.classification == 'actionable_vulnerability'
         continue-on-error: true
         uses: optimizr-tech/optimizr-actions/.github/actions/security-rebuild@v1
