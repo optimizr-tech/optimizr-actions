@@ -9,6 +9,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 BUILD_WORKFLOW = ROOT / ".github/workflows/_container-build-publish.yml"
 BUILD_DOC = ROOT / "docs/IMMUTABLE_CONTAINER_DEPLOY.md"
+GHCR_BUILD_DOC = ROOT / "docs/GHCR_IMAGE_BUILD_CONTRACT.md"
 DEPLOY_WORKFLOW = ROOT / ".github/workflows/_vps-monorepo-deploy.yml"
 SELF_HOSTED_DEPLOY_WORKFLOW = ROOT / ".github/workflows/_vps-self-hosted-deploy.yml"
 
@@ -62,6 +63,29 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
         self.assertIn("registry_password", content)
         self.assertIn("load: ${{ !inputs.push }}", content)
         self.assertIn("candidate-", content)
+
+    def test_build_workflow_exposes_unfixed_security_policy_to_both_gates(self) -> None:
+        content = BUILD_WORKFLOW.read_text(encoding="utf-8")
+        documentation = GHCR_BUILD_DOC.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "security_ignore_unfixed:\n"
+            "        description: Explicitly allow vendor-will-not-fix findings "
+            "to pass the pre-publication gates\n"
+            "        required: false\n"
+            "        type: boolean\n"
+            "        default: false",
+            content,
+        )
+        self.assertEqual(
+            2,
+            content.count("ignore_unfixed: ${{ inputs.security_ignore_unfixed }}"),
+        )
+        self.assertIn("security_ignore_unfixed", documentation)
+        self.assertIn(
+            "fixed vulnerabilities, misconfigurations,\nsecrets",
+            documentation,
+        )
 
     def test_control_jobs_can_run_on_self_hosted_without_changing_build_runner(self) -> None:
         content = BUILD_WORKFLOW.read_text(encoding="utf-8")

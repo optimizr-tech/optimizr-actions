@@ -75,6 +75,11 @@ on:
         required: false
         type: string
         default: "30"
+      security_ignore_unfixed:
+        description: Explicitly allow vendor-will-not-fix findings to pass the pre-publication gates
+        required: false
+        type: boolean
+        default: false
     secrets:
       registry_username:
         description: Registry username used only when push is true
@@ -242,6 +247,7 @@ jobs:
           image_refs: ${{ env.CANDIDATE_IMAGE }}
           docker_mode: direct
           severity: ${{ inputs.security_severity }}
+          ignore_unfixed: ${{ inputs.security_ignore_unfixed }}
           trivy_version: ${{ inputs.security_trivy_version }}
           db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
           evidence_dir: artifacts/security-gate/prepublish/${{ env.SERVICE_NAME }}
@@ -266,6 +272,7 @@ jobs:
           image_refs: ${{ env.CANDIDATE_IMAGE }}@${{ steps.build.outputs.digest }}
           docker_mode: direct
           severity: ${{ inputs.security_severity }}
+          ignore_unfixed: ${{ inputs.security_ignore_unfixed }}
           trivy_version: ${{ inputs.security_trivy_version }}
           db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
           evidence_dir: artifacts/security-gate/prepromotion/${{ env.SERVICE_NAME }}
