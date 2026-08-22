@@ -175,7 +175,12 @@ def audit_workflows(repository: str, visibility: str, workflows: Mapping[str, st
         if permissions:
             add("BROAD_WORKFLOW_PERMISSION", "Workflow grants write permissions that require job-level least-privilege review: " + ", ".join(sorted(permissions)) + ".")
         on_block = _on_block(content)
-        if Path(path).name in {"ci.yml", "deploy.yml", "test.yml"}:
+        metadata_only_pr_workflow = (
+            "optimizr-actions/.github/workflows/_pr-metadata.yml@v1" in content
+            and "actions/checkout" not in content
+            and not re.search(r"(?m)^\s*-?\s*run\s*:", content)
+        )
+        if Path(path).name in {"ci.yml", "deploy.yml", "test.yml"} and not metadata_only_pr_workflow:
             for event in ("push", "pull_request"):
                 if _has_event(on_block, event) and not _event_has_path_filter(on_block, event):
                     add("MISSING_PATH_FILTER", f"{event} trigger has no paths or paths-ignore filter.")

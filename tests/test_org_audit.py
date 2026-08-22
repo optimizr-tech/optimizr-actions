@@ -343,6 +343,28 @@ jobs:
             {finding.rule_id for finding in findings},
         )
 
+    def test_allows_metadata_only_pr_workflow_without_path_filter(self):
+        workflows = {
+            ".github/workflows/ci.yml": """
+on:
+  pull_request:
+jobs:
+  metadata:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@v1
+    with:
+      runner_json: '["self-hosted", "Linux", "cdn"]'
+      self_hosted_mode: metadata-pr
+""",
+        }
+
+        findings = audit_workflows(
+            "optimizr-tech/cdn", "private", workflows
+        )
+        self.assertNotIn(
+            "MISSING_PATH_FILTER",
+            {finding.rule_id for finding in findings},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
