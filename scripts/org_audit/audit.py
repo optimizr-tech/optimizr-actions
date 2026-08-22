@@ -175,7 +175,12 @@ def audit_workflows(repository: str, visibility: str, workflows: Mapping[str, st
         if permissions:
             add("BROAD_WORKFLOW_PERMISSION", "Workflow grants write permissions that require job-level least-privilege review: " + ", ".join(sorted(permissions)) + ".")
         on_block = _on_block(content)
-        if Path(path).name in {"ci.yml", "deploy.yml", "test.yml"}:
+        metadata_only_pr_workflow = (
+            "optimizr-actions/.github/workflows/_pr-metadata.yml@v1" in content
+            and "actions/checkout" not in content
+            and not re.search(r"(?m)^\s*-?\s*run\s*:", content)
+        )
+        if Path(path).name in {"ci.yml", "deploy.yml", "test.yml"} and not metadata_only_pr_workflow:
             for event in ("push", "pull_request"):
                 if _has_event(on_block, event) and not _event_has_path_filter(on_block, event):
                     add("MISSING_PATH_FILTER", f"{event} trigger has no paths or paths-ignore filter.")
@@ -186,7 +191,7 @@ def audit_workflows(repository: str, visibility: str, workflows: Mapping[str, st
         ):
             if "optimizr-actions/.github/workflows/" in content:
                 governed = re.search(
-                    r"self_hosted_mode\s*:\s*(?:metadata-pr|ephemeral-pr|trusted-main)\b",
+                    r"self_hosted_mode\s*:\s*[^\n]*(?:metadata-pr|ephemeral-pr|trusted-main|trusted-pr)\b",
                     content,
                 )
                 switches_to_hosted = (
@@ -203,9 +208,21 @@ def audit_workflows(repository: str, visibility: str, workflows: Mapping[str, st
         basename = Path(path).name
         if basename == "update-badges.yml" and "_release-badge-recovery.yml@v1" not in content:
             add("DUPLICATED_BADGE_WORKFLOW", "Release badge recovery is implemented inline instead of calling the canonical reusable.")
-        if basename == "commitlint.yml" and "optimizr-actions/.github/workflows/_commitlint.yml@v1" not in content:
+        if basename == "commitlint.yml" and not any(
+            reference in content
+            for reference in (
+                "optimizr-actions/.github/workflows/_commitlint.yml@v1",
+                "optimizr-actions/.github/workflows/_pr-metadata.yml@v1",
+            )
+        ):
             add("DUPLICATED_COMMITLINT_WORKFLOW", "Commitlint does not call the canonical optimizr-actions reusable.")
-        if basename == "validate-pr.yml" and "optimizr-actions/.github/workflows/_validate-pr.yml@v1" not in content:
+        if basename == "validate-pr.yml" and not any(
+            reference in content
+            for reference in (
+                "optimizr-actions/.github/workflows/_validate-pr.yml@v1",
+                "optimizr-actions/.github/workflows/_pr-metadata.yml@v1",
+            )
+        ):
             add("DUPLICATED_PR_VALIDATION", "Pull-request validation does not call the canonical optimizr-actions reusable.")
         if _has_event(on_block, "pull_request") and PR_BILLING_SKIP_GUARD_RE.search(content):
             add(
@@ -218,6 +235,22 @@ def audit_workflows(repository: str, visibility: str, workflows: Mapping[str, st
         if repo_engages_self_hosted and _has_event(on_block, "pull_request"):
             for job_name, job_block in _job_blocks(content):
                 if re.search(r"(?m)^\s+runs-on\s*:\s*.*self-hosted", job_block):
+                    continue
+                governed_pr_caller = (
+                    re.search(
+                        r"(?m)^\s+runner_json\s*:\s*[^\n]*self-hosted[^\n]*$",
+                        job_block,
+                    )
+                    and "ubuntu-latest" not in job_block
+                    and re.search(
+                        r"(?m)^\s+self_hosted_mode\s*:\s*[^\n]*"
+                        r"(?:metadata-pr|ephemeral-pr|trusted-pr)\b",
+                        job_block,
+                    )
+                )
+                if governed_pr_caller:
+                    continue
+                if "optimizr-actions/.github/workflows/_dependabot-security-automerge.yml@v1" in job_block:
                     continue
                 validates_candidate = (
                     "optimizr-actions/.github/workflows/" in job_block

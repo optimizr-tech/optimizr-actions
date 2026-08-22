@@ -218,6 +218,153 @@ jobs:
             {finding.rule_id for finding in findings},
         )
 
+    def test_accepts_governed_persistent_pr_reusable_callers(self):
+        workflows = {
+            ".github/workflows/commitlint.yml": """
+on:
+  pull_request:
+jobs:
+  commitlint:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_commitlint.yml@v1
+    with:
+      runner_json: '["self-hosted", "Linux", "monitoring"]'
+      self_hosted_mode: trusted-pr
+""",
+            ".github/workflows/validate-pr.yml": """
+on:
+  pull_request:
+jobs:
+  validate-pr:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_validate-pr.yml@v1
+    with:
+      runner_json: '["self-hosted", "Linux", "monitoring"]'
+      self_hosted_mode: trusted-pr
+""",
+        }
+
+        findings = audit_workflows(
+            "optimizr-tech/monitoring", "private", workflows
+        )
+        rules = {finding.rule_id for finding in findings}
+
+        self.assertNotIn("HOSTED_PR_CODE_VALIDATION", rules)
+        self.assertNotIn("SELF_HOSTED_PR_WITHOUT_GOVERNED_MODE", rules)
+
+    def test_accepts_metadata_reusable_callers_as_canonical_pr_checks(self):
+        workflows = {
+            ".github/workflows/commitlint.yml": """
+on:
+  pull_request:
+jobs:
+  commitlint:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@v1
+    with:
+      runner_json: '["self-hosted", "Linux", "monitoring"]'
+      self_hosted_mode: metadata-pr
+""",
+            ".github/workflows/validate-pr.yml": """
+on:
+  pull_request:
+jobs:
+  validate-pr:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@v1
+    with:
+      runner_json: '["self-hosted", "Linux", "monitoring"]'
+      self_hosted_mode: metadata-pr
+""",
+        }
+
+        findings = audit_workflows(
+            "optimizr-tech/monitoring", "private", workflows
+        )
+        rules = {finding.rule_id for finding in findings}
+
+        self.assertNotIn("DUPLICATED_COMMITLINT_WORKFLOW", rules)
+        self.assertNotIn("DUPLICATED_PR_VALIDATION", rules)
+        self.assertNotIn("HOSTED_PR_CODE_VALIDATION", rules)
+        self.assertNotIn("SELF_HOSTED_PR_WITHOUT_GOVERNED_MODE", rules)
+
+    def test_accepts_dynamic_governed_mode_expressions(self):
+        workflows = {
+            ".github/workflows/node-validation.yml": """
+on:
+  pull_request:
+jobs:
+  node:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_node-project-test.yml@v1
+    with:
+      runner_json: ${{ github.event_name == 'pull_request' && '["self-hosted","Linux","monitoring","ephemeral"]' || '["self-hosted","Linux","monitoring"]' }}
+      self_hosted_mode: ${{ github.event_name == 'pull_request' && 'ephemeral-pr' || 'trusted-main' }}
+""",
+            ".github/workflows/deploy.yml": """
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: [self-hosted, Linux, monitoring]
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@v1
+""",
+        }
+
+        findings = audit_workflows(
+            "optimizr-tech/monitoring", "private", workflows
+        )
+        self.assertNotIn(
+            "SELF_HOSTED_PR_WITHOUT_GOVERNED_MODE",
+            {finding.rule_id for finding in findings},
+        )
+
+    def test_accepts_dependabot_metadata_caller_on_self_hosted_repo(self):
+        workflows = {
+            ".github/workflows/dependabot-automerge.yml": """
+on:
+  pull_request:
+jobs:
+  automerge:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_dependabot-security-automerge.yml@v1
+""",
+            ".github/workflows/deploy.yml": """
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: [self-hosted, Linux, monitoring]
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@v1
+""",
+        }
+
+        findings = audit_workflows(
+            "optimizr-tech/monitoring", "private", workflows
+        )
+        self.assertNotIn(
+            "HOSTED_PR_CODE_VALIDATION",
+            {finding.rule_id for finding in findings},
+        )
+
+    def test_allows_metadata_only_pr_workflow_without_path_filter(self):
+        workflows = {
+            ".github/workflows/ci.yml": """
+on:
+  pull_request:
+jobs:
+  metadata:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@v1
+    with:
+      runner_json: '["self-hosted", "Linux", "cdn"]'
+      self_hosted_mode: metadata-pr
+""",
+        }
+
+        findings = audit_workflows(
+            "optimizr-tech/cdn", "private", workflows
+        )
+        self.assertNotIn(
+            "MISSING_PATH_FILTER",
+            {finding.rule_id for finding in findings},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
