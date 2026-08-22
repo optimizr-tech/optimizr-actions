@@ -47,6 +47,17 @@ class VpsDockerModeContractTests(unittest.TestCase):
                 self.assertIn('direct) command docker "$@" ;;', body)
                 self.assertIn('sudo|auto) command sudo docker "$@" ;;', body)
 
+    def test_docker_access_mode_is_configured_before_networks_and_volumes(self) -> None:
+        for workflow in WORKFLOWS:
+            content = workflow.read_text(encoding="utf-8")
+            configure_index = content.index("- name: Configure Docker access mode")
+            ensure_index = content.index("- name: Ensure networks and verify volumes")
+            self.assertLess(
+                configure_index,
+                ensure_index,
+                f"{workflow.name} must configure docker_cmd before ensuring networks or volumes",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
