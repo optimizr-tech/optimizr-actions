@@ -250,6 +250,40 @@ jobs:
         self.assertNotIn("HOSTED_PR_CODE_VALIDATION", rules)
         self.assertNotIn("SELF_HOSTED_PR_WITHOUT_GOVERNED_MODE", rules)
 
+    def test_accepts_metadata_reusable_callers_as_canonical_pr_checks(self):
+        workflows = {
+            ".github/workflows/commitlint.yml": """
+on:
+  pull_request:
+jobs:
+  commitlint:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@v1
+    with:
+      runner_json: '["self-hosted", "Linux", "monitoring"]'
+      self_hosted_mode: metadata-pr
+""",
+            ".github/workflows/validate-pr.yml": """
+on:
+  pull_request:
+jobs:
+  validate-pr:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@v1
+    with:
+      runner_json: '["self-hosted", "Linux", "monitoring"]'
+      self_hosted_mode: metadata-pr
+""",
+        }
+
+        findings = audit_workflows(
+            "optimizr-tech/monitoring", "private", workflows
+        )
+        rules = {finding.rule_id for finding in findings}
+
+        self.assertNotIn("DUPLICATED_COMMITLINT_WORKFLOW", rules)
+        self.assertNotIn("DUPLICATED_PR_VALIDATION", rules)
+        self.assertNotIn("HOSTED_PR_CODE_VALIDATION", rules)
+        self.assertNotIn("SELF_HOSTED_PR_WITHOUT_GOVERNED_MODE", rules)
+
 
 if __name__ == "__main__":
     unittest.main()

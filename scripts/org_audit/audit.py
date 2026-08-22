@@ -203,9 +203,21 @@ def audit_workflows(repository: str, visibility: str, workflows: Mapping[str, st
         basename = Path(path).name
         if basename == "update-badges.yml" and "_release-badge-recovery.yml@v1" not in content:
             add("DUPLICATED_BADGE_WORKFLOW", "Release badge recovery is implemented inline instead of calling the canonical reusable.")
-        if basename == "commitlint.yml" and "optimizr-actions/.github/workflows/_commitlint.yml@v1" not in content:
+        if basename == "commitlint.yml" and not any(
+            reference in content
+            for reference in (
+                "optimizr-actions/.github/workflows/_commitlint.yml@v1",
+                "optimizr-actions/.github/workflows/_pr-metadata.yml@v1",
+            )
+        ):
             add("DUPLICATED_COMMITLINT_WORKFLOW", "Commitlint does not call the canonical optimizr-actions reusable.")
-        if basename == "validate-pr.yml" and "optimizr-actions/.github/workflows/_validate-pr.yml@v1" not in content:
+        if basename == "validate-pr.yml" and not any(
+            reference in content
+            for reference in (
+                "optimizr-actions/.github/workflows/_validate-pr.yml@v1",
+                "optimizr-actions/.github/workflows/_pr-metadata.yml@v1",
+            )
+        ):
             add("DUPLICATED_PR_VALIDATION", "Pull-request validation does not call the canonical optimizr-actions reusable.")
         if _has_event(on_block, "pull_request") and PR_BILLING_SKIP_GUARD_RE.search(content):
             add(
