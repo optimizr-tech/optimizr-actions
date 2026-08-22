@@ -1038,6 +1038,7 @@
         "runner_json": "",
         "sbom": "",
         "security_db_max_age_hours": "",
+        "security_ignore_unfixed": "",
         "security_severity": "",
         "security_trivy_version": "",
         "services_json": ""
@@ -1058,7 +1059,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "d342d3504de58b620dbbb85c792234780e49cdbc8591580ebf238f44cce27e4c",
+      "source_sha256": "2e5aa5ca6ee7cbe2fedd7425c156676513b60403419185e70db5d650e9c1ce47",
       "trust_boundary": "trusted-push"
     },
     {

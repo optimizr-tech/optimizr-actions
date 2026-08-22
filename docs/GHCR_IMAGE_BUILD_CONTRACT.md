@@ -104,6 +104,13 @@ Before publication and again before rollout:
   explicitly allows unfixed findings;
 - record the candidate SHA, digest, scan result, and evidence artifact hashes.
 
+The `_container-build-publish.yml` caller may set
+`security_ignore_unfixed: true` when a reviewed policy intentionally retains
+vendor-will-not-fix or deferred findings as signal-only. The input defaults to
+`false` and is passed to both the local pre-publication and exact-digest
+pre-promotion gates. It never permits fixed vulnerabilities, misconfigurations,
+secrets, malformed evidence, transport failures, or scanner errors to pass.
+
 An image rebuilt from source is not remediation evidence until its immutable
 identity changes and the final scan passes. A successful `docker build` or
 registry push alone is never a green security result.
