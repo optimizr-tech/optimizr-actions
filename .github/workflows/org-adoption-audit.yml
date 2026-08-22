@@ -21,6 +21,18 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           persist-credentials: false
+      - name: Validate public audit configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "$ORG_AUDIT_REPOSITORIES" ] || {
+            echo "::error::ORG_AUDIT_REPOSITORIES is not configured" >&2
+            exit 1
+          }
+          [ -n "$ORG_AUDIT_TOKEN" ] || {
+            echo "::error::ORG_AUDIT_TOKEN is not configured" >&2
+            exit 1
+          }
       - name: Audit selected repositories through the contents API
         run: |
           python3 scripts/org_audit/combined.py \
@@ -51,8 +63,27 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           persist-credentials: false
-      - name: Update private issue when configured
-        if: env.ORG_AUDIT_ISSUE_REF != ''
+      - name: Validate private audit configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "$ORG_AUDIT_REPOSITORIES" ] || {
+            echo "::error::ORG_AUDIT_REPOSITORIES is not configured" >&2
+            exit 1
+          }
+          [ -n "$ORG_AUDIT_TOKEN" ] || {
+            echo "::error::ORG_AUDIT_TOKEN is not configured" >&2
+            exit 1
+          }
+          [ -n "$ORG_AUDIT_ISSUE_REF" ] || {
+            echo "::error::ORG_AUDIT_ISSUE_REF is not configured" >&2
+            exit 1
+          }
+          [ -n "$ORG_AUDIT_ISSUE_TOKEN" ] || {
+            echo "::error::ORG_AUDIT_ISSUE_TOKEN is not configured" >&2
+            exit 1
+          }
+      - name: Update private issue
         run: |
           private_dir="$RUNNER_TEMP/optimizr-private-audit"
           python3 scripts/org_audit/combined.py \
