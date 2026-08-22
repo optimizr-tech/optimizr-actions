@@ -15,7 +15,7 @@ on:
         type: string
         default: '["ubuntu-latest"]'
       self_hosted_mode:
-        description: none, trusted-main, or ephemeral-pr
+        description: none, trusted-main, ephemeral-pr, or trusted-pr
         required: false
         type: string
         default: none
@@ -149,11 +149,16 @@ jobs:
           if mode == "trusted-main":
               if os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"} or os.environ["EVENT_REF"] != "refs/heads/main":
                   raise SystemExit("trusted-main requires push/workflow_dispatch on refs/heads/main")
+          elif mode == "trusted-pr":
+              if os.environ["EVENT_NAME"] != "pull_request":
+                  raise SystemExit(
+                      "trusted-pr requires pull_request on an authorized persistent runner"
+                  )
           elif mode == "ephemeral-pr":
               if os.environ["EVENT_NAME"] != "pull_request" or "ephemeral" not in labels:
                   raise SystemExit("ephemeral-pr requires pull_request and an ephemeral runner label")
           else:
-              raise SystemExit("self-hosted validation requires mode trusted-main or ephemeral-pr")
+              raise SystemExit("self-hosted validation requires mode trusted-main, ephemeral-pr, or trusted-pr")
           PY
 
       - name: Checkout
@@ -250,11 +255,16 @@ jobs:
           if mode == "trusted-main":
               if os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"} or os.environ["EVENT_REF"] != "refs/heads/main":
                   raise SystemExit("trusted-main requires push/workflow_dispatch on refs/heads/main")
+          elif mode == "trusted-pr":
+              if os.environ["EVENT_NAME"] != "pull_request":
+                  raise SystemExit(
+                      "trusted-pr requires pull_request on an authorized persistent runner"
+                  )
           elif mode == "ephemeral-pr":
               if os.environ["EVENT_NAME"] != "pull_request" or "ephemeral" not in labels:
                   raise SystemExit("ephemeral-pr requires pull_request and an ephemeral runner label")
           else:
-              raise SystemExit("self-hosted validation requires mode trusted-main or ephemeral-pr")
+              raise SystemExit("self-hosted validation requires mode trusted-main, ephemeral-pr, or trusted-pr")
           PY
 
       - name: Checkout

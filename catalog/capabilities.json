@@ -1115,7 +1115,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "085b7fd1205a9b4f4d2468a4bf78ab2182de092cbbbc8be308559938dee35b31",
+      "source_sha256": "d4e2fdfc0e474e6953f5eeda62c949a36d72490bcb99963c222c4b584a4f3f01",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1206,7 +1206,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "d7f45f1414c0a0b031ea4571e28d33c89eeabaffadcb89fc93a0f4b4131a5438",
+      "source_sha256": "7c1560b37db7244f7e803f2f487cf98faceb084c92eaa136ec49d54049749211",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1352,7 +1352,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "af40cefb2682b5b6ef36bbed3810abd0d545bcca023720505003f696265633e1",
+      "source_sha256": "0fd398482d130613e9e151badf6bd6ae0d4280137f301bc6ac105ca7fa785da8",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1636,7 +1636,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "c12712f58d921eae0535a6d758997c541aa5305b6ddbf835a44b6e85fe7100eb",
+      "source_sha256": "a158a26d97ca698af2689593ac7da8d36af31c903a92a2f7cd302449c2f47dce",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1679,7 +1679,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "40de911c2b9b2a1acc78fcfc1eb931df1c16b3598acd35c6e3b40ebef22a6383",
+      "source_sha256": "851ea23f31e87af9b4bf58ca329e3cb459a24d76b005111449e99ae2d8b8344b",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1704,7 +1704,7 @@
         "trivy_version": ""
       },
       "kind": "workflow",
-      "known_limitations": "ephemeral-pr mode only on ephemeral runners",
+      "known_limitations": "trusted-pr requires an explicitly authorized persistent runner; the reusable validates the pull_request event and runner labels but not actor approval",
       "maturity": "stable-v1",
       "metadata_status": "classified",
       "outputs": {
@@ -1720,7 +1720,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "90eef90d6bc1a87317d675b6cc01d9282ea99db4f0d9d794ada1c030635296d9",
+      "source_sha256": "39146be068fe1099286def61d3953be1ca63e87eb301ce712bfda97a4d862928",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1785,7 +1785,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "f5ef7e246ef6a792357d91ed8b05bd28c69310599c05eeeda6bbd81c12760435",
+      "source_sha256": "ae3310b35fa7abf778d009f3f418d8a52bf914af34be7e7aa294bdb37c247422",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1845,7 +1845,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "7631c4fc1afe1ea9309a40b1beae9394b1a196ac49bfbfa3a1ddd3c65debb074",
+      "source_sha256": "e9e70025949a8248a2a7700225e91bfb96e759c1078d06a85aa45eff3309b3b0",
       "trust_boundary": "trusted-pr"
     },
     {

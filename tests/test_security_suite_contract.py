@@ -41,6 +41,7 @@ class SecuritySuiteContractTests(unittest.TestCase):
 
     def test_suite_enforces_runner_trust_before_children(self):
         self.assertIn("self_hosted_mode:", self.text)
+        self.assertIn("trusted-pr", self.text)
         self.assertIn(
             'hosted validation must use ["ubuntu-latest"] with mode=none',
             self.text,

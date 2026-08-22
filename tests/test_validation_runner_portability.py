@@ -60,6 +60,26 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
                 self.assertIn('"ephemeral" not in labels', text)
                 self.assertIn('os.environ["EVENT_NAME"] != "pull_request"', text)
 
+    def test_trusted_pr_mode_is_available_for_authorized_persistent_validation(self):
+        for name in (
+            "_python-uv-test.yml",
+            "_node-project-test.yml",
+            "_security-suite.yml",
+            "_static-lint.yml",
+            "_security-gate.yml",
+            "_dependency-policy.yml",
+            "_sast-gate.yml",
+            "_supply-chain-evidence.yml",
+        ):
+            text = (ROOT / ".github/workflows" / name).read_text()
+            with self.subTest(workflow=name):
+                self.assertIn("trusted-pr", text)
+                trusted_pr_index = text.index('mode == "trusted-pr"')
+                ephemeral_index = text.index('mode == "ephemeral-pr"')
+                trusted_pr_block = text[trusted_pr_index:ephemeral_index]
+                self.assertIn('os.environ["EVENT_NAME"] != "pull_request"', trusted_pr_block)
+                self.assertNotIn('"ephemeral" not in labels', trusted_pr_block)
+
     def test_explicit_optional_skip_remains_caller_controlled(self):
         for name in (
             "_docker-compose-validate.yml",
