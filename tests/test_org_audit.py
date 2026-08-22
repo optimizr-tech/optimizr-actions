@@ -315,6 +315,34 @@ jobs:
             {finding.rule_id for finding in findings},
         )
 
+    def test_accepts_dependabot_metadata_caller_on_self_hosted_repo(self):
+        workflows = {
+            ".github/workflows/dependabot-automerge.yml": """
+on:
+  pull_request:
+jobs:
+  automerge:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_dependabot-security-automerge.yml@v1
+""",
+            ".github/workflows/deploy.yml": """
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: [self-hosted, Linux, monitoring]
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@v1
+""",
+        }
+
+        findings = audit_workflows(
+            "optimizr-tech/monitoring", "private", workflows
+        )
+        self.assertNotIn(
+            "HOSTED_PR_CODE_VALIDATION",
+            {finding.rule_id for finding in findings},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

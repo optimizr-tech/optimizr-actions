@@ -245,6 +245,8 @@ def audit_workflows(repository: str, visibility: str, workflows: Mapping[str, st
                 )
                 if governed_pr_caller:
                     continue
+                if "optimizr-actions/.github/workflows/_dependabot-security-automerge.yml@v1" in job_block:
+                    continue
                 validates_candidate = (
                     "optimizr-actions/.github/workflows/" in job_block
                     or bool(
