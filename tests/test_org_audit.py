@@ -6,7 +6,15 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from org_audit.audit import Finding, audit_workflows, public_alias, render_markdown, render_json, update_marked_section
+from org_audit.audit import (
+    Finding,
+    _has_event,
+    audit_workflows,
+    public_alias,
+    render_markdown,
+    render_json,
+    update_marked_section,
+)
 
 
 class OrgAuditTests(unittest.TestCase):
@@ -154,6 +162,79 @@ jobs:
         )
         self.assertIn(
             "PR_BILLING_SKIP_GUARD",
+            {finding.rule_id for finding in findings},
+        )
+
+    def test_event_detection_ignores_pull_request_in_input_expression(self):
+        on_block = """
+  push:
+    branches: [main]
+"""
+        self.assertFalse(_has_event(on_block, "pull_request"))
+
+        workflows = {
+            ".github/workflows/deploy.yml": """
+on:
+  push:
+    branches: [main]
+    paths: ["**"]
+jobs:
+  deploy:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@v1
+    with:
+      candidate_sha: ${{ github.event.pull_request.base.sha }}
+""",
+        }
+
+        findings = audit_workflows("optimizr-tech/example", "private", workflows)
+
+        self.assertNotIn(
+            "MISSING_PATH_FILTER",
+            {finding.rule_id for finding in findings},
+        )
+
+    def test_reusable_caller_job_permissions_are_not_broad_workflow_permissions(self):
+        workflows = {
+            ".github/workflows/publish.yml": """
+on:
+  workflow_dispatch:
+jobs:
+  publish:
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_container-build-publish.yml@v1
+""",
+        }
+
+        findings = audit_workflows("optimizr-tech/example", "private", workflows)
+
+        self.assertNotIn(
+            "BROAD_WORKFLOW_PERMISSION",
+            {finding.rule_id for finding in findings},
+        )
+
+    def test_local_job_write_permission_remains_a_broad_permission_finding(self):
+        workflows = {
+            ".github/workflows/ci.yml": """
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo test
+""",
+        }
+
+        findings = audit_workflows("optimizr-tech/example", "private", workflows)
+
+        self.assertIn(
+            "BROAD_WORKFLOW_PERMISSION",
             {finding.rule_id for finding in findings},
         )
 

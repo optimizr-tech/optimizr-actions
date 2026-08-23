@@ -22,6 +22,14 @@ Rules detect:
 - missing governed Dependabot native auto-merge caller;
 - deployment-like workflows that do not call an approved VPS deploy reusable.
 
+The event rule reads only direct event keys under the top-level `on:` block;
+event names embedded in input descriptions or expressions are not triggers.
+The permission rule reports root-level write grants and write grants on local
+step jobs. A job-level grant on a reusable-workflow caller is part of that
+caller contract and is not classified as a broad workflow permission. The PR
+metadata validator detects byte sequences consistent with common mojibake,
+while allowing valid Portuguese characters such as `ÃO` in explanatory text.
+
 `combined.py` also runs `audit_functional_duplication`, which compares the
 repository surface against the canonical capability catalog and detects
 avoidable local reimplementation when the canonical reusable is not called

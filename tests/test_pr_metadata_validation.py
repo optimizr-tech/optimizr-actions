@@ -33,7 +33,11 @@ class PRMetadataValidationTests(unittest.TestCase):
         self.assertTrue(module.validate_body("   "))
         self.assertTrue(module.validate_body("hello\x07world"))
         self.assertTrue(module.validate_body("ðŸ broken"))
+        self.assertTrue(module.validate_body("## Summary\nCafÃ© in a copied title"))
         self.assertEqual([], module.validate_body("## Summary\nMetadata only."))
+
+    def test_body_allows_valid_uppercase_portuguese_diacritics(self):
+        self.assertEqual([], module.validate_body("## Context\nNÃO alterar this contract."))
 
     def test_ai_coauthorship_trailer_fails(self):
         message = ":bug: fix(ci): protect commit authorship\n\nCo-authored-by: Codex <codex@openai.com>"
