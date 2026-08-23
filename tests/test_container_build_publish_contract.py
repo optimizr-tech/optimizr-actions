@@ -18,6 +18,7 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
     def test_build_workflow_publishes_matrix_images_by_digest(self) -> None:
         self.assertTrue(BUILD_WORKFLOW.exists())
         content = BUILD_WORKFLOW.read_text(encoding="utf-8")
+        documentation = BUILD_DOC.read_text(encoding="utf-8")
 
         for needle in (
             "services_json:",
@@ -53,6 +54,9 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
         self.assertNotIn("docker/build-push-action@v", content)
         self.assertIn("provenance: ${{ inputs.provenance }}", content)
         self.assertIn("sbom: ${{ inputs.sbom }}", content)
+        self.assertIn("Caller permission contract", documentation)
+        self.assertIn("attestations: write", documentation)
+        self.assertIn("id-token: write", documentation)
 
     def test_build_workflow_does_not_publish_without_explicit_push(self) -> None:
         content = BUILD_WORKFLOW.read_text(encoding="utf-8")
