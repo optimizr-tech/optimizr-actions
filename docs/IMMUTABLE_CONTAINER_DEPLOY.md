@@ -16,6 +16,27 @@ same digest to the SHA tags. A candidate that fails either check cannot be
 promoted. The published SHA tags are convenience references; production must
 consume the manifest's `image@sha256:...` values.
 
+## Caller permission contract
+
+GitHub validates the caller's permission ceiling before it creates jobs in a
+reusable workflow. Every caller job that uses this workflow must therefore
+declare the permissions required by the reusable build job, even when
+`push: false` or `github_attestation: false` is selected:
+
+```yaml
+permissions:
+  contents: read
+  packages: write
+  attestations: write
+  id-token: write
+```
+
+These permissions belong on the caller job containing `uses:`. Omitting the
+attestation or OIDC scopes can produce `startup_failure` with no jobs or logs;
+the failure happens before the reusable can evaluate its inputs. The
+`github_attestation` input controls whether a GitHub artifact attestation is
+published; it does not remove the declared permission contract.
+
 The reusable accepts `runner_json` for the matrix build and
 `control_runner_json` for service-definition validation and release-manifest
 aggregation. Both default to `["ubuntu-latest"]` for backwards compatibility.
