@@ -1993,6 +1993,7 @@
         "prebuilt_compose_file": "",
         "prebuilt_images_json": "",
         "registry": "",
+        "registry_auth_mode": "",
         "run_prune": "",
         "runner_label": "",
         "security_db_max_age_hours": "",
@@ -2024,7 +2025,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "73c020c8806f846666314542ea21163fd829b0963bd131148b8e884155c0ca23",
+      "source_sha256": "b7da9fa9239a2faf5150097785eeb067133d359d9430751e1ba017f39b7d5feb",
       "trust_boundary": "trusted-push"
     },
     {
@@ -2059,6 +2060,7 @@
         "prebuilt_images_json": "",
         "recreate_services": "",
         "registry": "",
+        "registry_auth_mode": "",
         "run_prune": "",
         "runner_label": "",
         "security_baseline_file": "",
@@ -2087,7 +2089,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "2ef518b6ecd7ca5c966b648045f58b1f45b1332b4dedefd63e8a87479a91a752",
+      "source_sha256": "ebaac72a68dbd87ab8d073a64973a31668303916b87e50fabc174781280fedf8",
       "trust_boundary": "trusted-push"
     },
     {

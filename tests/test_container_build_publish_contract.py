@@ -168,6 +168,34 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
         self.assertNotIn('docker_cmd compose -f "$COMPOSE_FILE"', content)
         self.assertIn('--exclude="$PREBUILT_COMPOSE_FILE"', content)
 
+    def test_prebuilt_deploy_auth_modes_are_explicit_and_least_privilege(self) -> None:
+        monorepo = DEPLOY_WORKFLOW.read_text(encoding="utf-8")
+        self_hosted = SELF_HOSTED_DEPLOY_WORKFLOW.read_text(encoding="utf-8")
+        documentation = BUILD_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("registry_auth_mode:", monorepo)
+        self.assertIn("default: explicit", monorepo)
+        self.assertIn("registry_auth_mode:", self_hosted)
+        self.assertIn("default: anonymous", self_hosted)
+
+        for content in (monorepo, self_hosted):
+            self.assertIn("anonymous", content)
+            self.assertIn("github-token", content)
+            self.assertIn("explicit", content)
+            self.assertIn("GITHUB_TOKEN: ${{ github.token }}", content)
+            self.assertIn("REGISTRY_AUTH_MODE", content)
+        self.assertIn("packages: read", documentation)
+
+    def test_prebuilt_deploy_isolates_and_cleans_registry_docker_config(self) -> None:
+        for workflow in (DEPLOY_WORKFLOW, SELF_HOSTED_DEPLOY_WORKFLOW):
+            content = workflow.read_text(encoding="utf-8")
+            with self.subTest(workflow=workflow.name):
+                self.assertIn("DOCKER_CONFIG_DIR", content)
+                self.assertIn("DOCKER_CONFIG=$DOCKER_CONFIG_DIR", content)
+                self.assertIn('sudo env "DOCKER_CONFIG=', content)
+                self.assertIn("docker logout", content)
+                self.assertIn("Clean registry authentication state", content)
+
 
 if __name__ == "__main__":
     unittest.main()

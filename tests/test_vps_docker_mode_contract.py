@@ -44,8 +44,20 @@ class VpsDockerModeContractTests(unittest.TestCase):
             )
             self.assertTrue(helper_blocks)
             for body in helper_blocks:
-                self.assertIn('direct) command docker "$@" ;;', body)
-                self.assertIn('sudo|auto) command sudo docker "$@" ;;', body)
+                self.assertIn("direct)", body)
+                self.assertIn('command docker "$@"', body)
+                self.assertIn("sudo|auto)", body)
+                self.assertIn('command sudo docker "$@"', body)
+
+    def test_registry_config_is_forwarded_to_direct_and_sudo_docker(self) -> None:
+        for workflow in WORKFLOWS:
+            content = workflow.read_text(encoding="utf-8")
+            with self.subTest(workflow=workflow.name):
+                self.assertIn('env "DOCKER_CONFIG=$DOCKER_CONFIG" docker "$@"', content)
+                self.assertIn(
+                    'sudo env "DOCKER_CONFIG=$DOCKER_CONFIG" docker "$@"',
+                    content,
+                )
 
     def test_docker_access_mode_is_configured_before_networks_and_volumes(self) -> None:
         for workflow in WORKFLOWS:
