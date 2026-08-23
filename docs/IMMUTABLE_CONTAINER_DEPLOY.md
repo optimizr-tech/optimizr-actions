@@ -67,6 +67,25 @@ successful manifest's service/image pairs; the VPS does not rebuild the
 application images. Database rollback is not implicit: migrations must remain
 expand/contract compatible before this mode is enabled.
 
+### Registry authentication modes
+
+Pull-only callers choose an explicit `registry_auth_mode`:
+
+- `anonymous` pulls public images without credentials;
+- `github-token` logs in to `ghcr.io` with the called workflow's short-lived
+  `github.token` and requires the caller job to grant `packages: read`;
+- `explicit` preserves the legacy credential contract and requires both
+  `registry_username` and `registry_password`.
+
+The `github-token` mode is preferred when the GHCR package is associated with
+the caller repository. It does not require a PAT to be installed on the VPS.
+The token is available only to the trusted deployment job and the reusable
+must isolate Docker authentication under `$RUNNER_TEMP`, run `docker logout`,
+and remove that directory before the job ends. If package access cannot be
+granted to the caller repository, use a dedicated read-only `read:packages`
+credential through a protected GitHub Environment secret; never write it to a
+repository file or a permanent Docker config on the host.
+
 For private repositories, GitHub artifact attestations require Enterprise
 Cloud. Therefore `github_attestation` defaults to false. The registry-backed
 BuildKit SBOM and provenance check is mandatory for every published image; the
@@ -94,8 +113,9 @@ Migration checklist:
 2. Select a dedicated self-hosted builder through both `runner_json` and
    `control_runner_json` when hosted billing is not available.
 3. Store the resulting release manifest as the only deployment input.
-4. Configure a read-only registry token on the self-hosted deployment
-   environment.
+4. Prefer `registry_auth_mode: github-token` with caller `packages: read`; if
+   package access requires a separate identity, configure a read-only registry
+   token on the protected self-hosted deployment environment.
 5. Run the prebuilt path in staging and prove a missing or mismatched digest
    fails before Compose rollout.
 6. Keep the previous successful manifest for rollback; rollback means rerunning

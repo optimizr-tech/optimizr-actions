@@ -111,6 +111,18 @@ vendor-will-not-fix or deferred findings as signal-only. The input defaults to
 pre-promotion gates. It never permits fixed vulnerabilities, misconfigurations,
 secrets, malformed evidence, transport failures, or scanner errors to pass.
 
+## Registry authentication
+
+The publish job uses the caller's short-lived `GITHUB_TOKEN` with
+`packages: write`; it does not require a PAT or a token installed on the VPS.
+For pull-only deployment, the reusable supports `registry_auth_mode` values
+`anonymous`, `github-token`, and `explicit`. `github-token` is the preferred
+private-GHCR mode when the package is associated with the caller repository and
+the caller grants only `packages: read`. `explicit` is the fallback for a
+dedicated read-only `read:packages` credential kept in a protected GitHub
+Environment. The reusable must never persist that credential in the
+repository or the VPS user's permanent Docker config.
+
 An image rebuilt from source is not remediation evidence until its immutable
 identity changes and the final scan passes. A successful `docker build` or
 registry push alone is never a green security result.

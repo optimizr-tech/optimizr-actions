@@ -34,6 +34,11 @@ on:
         required: false
         type: string
         default: ghcr.io
+      registry_auth_mode:
+        description: Registry authentication for prebuilt-images (explicit preserves the legacy contract)
+        required: false
+        type: string
+        default: explicit
       prebuilt_images_json:
         description: JSON array of service/image digest pairs for prebuilt-images
         required: false
@@ -245,6 +250,7 @@ jobs:
       DOCKER_MODE: ${{ inputs.docker_mode }}
       DEPLOYMENT_MODE: ${{ inputs.deployment_mode }}
       REGISTRY: ${{ inputs.registry }}
+      REGISTRY_AUTH_MODE: ${{ inputs.registry_auth_mode }}
       PREBUILT_COMPOSE_FILE: ${{ inputs.prebuilt_compose_file }}
 
     steps:
@@ -279,8 +285,20 @@ jobs:
           cat > "$docker_mode_file" <<'EOF'
           docker_cmd() {
             case "${DOCKER_MODE:-sudo}" in
-              direct) command docker "$@" ;;
-              sudo|auto) command sudo docker "$@" ;;
+              direct)
+                if [ -n "${DOCKER_CONFIG:-}" ]; then
+                  env "DOCKER_CONFIG=$DOCKER_CONFIG" docker "$@"
+                else
+                  command docker "$@"
+                fi
+                ;;
+              sudo|auto)
+                if [ -n "${DOCKER_CONFIG:-}" ]; then
+                  sudo env "DOCKER_CONFIG=$DOCKER_CONFIG" docker "$@"
+                else
+                  command sudo docker "$@"
+                fi
+                ;;
               *)
                 echo "Unsupported docker_mode: ${DOCKER_MODE:-}" >&2
                 return 2
@@ -316,25 +334,54 @@ jobs:
         env:
           PREBUILT_IMAGES_JSON: ${{ inputs.prebuilt_images_json }}
           PREBUILT_TSV: ${{ runner.temp }}/optimizr-prebuilt-images.tsv
+          DOCKER_CONFIG_DIR: ${{ runner.temp }}/optimizr-ghcr-docker-config
           REGISTRY_USERNAME: ${{ secrets.registry_username }}
           REGISTRY_PASSWORD: ${{ secrets.registry_password }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_ACTOR: ${{ github.actor }}
         run: |
           set -euo pipefail
           [ -n "$PREBUILT_IMAGES_JSON" ] || {
             echo "::error::prebuilt-images mode requires prebuilt_images_json" >&2
             exit 2
           }
-          [ -n "$REGISTRY_USERNAME" ] && [ -n "$REGISTRY_PASSWORD" ] || {
-            echo "::error::prebuilt-images mode requires registry read credentials" >&2
-            exit 2
-          }
+          case "$REGISTRY_AUTH_MODE" in
+            anonymous)
+              ;;
+            github-token)
+              [ "$REGISTRY" = ghcr.io ] || {
+                echo "::error::github-token auth is only supported for ghcr.io" >&2
+                exit 2
+              }
+              REGISTRY_USERNAME="$GITHUB_ACTOR"
+              REGISTRY_PASSWORD="$GITHUB_TOKEN"
+              ;;
+            explicit)
+              [ -n "$REGISTRY_USERNAME" ] && [ -n "$REGISTRY_PASSWORD" ] || {
+                echo "::error::explicit registry auth requires both registry credentials" >&2
+                exit 2
+              }
+              ;;
+            *)
+              echo "::error::Unsupported registry_auth_mode: $REGISTRY_AUTH_MODE (expected anonymous, github-token, or explicit)" >&2
+              exit 2
+              ;;
+          esac
           if [ "$DOCKER_MODE" = direct ]; then
             mkdir -p "$DEPLOY_PATH"
           else
             sudo mkdir -p "$DEPLOY_PATH"
             sudo chown "$(id -un):$(id -gn)" "$DEPLOY_PATH"
           fi
-          docker_cmd login "$REGISTRY" --username "$REGISTRY_USERNAME" --password-stdin <<< "$REGISTRY_PASSWORD"
+          if [ "$REGISTRY_AUTH_MODE" != anonymous ]; then
+            rm -rf -- "$DOCKER_CONFIG_DIR"
+            install -d -m 700 -- "$DOCKER_CONFIG_DIR"
+            export DOCKER_CONFIG="$DOCKER_CONFIG_DIR"
+            echo "DOCKER_CONFIG=$DOCKER_CONFIG_DIR" >> "$GITHUB_ENV"
+            docker_cmd login "$REGISTRY" --username "$REGISTRY_USERNAME" --password-stdin <<< "$REGISTRY_PASSWORD"
+          else
+            echo "Using anonymous pulls for public prebuilt images"
+          fi
           python3 - <<'PY'
           import json
           import os
@@ -865,6 +912,22 @@ jobs:
         with:
           image_age_threshold: ${{ inputs.image_age_threshold }}
           docker_mode: ${{ inputs.docker_mode }}
+
+      - name: Clean registry authentication state
+        if: always() && inputs.deployment_mode == 'prebuilt-images' && inputs.registry_auth_mode != 'anonymous'
+        shell: bash
+        env:
+          DOCKER_CONFIG_DIR: ${{ runner.temp }}/optimizr-ghcr-docker-config
+        run: |
+          set +e
+          if [ "$DOCKER_MODE" = direct ]; then
+            DOCKER_CONFIG="$DOCKER_CONFIG_DIR" docker logout "$REGISTRY" >/dev/null 2>&1 || true
+            rm -rf -- "$DOCKER_CONFIG_DIR"
+          else
+            sudo env "DOCKER_CONFIG=$DOCKER_CONFIG_DIR" docker logout "$REGISTRY" >/dev/null 2>&1 || true
+            sudo rm -rf -- "$DOCKER_CONFIG_DIR"
+            rm -rf -- "$DOCKER_CONFIG_DIR" || true
+          fi
 
       - name: Clean runner workspace
         if: always()
