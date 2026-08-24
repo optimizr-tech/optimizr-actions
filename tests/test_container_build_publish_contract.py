@@ -68,6 +68,23 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
         self.assertIn("load: ${{ !inputs.push }}", content)
         self.assertIn("candidate-", content)
 
+    def test_build_workflow_checks_out_exact_reusable_sources_for_portable_gates(self) -> None:
+        content = BUILD_WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn("name: Checkout exact reusable implementation", content)
+        self.assertIn("repository: ${{ job.workflow_repository }}", content)
+        self.assertIn("ref: ${{ job.workflow_sha }}", content)
+        self.assertIn("path: .optimizr-actions-source", content)
+        self.assertIn(
+            "python3 .optimizr-actions-source/scripts/container_release/verify_attestations.py",
+            content,
+        )
+        self.assertIn(
+            "uses: ./.optimizr-actions-source/.github/actions/security-gate",
+            content,
+        )
+        self.assertNotIn("uses: ./.github/actions/security-gate", content)
+
     def test_build_workflow_exposes_unfixed_security_policy_to_both_gates(self) -> None:
         content = BUILD_WORKFLOW.read_text(encoding="utf-8")
         documentation = GHCR_BUILD_DOC.read_text(encoding="utf-8")
