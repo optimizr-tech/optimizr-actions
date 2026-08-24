@@ -239,11 +239,22 @@ jobs:
         shell: bash
         env:
           CANDIDATE_IMAGE: ${{ env.CANDIDATE_IMAGE }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           set -euo pipefail
-          metadata_file="$RUNNER_TEMP/optimizr-${SERVICE_NAME}-quarantine-index.json"
-          docker buildx imagetools inspect --raw "$CANDIDATE_IMAGE" > "$metadata_file"
-          python3 .optimizr-actions-source/scripts/container_release/verify_attestations.py --input "$metadata_file"
+          image_ref="$CANDIDATE_IMAGE@$IMAGE_DIGEST"
+          index_file="$RUNNER_TEMP/optimizr-${SERVICE_NAME}-quarantine-index.json"
+          sbom_file="$RUNNER_TEMP/optimizr-${SERVICE_NAME}-quarantine-sbom.json"
+          provenance_file="$RUNNER_TEMP/optimizr-${SERVICE_NAME}-quarantine-provenance.json"
+          docker buildx imagetools inspect --raw "$image_ref" > "$index_file"
+          docker buildx imagetools inspect "$image_ref" \
+            --format '{{ json .SBOM.SPDX }}' > "$sbom_file"
+          docker buildx imagetools inspect "$image_ref" \
+            --format '{{ json .Provenance.SLSA }}' > "$provenance_file"
+          python3 .optimizr-actions-source/scripts/container_release/verify_attestations.py \
+            --input "$index_file" \
+            --sbom-input "$sbom_file" \
+            --provenance-input "$provenance_file"
 
       - name: Security gate for local image before publication
         id: prepublish-security

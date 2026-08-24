@@ -41,6 +41,9 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
             "Security gate for exact quarantine digest before promotion",
             "Promote verified image by digest",
             "verify_attestations.py",
+            "image_ref=\"$CANDIDATE_IMAGE@$IMAGE_DIGEST\"",
+            "--sbom-input \"$sbom_file\"",
+            "--provenance-input \"$provenance_file\"",
             "attestation_verified",
         ):
             self.assertIn(needle, content)
