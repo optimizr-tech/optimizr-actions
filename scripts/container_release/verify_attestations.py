@@ -12,13 +12,12 @@ class AttestationError(ValueError):
     """Raised when an image index does not retain required attestations."""
 
 
-def verify_attestation_index(payload: Any, *, required_count: int = 2) -> dict[str, int]:
+def verify_attestation_index(payload: Any, *, required_count: int = 1) -> dict[str, int]:
     """Return sanitized counts for a BuildKit image index.
 
-    BuildKit stores SBOM and provenance as attestation manifests beside the
-    runnable platform manifest. The exact predicate contents are registry
-    implementation details; requiring both manifests prevents a caller from
-    silently publishing an image whose evidence was dropped during transport.
+    BuildKit stores one or more attestation manifests beside the runnable
+    platform manifest. A single attestation manifest can contain multiple
+    attestation blobs, so the presence of two descriptors is not required.
     """
     if not isinstance(payload, dict):
         raise AttestationError("image metadata is not a JSON object")
@@ -53,17 +52,56 @@ def verify_attestation_index(payload: Any, *, required_count: int = 2) -> dict[s
     }
 
 
+def verify_attestation_bundle(
+    index_payload: Any,
+    sbom_payload: Any,
+    provenance_payload: Any,
+    *,
+    required_count: int = 1,
+) -> dict[str, int]:
+    """Verify the index and the two required predicates for one exact digest."""
+    counts = verify_attestation_index(index_payload, required_count=required_count)
+
+    if not isinstance(sbom_payload, dict) or not sbom_payload:
+        raise AttestationError("SBOM evidence is missing or invalid")
+    if not isinstance(sbom_payload.get("spdxVersion"), str):
+        raise AttestationError("SBOM evidence is missing SPDX metadata")
+
+    if not isinstance(provenance_payload, dict) or not provenance_payload:
+        raise AttestationError("provenance evidence is missing or invalid")
+    if not (
+        isinstance(provenance_payload.get("buildType"), str)
+        or isinstance(provenance_payload.get("buildDefinition"), dict)
+    ):
+        raise AttestationError("provenance evidence is missing SLSA metadata")
+
+    return {**counts, "sbom": 1, "provenance": 1}
+
+
+def _read_json(path: Path, *, label: str) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise AttestationError(f"{label} evidence is not valid JSON") from exc
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, required=True)
-    parser.add_argument("--required-count", type=int, default=2)
+    parser.add_argument("--sbom-input", type=Path, required=True)
+    parser.add_argument("--provenance-input", type=Path, required=True)
+    parser.add_argument("--required-count", type=int, default=1)
     return parser
 
 
 def main() -> int:
     args = _parser().parse_args()
-    payload = json.loads(args.input.read_text(encoding="utf-8"))
-    counts = verify_attestation_index(payload, required_count=args.required_count)
+    counts = verify_attestation_bundle(
+        _read_json(args.input, label="image index"),
+        _read_json(args.sbom_input, label="SBOM"),
+        _read_json(args.provenance_input, label="provenance"),
+        required_count=args.required_count,
+    )
     print(json.dumps(counts, sort_keys=True))
     return 0
 

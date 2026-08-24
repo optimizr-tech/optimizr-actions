@@ -11,9 +11,10 @@ Publishing is opt-in through `push: true`. The registry write credential is
 only used by the build job and must be passed as a workflow secret. A push run
 first creates a unique, digest-addressed quarantine candidate. The exact
 candidate is scanned with the canonical Trivy security gate and its BuildKit
-SBOM/provenance manifests are verified before `imagetools create` promotes that
-same digest to the SHA tags. A candidate that fails either check cannot be
-promoted. The published SHA tags are convenience references; production must
+attestation index plus SBOM and provenance predicates are verified against the
+candidate digest before `imagetools create` promotes that same digest to the SHA
+tags. A candidate that fails either check cannot be promoted. The published SHA
+tags are convenience references; production must
 consume the manifest's `image@sha256:...` values.
 
 ## Caller permission contract
@@ -96,7 +97,10 @@ repository file or a permanent Docker config on the host.
 For private repositories, GitHub artifact attestations require Enterprise
 Cloud. Therefore `github_attestation` defaults to false. The registry-backed
 BuildKit SBOM and provenance check is mandatory for every published image; the
-workflow fails closed if either attestation manifest is missing. After the
+workflow fails closed if the exact digest has no attestation manifest or either
+predicate cannot be read. BuildKit may store both predicates in one attestation
+manifest; the workflow validates the predicate contents instead of assuming
+one descriptor per predicate. After the
 organization plan is confirmed, callers may additionally enable the GitHub
 attestation input.
 
