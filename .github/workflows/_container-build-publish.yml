@@ -187,6 +187,14 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Checkout exact reusable implementation
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .optimizr-actions-source
+          persist-credentials: false
+
       - name: Set up Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
 
@@ -235,13 +243,13 @@ jobs:
           set -euo pipefail
           metadata_file="$RUNNER_TEMP/optimizr-${SERVICE_NAME}-quarantine-index.json"
           docker buildx imagetools inspect --raw "$CANDIDATE_IMAGE" > "$metadata_file"
-          python3 scripts/container_release/verify_attestations.py --input "$metadata_file"
+          python3 .optimizr-actions-source/scripts/container_release/verify_attestations.py --input "$metadata_file"
 
       - name: Security gate for local image before publication
         id: prepublish-security
         if: ${{ !inputs.push }}
         continue-on-error: true
-        uses: ./.github/actions/security-gate
+        uses: ./.optimizr-actions-source/.github/actions/security-gate
         with:
           scan_type: image
           image_refs: ${{ env.CANDIDATE_IMAGE }}
@@ -266,7 +274,7 @@ jobs:
         id: prepromotion-security
         if: inputs.push
         continue-on-error: true
-        uses: ./.github/actions/security-gate
+        uses: ./.optimizr-actions-source/.github/actions/security-gate
         with:
           scan_type: image
           image_refs: ${{ env.CANDIDATE_IMAGE }}@${{ steps.build.outputs.digest }}

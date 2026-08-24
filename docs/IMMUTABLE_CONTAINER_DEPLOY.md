@@ -46,6 +46,13 @@ and artifact-download support. Do not point these jobs at a production service
 runner by default: the image matrix can contend for CPU, memory, disk, and
 Docker cache.
 
+The build job checks out the exact reusable revision selected by GitHub through
+`job.workflow_repository` and `job.workflow_sha` into
+`.optimizr-actions-source`. Portable verification scripts and the composite
+security gate run from that checkout, never from the consumer repository. This
+keeps the caller responsible for Docker contexts and source files while the
+Actions repository remains the source of truth for its executable gates.
+
 `_vps-monorepo-deploy.yml` and `_vps-self-hosted-deploy.yml` keep
 `deployment_mode: build` as their compatible default. Their
 `deployment_mode: prebuilt-images` mode requires a non-empty
