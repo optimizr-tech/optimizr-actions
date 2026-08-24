@@ -8,6 +8,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD_WORKFLOW = ROOT / ".github/workflows/_container-build-publish.yml"
+ACTIONLINT_CONFIG = ROOT / ".github/actionlint.yaml"
 BUILD_DOC = ROOT / "docs/IMMUTABLE_CONTAINER_DEPLOY.md"
 GHCR_BUILD_DOC = ROOT / "docs/GHCR_IMAGE_BUILD_CONTRACT.md"
 DEPLOY_WORKFLOW = ROOT / ".github/workflows/_vps-monorepo-deploy.yml"
@@ -84,6 +85,17 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
             content,
         )
         self.assertNotIn("uses: ./.github/actions/security-gate", content)
+
+    def test_actionlint_exception_is_scoped_to_exact_reusable_identity(self) -> None:
+        content = ACTIONLINT_CONFIG.read_text(encoding="utf-8")
+
+        workflow_start = content.index("  .github/workflows/_container-build-publish.yml:")
+        workflow_block = content[workflow_start:].split("\n  .github/workflows/", 1)[0]
+
+        self.assertIn(
+            'property "workflow_(repository|sha)" is not defined in object type .+',
+            workflow_block,
+        )
 
     def test_build_workflow_exposes_unfixed_security_policy_to_both_gates(self) -> None:
         content = BUILD_WORKFLOW.read_text(encoding="utf-8")
