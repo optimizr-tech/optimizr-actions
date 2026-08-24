@@ -71,9 +71,19 @@ def _on_block(content: str) -> str:
 
 
 def _has_event(on_block: str, event: str) -> bool:
-    if re.search(rf"(?m)^\s{{2,}}{re.escape(event)}\s*:", on_block):
-        return True
-    return bool(re.search(rf"\b{re.escape(event)}\b", on_block))
+    lines = [
+        line
+        for line in on_block.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    if not lines:
+        return False
+    event_indent = min(len(line) - len(line.lstrip()) for line in lines)
+    return any(
+        len(line) - len(line.lstrip()) == event_indent
+        and re.fullmatch(rf"{re.escape(event)}\s*:", line.lstrip())
+        for line in lines
+    )
 
 
 def _event_has_path_filter(on_block: str, event: str) -> bool:
@@ -99,23 +109,30 @@ def _event_has_path_filter(on_block: str, event: str) -> bool:
     return False
 
 
-def _write_permissions(content: str) -> set[str]:
+def _collect_write_permissions(lines: Sequence[str], base_indent: int) -> set[str]:
     result: set[str] = set()
-    lines = content.splitlines()
     for index, line in enumerate(lines):
-        match = re.match(r"^(\s*)permissions\s*:\s*$", line)
-        if not match:
+        indent = len(line) - len(line.lstrip())
+        if indent != base_indent or line.strip() != "permissions:":
             continue
-        base_indent = len(match.group(1))
         for child in lines[index + 1:]:
             if not child.strip() or child.lstrip().startswith("#"):
                 continue
-            indent = len(child) - len(child.lstrip())
-            if indent <= base_indent:
+            child_indent = len(child) - len(child.lstrip())
+            if child_indent <= base_indent:
                 break
             permission = re.match(r"^\s*([A-Za-z-]+)\s*:\s*write\s*(?:#.*)?$", child)
             if permission and permission.group(1) in WRITE_PERMISSIONS:
                 result.add(permission.group(1))
+    return result
+
+
+def _write_permissions(content: str) -> set[str]:
+    result = _collect_write_permissions(content.splitlines(), 0)
+    for _job_name, job_block in _job_blocks(content):
+        if re.search(r"(?m)^\s+uses\s*:", job_block):
+            continue
+        result.update(_collect_write_permissions(job_block.splitlines(), 4))
     return result
 
 
