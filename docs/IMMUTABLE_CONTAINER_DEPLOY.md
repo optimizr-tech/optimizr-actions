@@ -17,6 +17,12 @@ tags. A candidate that fails either check cannot be promoted. The published SHA
 tags are convenience references; production must
 consume the manifest's `image@sha256:...` values.
 
+After promotion, the reusable performs a bounded read-after-write verification
+of the release tag. This tolerates short GHCR registry propagation delays while
+remaining fail-closed: the manifest is not emitted as published unless the tag
+resolves to the exact verified digest. The retry is internal and does not add or
+change any caller input or output.
+
 ## Caller permission contract
 
 GitHub validates the caller's permission ceiling before it creates jobs in a
