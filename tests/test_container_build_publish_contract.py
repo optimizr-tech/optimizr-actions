@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import unittest
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD_WORKFLOW = ROOT / ".github/workflows/_container-build-publish.yml"
@@ -150,6 +149,18 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
         self.assertIn("published release manifest is missing attestation verification", content)
         self.assertIn("prebuilt_images_json=", content)
         self.assertIn("] if manifest[\"published\"] else []", content)
+
+    def test_aggregate_manifest_keeps_same_named_fragments_isolated(self) -> None:
+        content = BUILD_WORKFLOW.read_text(encoding="utf-8")
+        aggregate = content[content.index("  aggregate:"):]
+
+        self.assertIn("merge-multiple: false", aggregate)
+        self.assertIn('rglob("release-fragment.json")', aggregate)
+        self.assertNotIn("merge-multiple: true", aggregate)
+        self.assertNotIn(
+            'Path(os.environ["FRAGMENTS_DIR"]).glob("release-fragment.json")',
+            aggregate,
+        )
 
     def test_monorepo_deploy_supports_backward_compatible_pull_only_mode(self) -> None:
         content = DEPLOY_WORKFLOW.read_text(encoding="utf-8")

@@ -429,7 +429,10 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           pattern: container-manifest-*-${{ github.run_id }}
-          merge-multiple: true
+          # Keep each artifact in its own directory. Every service intentionally
+          # uploads the same filename; merging them would concatenate/overwrite
+          # fragments on self-hosted runners before the JSON parser sees them.
+          merge-multiple: false
           path: fragments
 
       - name: Create release manifest
@@ -454,7 +457,7 @@ jobs:
           expected = json.loads(os.environ["SERVICES_JSON"])
           expected_names = {item["name"] for item in expected}
           fragments = []
-          for path in sorted(Path(os.environ["FRAGMENTS_DIR"]).glob("release-fragment.json")):
+          for path in sorted(Path(os.environ["FRAGMENTS_DIR"]).rglob("release-fragment.json")):
               fragments.append(json.loads(path.read_text(encoding="utf-8")))
           if {item.get("service") for item in fragments} != expected_names:
               raise SystemExit("release manifest does not contain exactly the requested services")
