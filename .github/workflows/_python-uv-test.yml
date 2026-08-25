@@ -1,6 +1,7 @@
 # Reusable: uv sync + ruff + pytest com gate de cobertura.
 # Consome via: uses: optimizr-tech/optimizr-actions/.github/workflows/_python-uv-test.yml@<ref>
 # Monorepo integration preset (serve): input integration_preset=serve — issue #59.
+# Sharding is opt-in; shard_count=1 preserves the legacy single-job path.
 
 name: _python-uv-test
 
@@ -25,7 +26,7 @@ on:
         type: string
         default: "3.12"
       coverage_min:
-        description: "Cobertura mínima (%)"
+        description: "Cobertura mínima (%) aplicada no gate agregado quando há shards"
         required: false
         type: number
         default: 80
@@ -95,7 +96,7 @@ on:
         type: string
         default: ""
       upload_artifact_name:
-        description: "Nome do artifact de cobertura (vazio = sem upload)"
+        description: "Nome do artifact de cobertura no modo legado (vazio = sem upload)"
         required: false
         type: string
         default: ""
@@ -109,6 +110,36 @@ on:
         required: false
         type: string
         default: ""
+      shard_count:
+        description: "Número de shards (1 preserva o job legado; máximo 8)"
+        required: false
+        type: number
+        default: 1
+      max_parallel:
+        description: "Máximo de shards concorrentes (1 por padrão para proteger runners compartilhados)"
+        required: false
+        type: number
+        default: 1
+      shard_distribution:
+        description: "count usa distribuição equilibrada sem histórico; duration usa arquivo pytest-split versionado"
+        required: false
+        type: string
+        default: count
+      shard_durations_path:
+        description: "Caminho do arquivo de durações quando shard_distribution=duration"
+        required: false
+        type: string
+        default: ".test_durations"
+      pytest_split_version:
+        description: "Versão exata do pytest-split instalada apenas quando o sharding está habilitado"
+        required: false
+        type: string
+        default: "0.11.0"
+      coverage_artifact_prefix:
+        description: "Prefixo dos artifacts por shard e do artifact agregado"
+        required: false
+        type: string
+        default: "python-uv-test-coverage"
       timeout_minutes:
         description: "Timeout máximo do job de teste"
         required: false
@@ -121,8 +152,84 @@ on:
         default: false
 
 jobs:
+  shard-plan:
+    if: ${{ !inputs.skip && inputs.shard_count > 1 }}
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: 5
+    outputs:
+      shard_indices: ${{ steps.plan.outputs.shard_indices }}
+    steps:
+      - name: Validate runner trust contract
+        shell: bash
+        env:
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          SELF_HOSTED_MODE: ${{ inputs.self_hosted_mode }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if not isinstance(labels, list) or not labels or any(not isinstance(v, str) or not v for v in labels):
+              raise SystemExit("runner_json must be a non-empty JSON string array")
+          mode = os.environ["SELF_HOSTED_MODE"]
+          if "self-hosted" not in labels:
+              if labels != ["ubuntu-latest"] or mode != "none":
+                  raise SystemExit('hosted validation must use ["ubuntu-latest"] with mode=none')
+              raise SystemExit(0)
+          if "Linux" not in labels:
+              raise SystemExit("self-hosted validation requires the Linux label")
+          if mode == "trusted-main":
+              if os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"} or os.environ["EVENT_REF"] != "refs/heads/main":
+                  raise SystemExit("trusted-main requires push/workflow_dispatch on refs/heads/main")
+          elif mode == "trusted-pr":
+              if os.environ["EVENT_NAME"] != "pull_request":
+                  raise SystemExit("trusted-pr requires pull_request on an authorized persistent runner")
+          elif mode == "ephemeral-pr":
+              if os.environ["EVENT_NAME"] != "pull_request" or "ephemeral" not in labels:
+                  raise SystemExit("ephemeral-pr requires pull_request and an ephemeral runner label")
+          else:
+              raise SystemExit("self-hosted validation requires mode trusted-main, ephemeral-pr, or trusted-pr")
+          PY
+
+      - name: Build bounded shard matrix
+        id: plan
+        shell: bash
+        env:
+          SHARD_COUNT: ${{ inputs.shard_count }}
+          MAX_PARALLEL: ${{ inputs.max_parallel }}
+          SHARD_DISTRIBUTION: ${{ inputs.shard_distribution }}
+          SHARD_DURATIONS_PATH: ${{ inputs.shard_durations_path }}
+          COVERAGE_ARTIFACT_PREFIX: ${{ inputs.coverage_artifact_prefix }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+
+          shard_count = int(os.environ["SHARD_COUNT"])
+          max_parallel = int(os.environ["MAX_PARALLEL"])
+          distribution = os.environ["SHARD_DISTRIBUTION"]
+          durations_path = os.environ["SHARD_DURATIONS_PATH"]
+          artifact_prefix = os.environ["COVERAGE_ARTIFACT_PREFIX"]
+          if shard_count < 2 or shard_count > 8:
+              raise SystemExit("shard_count must be between 2 and 8 when sharding is enabled")
+          if max_parallel < 1 or max_parallel > shard_count:
+              raise SystemExit("max_parallel must be between 1 and shard_count")
+          if distribution not in {"count", "duration"}:
+              raise SystemExit("shard_distribution must be count or duration")
+          if distribution == "duration" and not durations_path:
+              raise SystemExit("shard_durations_path is required for duration distribution")
+          if not re.fullmatch(r"[A-Za-z0-9_.-]+", artifact_prefix):
+              raise SystemExit("coverage_artifact_prefix may contain only letters, numbers, _, . and -")
+          indices = list(range(1, shard_count + 1))
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"shard_indices={json.dumps(indices, separators=(',', ':'))}\n")
+          PY
+
   test:
-    if: ${{ !inputs.skip && inputs.integration_preset == '' }}
+    if: ${{ !inputs.skip && inputs.integration_preset == '' && inputs.shard_count == 1 }}
     runs-on: ${{ fromJSON(inputs.runner_json) }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
     steps:
@@ -151,9 +258,7 @@ jobs:
                   raise SystemExit("trusted-main requires push/workflow_dispatch on refs/heads/main")
           elif mode == "trusted-pr":
               if os.environ["EVENT_NAME"] != "pull_request":
-                  raise SystemExit(
-                      "trusted-pr requires pull_request on an authorized persistent runner"
-                  )
+                  raise SystemExit("trusted-pr requires pull_request on an authorized persistent runner")
           elif mode == "ephemeral-pr":
               if os.environ["EVENT_NAME"] != "pull_request" or "ephemeral" not in labels:
                   raise SystemExit("ephemeral-pr requires pull_request and an ephemeral runner label")
@@ -187,11 +292,88 @@ jobs:
           upload_artifact_name: ${{ inputs.upload_artifact_name }}
           upload_artifact_paths: ${{ inputs.upload_artifact_paths }}
 
-  test-integration:
-    if: ${{ !inputs.skip && inputs.integration_preset == 'serve' }}
+  test-sharded:
+    if: ${{ !inputs.skip && inputs.integration_preset == '' && inputs.shard_count > 1 }}
+    needs: shard-plan
     runs-on: ${{ fromJSON(inputs.runner_json) }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ inputs.max_parallel }}
+      matrix:
+        shard_index: ${{ fromJSON(needs.shard-plan.outputs.shard_indices) }}
+    steps:
+      - name: Validate runner trust contract
+        shell: bash
+        env:
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          SELF_HOSTED_MODE: ${{ inputs.self_hosted_mode }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if not isinstance(labels, list) or not labels or any(not isinstance(v, str) or not v for v in labels):
+              raise SystemExit("runner_json must be a non-empty JSON string array")
+          mode = os.environ["SELF_HOSTED_MODE"]
+          if "self-hosted" not in labels:
+              if labels != ["ubuntu-latest"] or mode != "none":
+                  raise SystemExit('hosted validation must use ["ubuntu-latest"] with mode=none')
+              raise SystemExit(0)
+          if "Linux" not in labels:
+              raise SystemExit("self-hosted validation requires the Linux label")
+          if mode == "trusted-main":
+              if os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"} or os.environ["EVENT_REF"] != "refs/heads/main":
+                  raise SystemExit("trusted-main requires push/workflow_dispatch on refs/heads/main")
+          elif mode == "trusted-pr":
+              if os.environ["EVENT_NAME"] != "pull_request":
+                  raise SystemExit("trusted-pr requires pull_request on an authorized persistent runner")
+          elif mode == "ephemeral-pr":
+              if os.environ["EVENT_NAME"] != "pull_request" or "ephemeral" not in labels:
+                  raise SystemExit("ephemeral-pr requires pull_request and an ephemeral runner label")
+          else:
+              raise SystemExit("self-hosted validation requires mode trusted-main, ephemeral-pr, or trusted-pr")
+          PY
 
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Python test steps (shard ${{ matrix.shard_index }})
+        uses: optimizr-tech/optimizr-actions/.github/actions/python-uv-test-steps@v1
+        with:
+          python_version: ${{ inputs.python_version }}
+          sync_all_extras: ${{ inputs.sync_all_extras }}
+          extras: ${{ inputs.extras }}
+          ruff_check: ${{ inputs.ruff_check }}
+          ruff_paths: ${{ inputs.ruff_paths }}
+          mypy_enabled: ${{ inputs.mypy_enabled }}
+          mypy_target: ${{ inputs.mypy_target }}
+          extra_steps: ${{ inputs.extra_steps }}
+          coverage_min: ${{ inputs.coverage_min }}
+          coverage_gate_enabled: false
+          cov_package: ${{ inputs.cov_package }}
+          coverage_branch: ${{ inputs.coverage_branch }}
+          coverage_xml_path: ${{ inputs.coverage_xml_path }}
+          coverage_json_path: ${{ inputs.coverage_json_path }}
+          pytest_args: ${{ inputs.pytest_args }}
+          pytest_env: ${{ inputs.pytest_env }}
+          shard_count: ${{ inputs.shard_count }}
+          shard_index: ${{ matrix.shard_index }}
+          shard_distribution: ${{ inputs.shard_distribution }}
+          shard_durations_path: ${{ inputs.shard_durations_path }}
+          pytest_split_version: ${{ inputs.pytest_split_version }}
+          upload_artifact_name: ${{ inputs.coverage_artifact_prefix }}-shard-${{ matrix.shard_index }}
+          upload_artifact_paths: |
+            ${{ inputs.upload_artifact_paths }}
+            .coverage.shard-${{ matrix.shard_index }}
+
+  test-integration:
+    if: ${{ !inputs.skip && inputs.integration_preset == 'serve' && inputs.shard_count == 1 }}
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: ${{ inputs.timeout_minutes }}
     services:
       postgres:
         image: postgres:16.14-alpine@sha256:e013e867e712fec275706a6c51c966f0bb0c93cfa8f51000f85a15f9865a28cb
@@ -219,18 +401,12 @@ jobs:
         image: rabbitmq:4.2.9-management-alpine@sha256:a51ed990cb4392ce136380fb01fdb8aab1203565953f5ea9711bf839b1b709db
         ports:
           - 5672:5672
-        # Explicit memory cap: on self-hosted runners the
-        # container can inherit a low default cgroup limit, and RabbitMQ 4.2.9
-        # reads the cgroup to derive vm_memory_high_watermark (0.6 by default)
-        # - a boot that exceeds it fires system_memory_high_watermark and the
-        # health check never turns healthy (optimizr-serve trusted-main battery).
         options: >-
           --memory 1g
           --health-cmd "rabbitmq-diagnostics -q check_running"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-
     steps:
       - name: Validate runner trust contract
         shell: bash
@@ -257,9 +433,7 @@ jobs:
                   raise SystemExit("trusted-main requires push/workflow_dispatch on refs/heads/main")
           elif mode == "trusted-pr":
               if os.environ["EVENT_NAME"] != "pull_request":
-                  raise SystemExit(
-                      "trusted-pr requires pull_request on an authorized persistent runner"
-                  )
+                  raise SystemExit("trusted-pr requires pull_request on an authorized persistent runner")
           elif mode == "ephemeral-pr":
               if os.environ["EVENT_NAME"] != "pull_request" or "ephemeral" not in labels:
                   raise SystemExit("ephemeral-pr requires pull_request and an ephemeral runner label")
@@ -292,3 +466,262 @@ jobs:
           pytest_env: ${{ inputs.pytest_env }}
           upload_artifact_name: ${{ inputs.upload_artifact_name }}
           upload_artifact_paths: ${{ inputs.upload_artifact_paths }}
+
+  test-integration-sharded:
+    if: ${{ !inputs.skip && inputs.integration_preset == 'serve' && inputs.shard_count > 1 }}
+    needs: shard-plan
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ inputs.max_parallel }}
+      matrix:
+        shard_index: ${{ fromJSON(needs.shard-plan.outputs.shard_indices) }}
+
+    # Every matrix job receives its own service-container namespace.
+    services:
+      postgres:
+        image: postgres:16.14-alpine@sha256:e013e867e712fec275706a6c51c966f0bb0c93cfa8f51000f85a15f9865a28cb
+        env:
+          POSTGRES_DB: serve_test
+          POSTGRES_USER: serve_app
+          POSTGRES_PASSWORD: testpass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U serve_app -d serve_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+      redis:
+        image: redis:7.4.9-alpine@sha256:b1addbe72465a718643cff9e60a58e6df1841e29d6d7d60c9a85d8d72f08d1a7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+      rabbitmq:
+        image: rabbitmq:4.2.9-management-alpine@sha256:a51ed990cb4392ce136380fb01fdb8aab1203565953f5ea9711bf839b1b709db
+        ports:
+          - 5672:5672
+        options: >-
+          --memory 1g
+          --health-cmd "rabbitmq-diagnostics -q check_running"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Validate runner trust contract
+        shell: bash
+        env:
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          SELF_HOSTED_MODE: ${{ inputs.self_hosted_mode }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if not isinstance(labels, list) or not labels or any(not isinstance(v, str) or not v for v in labels):
+              raise SystemExit("runner_json must be a non-empty JSON string array")
+          mode = os.environ["SELF_HOSTED_MODE"]
+          if "self-hosted" not in labels:
+              if labels != ["ubuntu-latest"] or mode != "none":
+                  raise SystemExit('hosted validation must use ["ubuntu-latest"] with mode=none')
+              raise SystemExit(0)
+          if "Linux" not in labels:
+              raise SystemExit("self-hosted validation requires the Linux label")
+          if mode == "trusted-main":
+              if os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"} or os.environ["EVENT_REF"] != "refs/heads/main":
+                  raise SystemExit("trusted-main requires push/workflow_dispatch on refs/heads/main")
+          elif mode == "trusted-pr":
+              if os.environ["EVENT_NAME"] != "pull_request":
+                  raise SystemExit("trusted-pr requires pull_request on an authorized persistent runner")
+          elif mode == "ephemeral-pr":
+              if os.environ["EVENT_NAME"] != "pull_request" or "ephemeral" not in labels:
+                  raise SystemExit("ephemeral-pr requires pull_request and an ephemeral runner label")
+          else:
+              raise SystemExit("self-hosted validation requires mode trusted-main, ephemeral-pr, or trusted-pr")
+          PY
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Python test steps (integration shard ${{ matrix.shard_index }})
+        uses: optimizr-tech/optimizr-actions/.github/actions/python-uv-test-steps@v1
+        with:
+          python_version: ${{ inputs.python_version }}
+          sync_all_extras: ${{ inputs.sync_all_extras }}
+          extras: ${{ inputs.extras }}
+          ruff_check: ${{ inputs.ruff_check }}
+          ruff_paths: ${{ inputs.ruff_paths }}
+          mypy_enabled: ${{ inputs.mypy_enabled }}
+          mypy_target: ${{ inputs.mypy_target }}
+          extra_steps: ${{ inputs.extra_steps }}
+          coverage_min: ${{ inputs.coverage_min }}
+          coverage_gate_enabled: false
+          cov_package: ${{ inputs.cov_package }}
+          coverage_branch: ${{ inputs.coverage_branch }}
+          coverage_xml_path: ${{ inputs.coverage_xml_path }}
+          coverage_json_path: ${{ inputs.coverage_json_path }}
+          pytest_args: ${{ inputs.pytest_args }}
+          pytest_env: ${{ inputs.pytest_env }}
+          shard_count: ${{ inputs.shard_count }}
+          shard_index: ${{ matrix.shard_index }}
+          shard_distribution: ${{ inputs.shard_distribution }}
+          shard_durations_path: ${{ inputs.shard_durations_path }}
+          pytest_split_version: ${{ inputs.pytest_split_version }}
+          upload_artifact_name: ${{ inputs.coverage_artifact_prefix }}-shard-${{ matrix.shard_index }}
+          upload_artifact_paths: |
+            ${{ inputs.upload_artifact_paths }}
+            .coverage.shard-${{ matrix.shard_index }}
+
+  aggregate-coverage:
+    if: ${{ always() && !inputs.skip && inputs.shard_count > 1 }}
+    needs:
+      - shard-plan
+      - test-sharded
+      - test-integration-sharded
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    steps:
+      - name: Validate runner trust contract
+        shell: bash
+        env:
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          SELF_HOSTED_MODE: ${{ inputs.self_hosted_mode }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if not isinstance(labels, list) or not labels or any(not isinstance(v, str) or not v for v in labels):
+              raise SystemExit("runner_json must be a non-empty JSON string array")
+          mode = os.environ["SELF_HOSTED_MODE"]
+          if "self-hosted" not in labels:
+              if labels != ["ubuntu-latest"] or mode != "none":
+                  raise SystemExit('hosted validation must use ["ubuntu-latest"] with mode=none')
+              raise SystemExit(0)
+          if "Linux" not in labels:
+              raise SystemExit("self-hosted validation requires the Linux label")
+          if mode == "trusted-main":
+              if os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"} or os.environ["EVENT_REF"] != "refs/heads/main":
+                  raise SystemExit("trusted-main requires push/workflow_dispatch on refs/heads/main")
+          elif mode == "trusted-pr":
+              if os.environ["EVENT_NAME"] != "pull_request":
+                  raise SystemExit("trusted-pr requires pull_request on an authorized persistent runner")
+          elif mode == "ephemeral-pr":
+              if os.environ["EVENT_NAME"] != "pull_request" or "ephemeral" not in labels:
+                  raise SystemExit("ephemeral-pr requires pull_request and an ephemeral runner label")
+          else:
+              raise SystemExit("self-hosted validation requires mode trusted-main, ephemeral-pr, or trusted-pr")
+          PY
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+        with:
+          python-version: ${{ inputs.python_version }}
+          enable-cache: true
+
+      - name: Install dependencies for aggregate gate
+        shell: bash
+        env:
+          SYNC_ALL_EXTRAS: ${{ inputs.sync_all_extras }}
+          EXTRAS: ${{ inputs.extras }}
+        run: |
+          set -euo pipefail
+          if [ "$SYNC_ALL_EXTRAS" = "true" ]; then
+            uv sync --all-extras
+          elif [ -n "$EXTRAS" ]; then
+            EXTRA_ARGS=()
+            for e in $EXTRAS; do
+              EXTRA_ARGS+=(--extra "$e")
+            done
+            uv sync "${EXTRA_ARGS[@]}"
+          else
+            uv sync
+          fi
+
+      - name: Download every shard coverage artifact
+        if: always()
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          pattern: ${{ inputs.coverage_artifact_prefix }}-shard-*
+          path: shard-artifacts
+
+      - name: Merge coverage and enforce aggregate threshold
+        if: always()
+        shell: bash
+        env:
+          COVERAGE_MIN: ${{ inputs.coverage_min }}
+          COVERAGE_XML_PATH: ${{ inputs.coverage_xml_path }}
+          COVERAGE_JSON_PATH: ${{ inputs.coverage_json_path }}
+          EXPECTED_COUNT: ${{ inputs.shard_count }}
+        run: |
+          set -euo pipefail
+          mapfile -t coverage_files < <(find shard-artifacts -type f -name '.coverage.shard-*' -print)
+          found_count="${#coverage_files[@]}"
+          if [ "$found_count" -ne "$EXPECTED_COUNT" ]; then
+            echo "expected $EXPECTED_COUNT coverage files, found $found_count; no shard may be skipped" >&2
+            exit 1
+          fi
+          mkdir -p coverage-input
+          for coverage_file in "${coverage_files[@]}"; do
+            cp "$coverage_file" coverage-input/
+          done
+          uv run coverage combine coverage-input
+          uv run coverage report --fail-under="$COVERAGE_MIN"
+
+          xml_path="${COVERAGE_XML_PATH:-coverage.xml}"
+          uv run coverage xml -o "$xml_path"
+          if [ "$xml_path" != "coverage.xml" ]; then
+            cp "$xml_path" coverage.xml
+          fi
+
+          json_path="${COVERAGE_JSON_PATH:-coverage.json}"
+          uv run coverage json -o "$json_path"
+          if [ "$json_path" != "coverage.json" ]; then
+            cp "$json_path" coverage.json
+          fi
+
+      - name: Require every shard job to pass
+        if: always()
+        shell: bash
+        env:
+          NON_INTEGRATION_RESULT: ${{ needs.test-sharded.result }}
+          INTEGRATION_RESULT: ${{ needs.test-integration-sharded.result }}
+          INTEGRATION_PRESET: ${{ inputs.integration_preset }}
+        run: |
+          set -euo pipefail
+          if [ "$INTEGRATION_PRESET" = "serve" ]; then
+            shard_result="$INTEGRATION_RESULT"
+          else
+            shard_result="$NON_INTEGRATION_RESULT"
+          fi
+          if [ "$shard_result" != "success" ]; then
+            echo "shard matrix result was $shard_result" >&2
+            exit 1
+          fi
+
+      - name: Upload aggregate coverage artifact
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: ${{ inputs.coverage_artifact_prefix }}
+          path: |
+            coverage.xml
+            coverage.json
+            ${{ inputs.coverage_xml_path }}
+            ${{ inputs.coverage_json_path }}
+          retention-days: 7
+          if-no-files-found: error
