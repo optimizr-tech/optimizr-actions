@@ -101,7 +101,7 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
                 "optimizr-tech/optimizr-actions/.github/actions/"
                 "python-uv-test-steps@v1"
             ),
-            2,
+            4,
         )
 
     def test_rabbitmq_service_avoids_deprecated_memory_environment(self):

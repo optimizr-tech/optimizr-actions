@@ -299,6 +299,7 @@
       "inputs": {
         "cov_package": "",
         "coverage_branch": "",
+        "coverage_gate_enabled": "",
         "coverage_json_path": "",
         "coverage_min": "",
         "coverage_xml_path": "",
@@ -308,15 +309,20 @@
         "mypy_target": "",
         "pytest_args": "",
         "pytest_env": "",
+        "pytest_split_version": "",
         "python_version": "",
         "ruff_check": "",
         "ruff_paths": "",
+        "shard_count": "",
+        "shard_distribution": "",
+        "shard_durations_path": "",
+        "shard_index": "",
         "sync_all_extras": "",
         "upload_artifact_name": "",
         "upload_artifact_paths": ""
       },
       "kind": "action",
-      "known_limitations": "Composite intended for _python-uv-test.yml; prefer the reusable workflow",
+      "known_limitations": "Composite intended for _python-uv-test.yml; sharded coverage is merged by the reusable workflow",
       "maturity": "stable-v1",
       "metadata_status": "classified",
       "outputs": {},
@@ -327,7 +333,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "f86008a366d4bb21a44de7cc44cf8614944e4e16d198572cc9afab134c0a4dfa",
+      "source_sha256": "92dab57bb12cc68491a353193b848b0db8b9226f49fcf7b8a53ec7e0b79bef90",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1313,12 +1319,13 @@
     },
     {
       "category": "test",
-      "evidence": "uv sync, ruff, optional mypy and pytest coverage results",
+      "evidence": "uv sync, ruff, optional mypy, bounded pytest shards and aggregate coverage results",
       "examples": [
         "uses: optimizr-tech/optimizr-actions/.github/workflows/_python-uv-test.yml@v1"
       ],
       "inputs": {
         "cov_package": "",
+        "coverage_artifact_prefix": "",
         "coverage_branch": "",
         "coverage_json_path": "",
         "coverage_min": "",
@@ -1326,15 +1333,20 @@
         "extra_steps": "",
         "extras": "",
         "integration_preset": "",
+        "max_parallel": "",
         "mypy_enabled": "",
         "mypy_target": "",
         "pytest_args": "",
         "pytest_env": "",
+        "pytest_split_version": "",
         "python_version": "",
         "ruff_check": "",
         "ruff_paths": "",
         "runner_json": "",
         "self_hosted_mode": "",
+        "shard_count": "",
+        "shard_distribution": "",
+        "shard_durations_path": "",
         "skip": "",
         "sync_all_extras": "",
         "timeout_minutes": "",
@@ -1342,7 +1354,7 @@
         "upload_artifact_paths": ""
       },
       "kind": "workflow",
-      "known_limitations": "",
+      "known_limitations": "Sharding is opt-in, limited to eight shards, and requires job-scoped service isolation for integration presets",
       "maturity": "stable-v1",
       "metadata_status": "classified",
       "outputs": {},
@@ -1353,7 +1365,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "0fd398482d130613e9e151badf6bd6ae0d4280137f301bc6ac105ca7fa785da8",
+      "source_sha256": "416f9f0019ffd3e7f7acd53a97b615981ad26786b3b75bad85ed002838c1154b",
       "trust_boundary": "trusted-pr"
     },
     {

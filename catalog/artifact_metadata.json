@@ -63,7 +63,7 @@
     ".github/actions/python-uv-test-steps/action.yml": {
       "trust_boundary": "trusted-pr",
       "evidence": "uv sync, ruff, optional mypy, pytest coverage results and coverage artifacts",
-      "known_limitations": "Composite intended for _python-uv-test.yml; prefer the reusable workflow"
+      "known_limitations": "Composite intended for _python-uv-test.yml; sharded coverage is merged by the reusable workflow"
     },
     ".github/actions/resolve-image-manifest/action.yml": {
       "category": "deploy",
@@ -222,7 +222,8 @@
     },
     ".github/workflows/_python-uv-test.yml": {
       "trust_boundary": "trusted-pr",
-      "evidence": "uv sync, ruff, optional mypy and pytest coverage results",
+      "evidence": "uv sync, ruff, optional mypy, bounded pytest shards and aggregate coverage results",
+      "known_limitations": "Sharding is opt-in, limited to eight shards, and requires job-scoped service isolation for integration presets",
       "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_python-uv-test.yml@v1"]
     },
     ".github/workflows/_quality-gate-baseline.yml": {
