@@ -523,7 +523,7 @@ runs:
             scan_status=$?
             set -e
           else
-            cp "$blocking_json_report" "$enforced_json_report"
+            cp "$filtered_blocking_json_report" "$enforced_json_report"
             python3 - "$baseline_summary" <<'PY'
         import json
         import pathlib
