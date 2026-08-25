@@ -18,6 +18,10 @@ with:
 - `shard_count: 1` uses the legacy `test` or `test-integration` job. Existing
   caller inputs, permissions, coverage threshold and artifact behavior remain
   unchanged.
+- `working_directory` is an additive repository-relative path for monorepos and
+  fixture consumers. Its default is `.` and the action rejects absolute paths,
+  traversal and missing directories. Artifact paths remain workspace-relative;
+  the reusable prefixes raw shard coverage with this directory automatically.
 - Values above eight are rejected. `max_parallel` must be between `1` and
   `shard_count`; start with `1` on shared self-hosted capacity and raise it
   only after measuring service and database contention.
@@ -74,3 +78,23 @@ Adopt in this order:
 3. Confirm all shards execute, the aggregate artifact is present, and the
    combined coverage is at least the prior single-job result.
 4. Only then evaluate a higher `max_parallel` or a committed duration file.
+
+## Executable canary
+
+The manually triggered
+`.github/workflows/python-uv-test-canary.yml` is a small consumer fixture for
+the exact candidate revision. It runs three positive paths:
+
+1. the legacy single-job path;
+2. a two-shard run with aggregate coverage;
+3. the candidate composite action directly, using a two-shard matrix.
+
+The separate manually triggered
+`.github/workflows/python-uv-test-failure-canary.yml` is intentionally expected
+to be red. It injects one deterministic failure into the first shard and proves
+that the aggregate rejects the run while the other shard is allowed to finish.
+
+Run it from the Actions tab on the candidate branch before publishing or moving
+the floating `v1` tag. The fixture owns its `pyproject.toml` and `uv.lock`, so
+it does not depend on the Actions repository's toolchain or on production
+configuration.

@@ -1,0 +1,39 @@
+name: Python uv reusable failed-shard canary
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# This workflow is intentionally expected to be red: it proves that the
+# aggregate rejects one failed shard instead of producing a false green result.
+jobs:
+  failure-path:
+    name: Expected failed-shard path
+    uses: ./.github/workflows/_python-uv-test.yml
+    with:
+      working_directory: tests/fixtures/python-uv-test-canary
+      extras: test
+      ruff_paths: .
+      pytest_args: tests
+      pytest_env: |
+        CANARY_FAILURE_MODE=1
+      cov_package: canary_app
+      coverage_min: 90
+      shard_count: 2
+      max_parallel: 2
+      coverage_artifact_prefix: canary-failure-coverage
+
+  assert-failure:
+    name: Assert failed-shard rejection
+    if: ${{ always() }}
+    needs: failure-path
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the reusable workflow to reject the failed shard
+        env:
+          FAILURE_RESULT: ${{ needs.failure-path.result }}
+        run: |
+          set -euo pipefail
+          test "$FAILURE_RESULT" = "failure"

@@ -9,6 +9,10 @@ inputs:
     description: Python version for setup-uv
     required: false
     default: "3.12"
+  working_directory:
+    description: Relative repository path containing the Python project
+    required: false
+    default: "."
   sync_all_extras:
     description: Run uv sync --all-extras instead of uv sync
     required: false
@@ -107,21 +111,37 @@ runs:
         python-version: ${{ inputs.python_version }}
         enable-cache: true
 
+    - name: Validate working directory
+      shell: bash
+      env:
+        WORKING_DIRECTORY: ${{ inputs.working_directory }}
+      run: |
+        set -euo pipefail
+        if [ -z "$WORKING_DIRECTORY" ] || [[ "$WORKING_DIRECTORY" = /* ]] || [[ "$WORKING_DIRECTORY" == *..* ]]; then
+          echo "working_directory must be a non-empty repository-relative path without traversal" >&2
+          exit 1
+        fi
+        if [ ! -d "$WORKING_DIRECTORY" ]; then
+          echo "working_directory does not exist: $WORKING_DIRECTORY" >&2
+          exit 1
+        fi
+
     - name: Install dependencies
       shell: bash
       env:
         SYNC_ALL_EXTRAS: ${{ inputs.sync_all_extras }}
         EXTRAS: ${{ inputs.extras }}
+      working-directory: ${{ inputs.working_directory }}
       run: |
         set -euo pipefail
         if [ "$SYNC_ALL_EXTRAS" = "true" ]; then
           uv sync --all-extras
         elif [ -n "$EXTRAS" ]; then
-          EXTRA_ARGS=""
+          EXTRA_ARGS=()
           for e in $EXTRAS; do
-            EXTRA_ARGS="$EXTRA_ARGS --extra $e"
+            EXTRA_ARGS+=(--extra "$e")
           done
-          uv sync $EXTRA_ARGS
+          uv sync "${EXTRA_ARGS[@]}"
         else
           uv sync
         fi
@@ -131,6 +151,7 @@ runs:
       shell: bash
       env:
         PYTHONDONTWRITEBYTECODE: "1"
+      working-directory: ${{ inputs.working_directory }}
       run: uv run ruff check ${{ inputs.ruff_paths }}
 
     - name: Type check (mypy)
@@ -138,6 +159,7 @@ runs:
       shell: bash
       env:
         PYTHONDONTWRITEBYTECODE: "1"
+      working-directory: ${{ inputs.working_directory }}
       run: uv run mypy ${{ inputs.mypy_target }}
 
     - name: Extra steps
@@ -145,6 +167,7 @@ runs:
       shell: bash
       env:
         PYTHONDONTWRITEBYTECODE: "1"
+      working-directory: ${{ inputs.working_directory }}
       run: |
         set -euo pipefail
         ${{ inputs.extra_steps }}
@@ -166,6 +189,7 @@ runs:
         SHARD_DISTRIBUTION: ${{ inputs.shard_distribution }}
         SHARD_DURATIONS_PATH: ${{ inputs.shard_durations_path }}
         PYTEST_SPLIT_VERSION: ${{ inputs.pytest_split_version }}
+      working-directory: ${{ inputs.working_directory }}
       run: |
         set -euo pipefail
         if [ -n "$PYTEST_ENV" ]; then

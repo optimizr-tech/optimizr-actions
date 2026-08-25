@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "optimizr-actions-python-uv-canary"
+version = "0.1.0"
+description = "Small executable consumer for the Python uv reusable workflow"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+test = [
+  "pytest==8.3.5",
+  "pytest-cov==6.1.1",
+  "ruff==0.11.2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/canary_app"]
