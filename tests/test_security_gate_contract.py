@@ -70,6 +70,14 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertIn("render-exceptions", content)
         self.assertIn("filter-report", content)
         self.assertIn('filtered_blocking_json_report="${prefix}-filtered.json"', content)
+        self.assertIn(
+            'cp "$filtered_blocking_json_report" "$enforced_json_report"',
+            content,
+        )
+        self.assertNotIn(
+            'cp "$blocking_json_report" "$enforced_json_report"',
+            content,
+        )
         self.assertIn("scripts/security_gate/report.py", content)
         self.assertIn("scripts/security_gate/aggregate.py", content)
         self.assertIn("scripts/security_gate/remediation_window.py", content)
