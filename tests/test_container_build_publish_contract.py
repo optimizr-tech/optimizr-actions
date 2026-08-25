@@ -39,6 +39,9 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
             "docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8",
             "Security gate for exact quarantine digest before promotion",
             "Promote verified image by digest",
+            "verify_published_digest.py",
+            '--image-ref "$RELEASE_IMAGE"',
+            '--expected-digest "$IMAGE_DIGEST"',
             "verify_attestations.py",
             "image_ref=\"$CANDIDATE_IMAGE@$IMAGE_DIGEST\"",
             "--sbom-input \"$sbom_file\"",
@@ -160,6 +163,17 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
         self.assertNotIn(
             'Path(os.environ["FRAGMENTS_DIR"]).glob("release-fragment.json")',
             aggregate,
+        )
+
+    def test_promotion_uses_bounded_fail_closed_digest_verification(self) -> None:
+        content = BUILD_WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn("verify_published_digest.py", content)
+        self.assertIn('--image-ref "$RELEASE_IMAGE"', content)
+        self.assertIn('--expected-digest "$IMAGE_DIGEST"', content)
+        self.assertNotIn(
+            'promoted_digest="$(docker buildx imagetools inspect "$RELEASE_IMAGE"',
+            content,
         )
 
     def test_monorepo_deploy_supports_backward_compatible_pull_only_mode(self) -> None:

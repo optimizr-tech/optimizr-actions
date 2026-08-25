@@ -319,11 +319,9 @@ jobs:
             --tag "$RELEASE_IMAGE" \
             --tag "$IMAGE_NAME:sha-$CANDIDATE_SHA" \
             "$CANDIDATE_IMAGE@$IMAGE_DIGEST"
-          promoted_digest="$(docker buildx imagetools inspect "$RELEASE_IMAGE" | awk '/^Digest:/ { print $2; exit }')"
-          if [ "$promoted_digest" != "$IMAGE_DIGEST" ]; then
-            echo "::error::promoted image digest does not match the verified candidate" >&2
-            exit 1
-          fi
+          python3 .optimizr-actions-source/scripts/container_release/verify_published_digest.py \
+            --image-ref "$RELEASE_IMAGE" \
+            --expected-digest "$IMAGE_DIGEST"
 
       - name: Attest published image provenance
         if: inputs.push && steps.promote.outcome == 'success' && inputs.github_attestation

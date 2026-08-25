@@ -56,6 +56,11 @@ A consumer adopting the contract supplies a reviewed manifest containing:
 Mutable tags are allowed as discovery aliases only. Promotion evidence and
 deployment input must use a complete `sha256:` digest.
 
+The promotion read-after-write check may retry a bounded number of times when a
+new GHCR tag is temporarily unavailable or reports no digest. It still fails
+closed for a missing, malformed, or mismatched digest, and this resilience is
+internal to the reusable workflow contract.
+
 ## Build requirements
 
 The implementation PR must:
