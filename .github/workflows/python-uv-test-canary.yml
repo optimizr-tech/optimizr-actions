@@ -1,0 +1,96 @@
+name: Python uv reusable canary
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-uv-test-canary-${{ github.ref }}
+  cancel-in-progress: true
+
+# This is a manually-triggered executable consumer. It calls the local reusable
+# and the local composite so the candidate workflow and action are both tested
+# before v1 moves.
+jobs:
+  legacy:
+    name: Legacy single-job path
+    uses: ./.github/workflows/_python-uv-test.yml
+    with:
+      working_directory: tests/fixtures/python-uv-test-canary
+      extras: test
+      ruff_paths: .
+      pytest_args: tests
+      cov_package: canary_app
+      coverage_min: 90
+      coverage_xml_path: coverage.xml
+      coverage_json_path: coverage.json
+      upload_artifact_name: canary-legacy-coverage
+      upload_artifact_paths: |
+        tests/fixtures/python-uv-test-canary/coverage.xml
+        tests/fixtures/python-uv-test-canary/coverage.json
+
+  sharded:
+    name: Two-shard aggregate path
+    uses: ./.github/workflows/_python-uv-test.yml
+    with:
+      working_directory: tests/fixtures/python-uv-test-canary
+      extras: test
+      ruff_paths: .
+      pytest_args: tests
+      cov_package: canary_app
+      coverage_min: 90
+      coverage_branch: true
+      shard_count: 2
+      max_parallel: 2
+      coverage_artifact_prefix: canary-sharded-coverage
+
+  action-sharded:
+    name: Candidate composite action shards
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        shard_index: [1, 2]
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Run candidate composite action (shard ${{ matrix.shard_index }})
+        uses: ./.github/actions/python-uv-test-steps
+        with:
+          working_directory: tests/fixtures/python-uv-test-canary
+          extras: test
+          ruff_paths: .
+          pytest_args: tests
+          cov_package: canary_app
+          coverage_gate_enabled: false
+          shard_count: 2
+          shard_index: ${{ matrix.shard_index }}
+          upload_artifact_name: canary-action-shard-${{ matrix.shard_index }}
+          upload_artifact_paths: >-
+            tests/fixtures/python-uv-test-canary/.coverage.shard-${{ matrix.shard_index }}
+
+  assert-positive:
+    name: Assert positive paths
+    if: ${{ always() }}
+    needs:
+      - legacy
+      - sharded
+      - action-sharded
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require legacy and sharded paths to pass
+        env:
+          LEGACY_RESULT: ${{ needs.legacy.result }}
+          SHARDED_RESULT: ${{ needs.sharded.result }}
+          ACTION_RESULT: ${{ needs.action-sharded.result }}
+        run: |
+          set -euo pipefail
+          test "$LEGACY_RESULT" = "success"
+          test "$SHARDED_RESULT" = "success"
+          test "$ACTION_RESULT" = "success"

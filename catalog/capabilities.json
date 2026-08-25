@@ -319,7 +319,8 @@
         "shard_index": "",
         "sync_all_extras": "",
         "upload_artifact_name": "",
-        "upload_artifact_paths": ""
+        "upload_artifact_paths": "",
+        "working_directory": ""
       },
       "kind": "action",
       "known_limitations": "Composite intended for _python-uv-test.yml; sharded coverage is merged by the reusable workflow",
@@ -333,7 +334,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "92dab57bb12cc68491a353193b848b0db8b9226f49fcf7b8a53ec7e0b79bef90",
+      "source_sha256": "bfe926e736e051db5567c3b55badecc34a728f6d33b6866cecd0e55b60b38391",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1351,7 +1352,8 @@
         "sync_all_extras": "",
         "timeout_minutes": "",
         "upload_artifact_name": "",
-        "upload_artifact_paths": ""
+        "upload_artifact_paths": "",
+        "working_directory": ""
       },
       "kind": "workflow",
       "known_limitations": "Sharding is opt-in, limited to eight shards, and requires job-scoped service isolation for integration presets",
@@ -1365,7 +1367,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "416f9f0019ffd3e7f7acd53a97b615981ad26786b3b75bad85ed002838c1154b",
+      "source_sha256": "1b9fbea1b2e026e307168475853e27fb36916702b522914a28961f9a67707f77",
       "trust_boundary": "trusted-pr"
     },
     {

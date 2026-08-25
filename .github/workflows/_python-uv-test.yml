@@ -25,6 +25,11 @@ on:
         required: false
         type: string
         default: "3.12"
+      working_directory:
+        description: "Diretório relativo do projeto Python dentro do workspace"
+        required: false
+        type: string
+        default: "."
       coverage_min:
         description: "Cobertura mínima (%) aplicada no gate agregado quando há shards"
         required: false
@@ -275,6 +280,7 @@ jobs:
         uses: optimizr-tech/optimizr-actions/.github/actions/python-uv-test-steps@v1
         with:
           python_version: ${{ inputs.python_version }}
+          working_directory: ${{ inputs.working_directory }}
           sync_all_extras: ${{ inputs.sync_all_extras }}
           extras: ${{ inputs.extras }}
           ruff_check: ${{ inputs.ruff_check }}
@@ -345,6 +351,7 @@ jobs:
         uses: optimizr-tech/optimizr-actions/.github/actions/python-uv-test-steps@v1
         with:
           python_version: ${{ inputs.python_version }}
+          working_directory: ${{ inputs.working_directory }}
           sync_all_extras: ${{ inputs.sync_all_extras }}
           extras: ${{ inputs.extras }}
           ruff_check: ${{ inputs.ruff_check }}
@@ -368,7 +375,7 @@ jobs:
           upload_artifact_name: ${{ inputs.coverage_artifact_prefix }}-shard-${{ matrix.shard_index }}
           upload_artifact_paths: |
             ${{ inputs.upload_artifact_paths }}
-            .coverage.shard-${{ matrix.shard_index }}
+            ${{ inputs.working_directory }}/.coverage.shard-${{ matrix.shard_index }}
 
   test-integration:
     if: ${{ !inputs.skip && inputs.integration_preset == 'serve' && inputs.shard_count == 1 }}
@@ -450,6 +457,7 @@ jobs:
         uses: optimizr-tech/optimizr-actions/.github/actions/python-uv-test-steps@v1
         with:
           python_version: ${{ inputs.python_version }}
+          working_directory: ${{ inputs.working_directory }}
           sync_all_extras: ${{ inputs.sync_all_extras }}
           extras: ${{ inputs.extras }}
           ruff_check: ${{ inputs.ruff_check }}
@@ -555,6 +563,7 @@ jobs:
         uses: optimizr-tech/optimizr-actions/.github/actions/python-uv-test-steps@v1
         with:
           python_version: ${{ inputs.python_version }}
+          working_directory: ${{ inputs.working_directory }}
           sync_all_extras: ${{ inputs.sync_all_extras }}
           extras: ${{ inputs.extras }}
           ruff_check: ${{ inputs.ruff_check }}
@@ -578,7 +587,7 @@ jobs:
           upload_artifact_name: ${{ inputs.coverage_artifact_prefix }}-shard-${{ matrix.shard_index }}
           upload_artifact_paths: |
             ${{ inputs.upload_artifact_paths }}
-            .coverage.shard-${{ matrix.shard_index }}
+            ${{ inputs.working_directory }}/.coverage.shard-${{ matrix.shard_index }}
 
   aggregate-coverage:
     if: ${{ always() && !inputs.skip && inputs.shard_count > 1 }}
@@ -638,6 +647,7 @@ jobs:
         env:
           SYNC_ALL_EXTRAS: ${{ inputs.sync_all_extras }}
           EXTRAS: ${{ inputs.extras }}
+        working-directory: ${{ inputs.working_directory }}
         run: |
           set -euo pipefail
           if [ "$SYNC_ALL_EXTRAS" = "true" ]; then
@@ -667,9 +677,10 @@ jobs:
           COVERAGE_XML_PATH: ${{ inputs.coverage_xml_path }}
           COVERAGE_JSON_PATH: ${{ inputs.coverage_json_path }}
           EXPECTED_COUNT: ${{ inputs.shard_count }}
+        working-directory: ${{ inputs.working_directory }}
         run: |
           set -euo pipefail
-          mapfile -t coverage_files < <(find shard-artifacts -type f -name '.coverage.shard-*' -print)
+          mapfile -t coverage_files < <(find "$GITHUB_WORKSPACE/shard-artifacts" -type f -name '.coverage.shard-*' -print)
           found_count="${#coverage_files[@]}"
           if [ "$found_count" -ne "$EXPECTED_COUNT" ]; then
             echo "expected $EXPECTED_COUNT coverage files, found $found_count; no shard may be skipped" >&2
@@ -719,9 +730,9 @@ jobs:
         with:
           name: ${{ inputs.coverage_artifact_prefix }}
           path: |
-            coverage.xml
-            coverage.json
-            ${{ inputs.coverage_xml_path }}
-            ${{ inputs.coverage_json_path }}
+            ${{ inputs.working_directory }}/coverage.xml
+            ${{ inputs.working_directory }}/coverage.json
+            ${{ inputs.working_directory }}/${{ inputs.coverage_xml_path }}
+            ${{ inputs.working_directory }}/${{ inputs.coverage_json_path }}
           retention-days: 7
           if-no-files-found: error
