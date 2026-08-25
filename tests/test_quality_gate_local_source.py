@@ -51,6 +51,10 @@ class QualityGateLocalSourceTests(unittest.TestCase):
                 self.assertIn("ref: ${{ job.workflow_sha }}", text)
                 self.assertIn(".optimizr-actions-source", text)
 
+    def test_baseline_excludes_buildx_debug_artifacts(self) -> None:
+        text = (ROOT / ".github" / "workflows" / "_quality-gate-baseline.yml").read_text()
+        self.assertIn('pattern: "!*.dockerbuild"', text)
+
     def test_repository_boundary_allowlist_is_empty(self) -> None:
         text = (ROOT / "tests" / "test_repository_boundary.py").read_text()
         self.assertIn("LEGACY_INFRA_OPS_REFERENCES", text)
