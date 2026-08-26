@@ -75,8 +75,12 @@ class PythonUvShardingContractTests(unittest.TestCase):
     def test_aggregate_gate_requires_all_shards_and_preserves_threshold(self) -> None:
         self.assertIn("aggregate-coverage:", self.workflow)
         aggregate_section = self.workflow.split("aggregate-coverage:", 1)[1]
+        download_section = aggregate_section.split(
+            "- name: Download every shard coverage artifact", 1
+        )[1].split("Merge coverage and enforce aggregate threshold:", 1)[0]
         self.assertIn("needs.test-sharded.result", aggregate_section)
         self.assertIn("needs.test-integration-sharded.result", aggregate_section)
+        self.assertIn("include-hidden-files: true", download_section)
         self.assertIn("coverage combine coverage-input", aggregate_section)
         self.assertIn("--fail-under=\"$COVERAGE_MIN\"", aggregate_section)
         self.assertIn("EXPECTED_COUNT: ${{ inputs.shard_count }}", aggregate_section)

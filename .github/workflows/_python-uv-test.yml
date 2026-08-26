@@ -668,6 +668,7 @@ jobs:
         with:
           pattern: ${{ inputs.coverage_artifact_prefix }}-shard-*
           path: shard-artifacts
+          include-hidden-files: true
 
       - name: Merge coverage and enforce aggregate threshold
         if: always()
