@@ -196,6 +196,7 @@ runs:
         ECOSYSTEMS_FILE: ${{ steps.ecosystems.outputs.ecosystems_file }}
       run: |
         set -euo pipefail
+        export HOME="${HOME:-$(eval echo ~)}"
         action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
         policy_tool="$action_root/scripts/dependency_policy/policy.py"
         mapfile -t ecosystems < "$ECOSYSTEMS_FILE"

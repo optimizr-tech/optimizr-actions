@@ -262,7 +262,7 @@ jobs:
           echo "::notice title=Effective deployment timeout::Effective deployment timeout: ${DEPLOY_TIMEOUT_MINUTES} minutes (allowed range is 30-120 minutes)."
 
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -948,7 +948,7 @@ jobs:
 
       - name: Checkout coherent deploy-manifest recorder
         if: always() && inputs.deploy_manifest_enabled
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
