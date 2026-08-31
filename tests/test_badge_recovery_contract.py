@@ -11,7 +11,7 @@ class BadgeRecoveryContractTests(unittest.TestCase):
         self.assertIn("cancel-in-progress: false", text)
         self.assertIn("fromJSON(inputs.runner_json)", text)
         self.assertNotIn("secrets: inherit", text)
-        self.assertIn("actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd", text)
+        self.assertIn("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", text)
         self.assertIn("update-release-badge@v1", text)
         self.assertIn("release-badge-resolver@v1", text)
         resolver = (ROOT / ".github/actions/release-badge-resolver/action.yml").read_text()

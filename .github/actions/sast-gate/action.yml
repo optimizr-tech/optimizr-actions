@@ -29,7 +29,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        export HOME="${HOME:-$(eval echo ~)}"
+        export HOME="${HOME:-$(cd ~ 2>/dev/null && pwd || echo /home/${USER:-runner})}"
         # --force: the persistent self-hosted runner reuses HOME, so the tool
         # may already exist; without --force uv exits 2 (Executables already exist).
         uv tool install --force 'semgrep==1.170.0'
@@ -44,7 +44,7 @@ runs:
         SEMGREP_METRICS: --metrics=off
       run: |
         set -euo pipefail
-        export HOME="${HOME:-$(eval echo ~)}"
+        export HOME="${HOME:-$(cd ~ 2>/dev/null && pwd || echo /home/${USER:-runner})}"
         export PATH="$HOME/.local/bin:$PATH"
         action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
         baseline=""

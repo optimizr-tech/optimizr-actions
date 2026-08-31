@@ -51,7 +51,7 @@ class PythonUvCanaryContractTests(unittest.TestCase):
                 self.assertIn(job_name, canary)
         self.assertEqual(2, canary.count("uses: ./.github/workflows/_python-uv-test.yml"))
         self.assertIn("uses: ./.github/actions/python-uv-test-steps", canary)
-        self.assertIn("actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd", canary)
+        self.assertIn("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", canary)
         self.assertIn("shard_count: 2", canary)
         self.assertIn("coverage_artifact_prefix: canary-sharded-coverage", canary)
         self.assertNotIn("secrets: inherit", canary)
