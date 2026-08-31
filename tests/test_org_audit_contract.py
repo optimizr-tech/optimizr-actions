@@ -21,7 +21,7 @@ class OrgAuditContractTests(unittest.TestCase):
         self.assertIn('ORG_AUDIT_ISSUE_TOKEN is not configured', text)
         self.assertNotIn("Update private issue when configured", text)
         self.assertNotIn("if: env.ORG_AUDIT_ISSUE_REF != ''", text)
-        self.assertIn("actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd", text)
+        self.assertIn("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", text)
         self.assertIn("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a", text)
         self.assertNotIn("git clone", text)
 

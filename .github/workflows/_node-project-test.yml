@@ -168,12 +168,12 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     steps:
       - name: Checkout exact candidate
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
       - name: Install Node.js before pnpm bootstrap
         if: matrix.project.package_manager == 'pnpm'
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
           node-version: ${{ inputs.node_version }}
       - name: Install pnpm
@@ -183,14 +183,14 @@ jobs:
           version: ${{ inputs.pnpm_version }}
       - name: Initialize pnpm cache
         if: matrix.project.package_manager == 'pnpm'
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
           node-version: ${{ inputs.node_version }}
           cache: pnpm
           cache-dependency-path: ${{ matrix.project.working_directory }}/${{ matrix.project.lockfile }}
       - name: Install Node.js for npm projects
         if: matrix.project.package_manager == 'npm'
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
           node-version: ${{ inputs.node_version }}
       - name: Run bounded Node project validation
