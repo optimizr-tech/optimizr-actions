@@ -97,7 +97,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Generate image evidence
-        uses: optimizr-tech/optimizr-actions/.github/actions/supply-chain-evidence@v1
+        uses: optimizr-tech/optimizr-actions/.github/actions/supply-chain-evidence@f042163c0d83712736bbc9cc168c4f9f98c488cf
         with:
           image_refs: ${{ inputs.image_refs }}
           trivy_version: ${{ inputs.trivy_version }}

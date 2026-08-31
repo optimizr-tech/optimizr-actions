@@ -21,6 +21,7 @@ TEMPORARY_ACTIONS_SHA = "7925034d32f769326a45f6af155c95dac6aefc55"
 REPO_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$")
 USES_RE = re.compile(r"(?m)^\s*-?\s*uses:\s*([^\s#]+)")
 INTERNAL_REF_RE = re.compile(r"optimizr-tech/optimizr-actions/(?:\.github/(?:workflows|actions)/[^@\s]+)@([^\s#]+)")
+GOVERNED_INTERNAL_REF_RE = re.compile(r"^(?:v1|[0-9a-f]{40})$")
 THIRD_PARTY_RE = re.compile(r"^(?!\./)([^/\s]+)/([^@\s]+)@([^\s]+)$")
 PR_BILLING_SKIP_GUARD_RE = re.compile(
     r"!\s*contains\(\s*github\.event\.pull_request\.title\s*,\s*"
@@ -136,6 +137,15 @@ def _write_permissions(content: str) -> set[str]:
     return result
 
 
+def _has_governed_internal_ref(content: str, artifact_path: str) -> bool:
+    """Return whether an internal reusable is referenced by v1 or an immutable SHA."""
+    return re.search(
+        rf"optimizr-tech/optimizr-actions/{re.escape(artifact_path)}@"
+        r"(?:v1|[0-9a-f]{40})(?=$|[^A-Za-z0-9_-])",
+        content,
+    ) is not None
+
+
 def _job_blocks(content: str) -> list[tuple[str, str]]:
     """Return top-level workflow job blocks without parsing expressions as YAML."""
     lines = content.splitlines()
@@ -175,8 +185,8 @@ def audit_workflows(repository: str, visibility: str, workflows: Mapping[str, st
         if TEMPORARY_ACTIONS_SHA in content:
             add("TEMPORARY_ACTIONS_SHA", "Workflow still references the temporary semantic-release compatibility SHA.")
         for ref in INTERNAL_REF_RE.findall(content):
-            if ref != "v1":
-                add("INTERNAL_REF_NOT_V1", "First-party portable automation does not use the governed floating v1 contract.")
+            if not GOVERNED_INTERNAL_REF_RE.fullmatch(ref):
+                add("INTERNAL_REF_NOT_V1", "First-party portable automation does not use the governed v1 contract or an immutable 40-character commit SHA.")
                 break
         for use in USES_RE.findall(content):
             match = THIRD_PARTY_RE.fullmatch(use)
@@ -193,7 +203,7 @@ def audit_workflows(repository: str, visibility: str, workflows: Mapping[str, st
             add("BROAD_WORKFLOW_PERMISSION", "Workflow grants write permissions that require job-level least-privilege review: " + ", ".join(sorted(permissions)) + ".")
         on_block = _on_block(content)
         metadata_only_pr_workflow = (
-            "optimizr-actions/.github/workflows/_pr-metadata.yml@v1" in content
+            _has_governed_internal_ref(content, ".github/workflows/_pr-metadata.yml")
             and "actions/checkout" not in content
             and not re.search(r"(?m)^\s*-?\s*run\s*:", content)
         )
@@ -223,21 +233,21 @@ def audit_workflows(repository: str, visibility: str, workflows: Mapping[str, st
                         "Pull-request workflow calls a canonical reusable on a self-hosted runner without a governed self_hosted_mode (metadata-pr/ephemeral-pr/trusted-main) or a hosted-PR switch. Untrusted candidate code may reach a persistent runner outside the governed contract (directive #159).",
                     )
         basename = Path(path).name
-        if basename == "update-badges.yml" and "_release-badge-recovery.yml@v1" not in content:
+        if basename == "update-badges.yml" and not _has_governed_internal_ref(content, ".github/workflows/_release-badge-recovery.yml"):
             add("DUPLICATED_BADGE_WORKFLOW", "Release badge recovery is implemented inline instead of calling the canonical reusable.")
         if basename == "commitlint.yml" and not any(
-            reference in content
-            for reference in (
-                "optimizr-actions/.github/workflows/_commitlint.yml@v1",
-                "optimizr-actions/.github/workflows/_pr-metadata.yml@v1",
+            _has_governed_internal_ref(content, artifact_path)
+            for artifact_path in (
+                ".github/workflows/_commitlint.yml",
+                ".github/workflows/_pr-metadata.yml",
             )
         ):
             add("DUPLICATED_COMMITLINT_WORKFLOW", "Commitlint does not call the canonical optimizr-actions reusable.")
         if basename == "validate-pr.yml" and not any(
-            reference in content
-            for reference in (
-                "optimizr-actions/.github/workflows/_validate-pr.yml@v1",
-                "optimizr-actions/.github/workflows/_pr-metadata.yml@v1",
+            _has_governed_internal_ref(content, artifact_path)
+            for artifact_path in (
+                ".github/workflows/_validate-pr.yml",
+                ".github/workflows/_pr-metadata.yml",
             )
         ):
             add("DUPLICATED_PR_VALIDATION", "Pull-request validation does not call the canonical optimizr-actions reusable.")
@@ -267,7 +277,7 @@ def audit_workflows(repository: str, visibility: str, workflows: Mapping[str, st
                 )
                 if governed_pr_caller:
                     continue
-                if "optimizr-actions/.github/workflows/_dependabot-security-automerge.yml@v1" in job_block:
+                if _has_governed_internal_ref(job_block, ".github/workflows/_dependabot-security-automerge.yml"):
                     continue
                 validates_candidate = (
                     "optimizr-actions/.github/workflows/" in job_block

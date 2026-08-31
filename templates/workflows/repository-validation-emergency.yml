@@ -33,7 +33,7 @@ permissions:
   contents: read
 jobs:
   validation:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_repository-validation-emergency.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_repository-validation-emergency.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
     with:
       environment_name: ${{ inputs.environment_name }}
       runner_json: ${{ inputs.runner_json }}

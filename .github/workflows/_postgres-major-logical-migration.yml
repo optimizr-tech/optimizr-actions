@@ -270,7 +270,7 @@ jobs:
 
       - name: Write sanitized source verification diagnostics
         if: steps.backup.outcome == 'success'
-        uses: optimizr-tech/optimizr-actions/.github/actions/postgres-migration-diagnostics@v1
+        uses: optimizr-tech/optimizr-actions/.github/actions/postgres-migration-diagnostics@f042163c0d83712736bbc9cc168c4f9f98c488cf
         with:
           mode: component
           input_file: ${{ steps.backup.outputs.source_fingerprint_file }}
@@ -329,7 +329,7 @@ jobs:
       - name: Write sanitized target verification diagnostics
         id: target-diagnostics
         if: steps.restore.outcome == 'success'
-        uses: optimizr-tech/optimizr-actions/.github/actions/postgres-migration-diagnostics@v1
+        uses: optimizr-tech/optimizr-actions/.github/actions/postgres-migration-diagnostics@f042163c0d83712736bbc9cc168c4f9f98c488cf
         with:
           mode: component
           input_file: ${{ steps.restore.outputs.target_value_file }}
@@ -340,7 +340,7 @@ jobs:
       - name: Compare sanitized verification diagnostics
         id: diagnostic-comparison
         if: steps.restore.outcome == 'success' && steps.target-diagnostics.outcome == 'success'
-        uses: optimizr-tech/optimizr-actions/.github/actions/postgres-migration-diagnostics@v1
+        uses: optimizr-tech/optimizr-actions/.github/actions/postgres-migration-diagnostics@f042163c0d83712736bbc9cc168c4f9f98c488cf
         with:
           mode: comparison
           source_file: ${{ env.EVIDENCE_DIR }}/source-verification.json

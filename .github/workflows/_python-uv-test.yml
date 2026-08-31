@@ -277,7 +277,7 @@ jobs:
           persist-credentials: false
 
       - name: Python test steps
-        uses: optimizr-tech/optimizr-actions/.github/actions/python-uv-test-steps@v1
+        uses: optimizr-tech/optimizr-actions/.github/actions/python-uv-test-steps@f042163c0d83712736bbc9cc168c4f9f98c488cf
         with:
           python_version: ${{ inputs.python_version }}
           working_directory: ${{ inputs.working_directory }}
@@ -348,7 +348,7 @@ jobs:
           persist-credentials: false
 
       - name: Python test steps (shard ${{ matrix.shard_index }})
-        uses: optimizr-tech/optimizr-actions/.github/actions/python-uv-test-steps@v1
+        uses: optimizr-tech/optimizr-actions/.github/actions/python-uv-test-steps@f042163c0d83712736bbc9cc168c4f9f98c488cf
         with:
           python_version: ${{ inputs.python_version }}
           working_directory: ${{ inputs.working_directory }}
@@ -454,7 +454,7 @@ jobs:
           persist-credentials: false
 
       - name: Python test steps
-        uses: optimizr-tech/optimizr-actions/.github/actions/python-uv-test-steps@v1
+        uses: optimizr-tech/optimizr-actions/.github/actions/python-uv-test-steps@f042163c0d83712736bbc9cc168c4f9f98c488cf
         with:
           python_version: ${{ inputs.python_version }}
           working_directory: ${{ inputs.working_directory }}
@@ -560,7 +560,7 @@ jobs:
           persist-credentials: false
 
       - name: Python test steps (integration shard ${{ matrix.shard_index }})
-        uses: optimizr-tech/optimizr-actions/.github/actions/python-uv-test-steps@v1
+        uses: optimizr-tech/optimizr-actions/.github/actions/python-uv-test-steps@f042163c0d83712736bbc9cc168c4f9f98c488cf
         with:
           python_version: ${{ inputs.python_version }}
           working_directory: ${{ inputs.working_directory }}

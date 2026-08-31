@@ -37,9 +37,10 @@ jobs:
       - uses: actions/checkout@main
       - uses: optimizr-tech/optimizr-infra-ops/.github/workflows/_trivy-scan.yml@v1
       - uses: optimizr-tech/optimizr-actions/.github/workflows/_semantic-release.yml@7925034d32f769326a45f6af155c95dac6aefc55
+      - uses: optimizr-tech/optimizr-actions/.github/workflows/_commitlint.yml@main
   validate:
     runs-on: [self-hosted, Linux, prod]
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_repository-validation.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_repository-validation.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
 """,
             ".github/workflows/update-badges.yml": """
 on: [workflow_dispatch]
@@ -47,7 +48,7 @@ jobs:
   badge:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: optimizr-tech/optimizr-actions/.github/actions/update-release-badge@v1
+      - uses: optimizr-tech/optimizr-actions/.github/actions/update-release-badge@f042163c0d83712736bbc9cc168c4f9f98c488cf
 """,
         }
         findings = audit_workflows("optimizr-tech/private-repo", "private", workflows)
@@ -97,7 +98,7 @@ on:
 jobs:
   commitlint:
 {guard}
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_commitlint.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_commitlint.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
 """,
             ".github/workflows/validate-pr.yml": f"""
 on:
@@ -105,7 +106,7 @@ on:
 jobs:
   validate-pr:
 {guard}
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_validate-pr.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_validate-pr.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
 """,
         }
 
@@ -130,7 +131,7 @@ jobs:
   root:
     if: >-
       !contains(github.event.pull_request.title, '[skip-tests]')
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_docker-compose-validate.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_docker-compose-validate.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
   dependent:
     needs: root
     runs-on: ubuntu-latest
@@ -144,7 +145,7 @@ on:
 jobs:
   deploy:
     runs-on: [self-hosted, Linux, prod]
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
 """,
         }
 
@@ -180,7 +181,7 @@ on:
     paths: ["**"]
 jobs:
   deploy:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
     with:
       candidate_sha: ${{ github.event.pull_request.base.sha }}
 """,
@@ -205,7 +206,7 @@ jobs:
       packages: write
       attestations: write
       id-token: write
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_container-build-publish.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_container-build-publish.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
 """,
         }
 
@@ -254,7 +255,7 @@ on:
   pull_request:
 jobs:
   node:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_python-uv-test.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_python-uv-test.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
     with:
       runner_json: ${{ github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["self-hosted","Linux","corp-docs"]' }}
       self_hosted_mode: ${{ github.event_name == 'pull_request' && 'none' || 'trusted-main' }}
@@ -275,14 +276,14 @@ on:
   pull_request:
 jobs:
   commitlint:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_commitlint.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_commitlint.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
 """,
             ".github/workflows/validate-pr.yml": """
 on:
   pull_request:
 jobs:
   validate-pr:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_validate-pr.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_validate-pr.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
 """,
         }
 
@@ -306,7 +307,7 @@ on:
   pull_request:
 jobs:
   commitlint:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_commitlint.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_commitlint.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
     with:
       runner_json: '["self-hosted", "Linux", "monitoring"]'
       self_hosted_mode: trusted-pr
@@ -316,7 +317,7 @@ on:
   pull_request:
 jobs:
   validate-pr:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_validate-pr.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_validate-pr.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
     with:
       runner_json: '["self-hosted", "Linux", "monitoring"]'
       self_hosted_mode: trusted-pr
@@ -338,7 +339,7 @@ on:
   pull_request:
 jobs:
   commitlint:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
     with:
       runner_json: '["self-hosted", "Linux", "monitoring"]'
       self_hosted_mode: metadata-pr
@@ -348,7 +349,7 @@ on:
   pull_request:
 jobs:
   validate-pr:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
     with:
       runner_json: '["self-hosted", "Linux", "monitoring"]'
       self_hosted_mode: metadata-pr
@@ -372,7 +373,7 @@ on:
   pull_request:
 jobs:
   node:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_node-project-test.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_node-project-test.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
     with:
       runner_json: ${{ github.event_name == 'pull_request' && '["self-hosted","Linux","monitoring","ephemeral"]' || '["self-hosted","Linux","monitoring"]' }}
       self_hosted_mode: ${{ github.event_name == 'pull_request' && 'ephemeral-pr' || 'trusted-main' }}
@@ -384,7 +385,7 @@ on:
 jobs:
   deploy:
     runs-on: [self-hosted, Linux, monitoring]
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
 """,
         }
 
@@ -403,7 +404,7 @@ on:
   pull_request:
 jobs:
   automerge:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_dependabot-security-automerge.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_dependabot-security-automerge.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
 """,
             ".github/workflows/deploy.yml": """
 on:
@@ -412,7 +413,7 @@ on:
 jobs:
   deploy:
     runs-on: [self-hosted, Linux, monitoring]
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
 """,
         }
 
@@ -431,7 +432,7 @@ on:
   pull_request:
 jobs:
   metadata:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
     with:
       runner_json: '["self-hosted", "Linux", "cdn"]'
       self_hosted_mode: metadata-pr

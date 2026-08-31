@@ -30,7 +30,7 @@ class SecurityGateContractTests(unittest.TestCase):
     def test_legacy_trivy_workflow_uses_the_shared_cache_contract(self) -> None:
         content = read(".github/workflows/_trivy-scan.yml")
         self.assertIn(
-            "uses: optimizr-tech/optimizr-actions/.github/actions/trivy-scan@v1",
+            "uses: optimizr-tech/optimizr-actions/.github/actions/trivy-scan@f042163c0d83712736bbc9cc168c4f9f98c488cf",
             content,
         )
         self.assertIn("exit_code", content)
@@ -201,7 +201,7 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertIn("runs-on: ${{ fromJSON(inputs.runner_json) }}", content)
         self.assertIn('default: \'["ubuntu-latest"]\'', content)
         self.assertIn(
-            "uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@v1",
+            "uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@f042163c0d83712736bbc9cc168c4f9f98c488cf",
             content,
         )
         self.assertIn(

@@ -64,7 +64,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Build and promote static assets
-        uses: optimizr-tech/optimizr-actions/.github/actions/static-site-deploy@v1
+        uses: optimizr-tech/optimizr-actions/.github/actions/static-site-deploy@f042163c0d83712736bbc9cc168c4f9f98c488cf
         with:
           manifest_path: ${{ inputs.manifest_path }}
           deployed_sha: ${{ inputs.deployed_sha }}

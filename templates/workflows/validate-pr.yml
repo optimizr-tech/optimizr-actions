@@ -20,7 +20,7 @@ jobs:
     if: >-
       github.event_name != 'pull_request' ||
       !contains(github.event.pull_request.title, '[skip-tests]')
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_validate-pr.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_validate-pr.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
     with:
       run_self_tests: true
       pr_title: ${{ github.event.pull_request.title }}

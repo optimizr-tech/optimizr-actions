@@ -38,12 +38,12 @@ class DockerPruneContractTests(unittest.TestCase):
             with self.subTest(workflow=workflow.name):
                 self.assertIn(
                     "uses: optimizr-tech/optimizr-actions/.github/actions/"
-                    "docker-prune-safe@v1",
+                    "docker-prune-safe@f042163c0d83712736bbc9cc168c4f9f98c488cf",
                     content,
                 )
                 self.assertIn(
                     "uses: optimizr-tech/optimizr-actions/.github/actions/"
-                    "deploy-snapshot-retention@v1",
+                    "deploy-snapshot-retention@f042163c0d83712736bbc9cc168c4f9f98c488cf",
                     content,
                 )
                 self.assertIn("deploy_snapshot_retention_count:", content)

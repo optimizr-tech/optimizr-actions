@@ -99,7 +99,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Run local SAST profiles
-        uses: optimizr-tech/optimizr-actions/.github/actions/sast-gate@v1
+        uses: optimizr-tech/optimizr-actions/.github/actions/sast-gate@f042163c0d83712736bbc9cc168c4f9f98c488cf
         with:
           profile: ${{ inputs.profile }}
           baseline_file: ${{ inputs.baseline_file }}

@@ -99,7 +99,7 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
         self.assertEqual(
             text.count(
                 "optimizr-tech/optimizr-actions/.github/actions/"
-                "python-uv-test-steps@v1"
+                "python-uv-test-steps@f042163c0d83712736bbc9cc168c4f9f98c488cf"
             ),
             4,
         )

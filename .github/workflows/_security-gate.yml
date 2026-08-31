@@ -168,7 +168,7 @@ jobs:
       - name: Run portable security gate
         id: security-gate
         continue-on-error: true
-        uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@v1
+        uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@f042163c0d83712736bbc9cc168c4f9f98c488cf
         with:
           scan_type: ${{ inputs.scan_type }}
           scan_ref: ${{ inputs.scan_ref }}

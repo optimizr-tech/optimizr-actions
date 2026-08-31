@@ -181,7 +181,7 @@ jobs:
   static-lint:
     name: Static lint
     needs: profile
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_static-lint.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_static-lint.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
     with:
       runner_json: ${{ inputs.runner_json }}
       self_hosted_mode: ${{ inputs.self_hosted_mode }}
@@ -193,7 +193,7 @@ jobs:
   filesystem-security:
     name: Filesystem security
     needs: profile
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_security-gate.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_security-gate.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
     with:
       runner_json: ${{ inputs.runner_json }}
       self_hosted_mode: ${{ inputs.self_hosted_mode }}
@@ -209,7 +209,7 @@ jobs:
     name: Dependency and license policy
     needs: profile
     if: needs.profile.outputs.run_dependency == 'true'
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_dependency-policy.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_dependency-policy.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
     with:
       runner_json: ${{ inputs.runner_json }}
       self_hosted_mode: ${{ inputs.self_hosted_mode }}
@@ -225,7 +225,7 @@ jobs:
     name: Controlled SAST
     needs: profile
     if: needs.profile.outputs.run_sast == 'true'
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_sast-gate.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_sast-gate.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
     with:
       runner_json: ${{ inputs.runner_json }}
       self_hosted_mode: ${{ inputs.self_hosted_mode }}
@@ -238,7 +238,7 @@ jobs:
     name: Image SBOM and provenance
     needs: profile
     if: needs.profile.outputs.run_supply_chain == 'true' && inputs.image_refs != ''
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_supply-chain-evidence.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_supply-chain-evidence.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
     with:
       runner_json: ${{ inputs.runner_json }}
       self_hosted_mode: ${{ inputs.self_hosted_mode }}

@@ -32,7 +32,7 @@ class PostgresMajorLogicalMigrationContract(unittest.TestCase):
             "verification_sql",
             "source and target verification fingerprints differ",
             ".optimizr-postgres-major-migration.json",
-            ".github/actions/postgres-migration-diagnostics@v1",
+            ".github/actions/postgres-migration-diagnostics@f042163c0d83712736bbc9cc168c4f9f98c488cf",
             "source_fingerprint_file",
             "target-diagnostics",
             "source-verification.json",

@@ -1,5 +1,5 @@
 # Composite action: prune Docker safe (containers/images/builder; nunca volumes/networks).
-# Uso: uses: optimizr-tech/optimizr-actions/.github/actions/docker-prune-safe@v1
+# Uso: uses: optimizr-tech/optimizr-actions/.github/actions/docker-prune-safe@f042163c0d83712736bbc9cc168c4f9f98c488cf
 
 name: docker-prune-safe
 description: Prune containers/images/builder + workspace temp; nunca toca volumes ou networks

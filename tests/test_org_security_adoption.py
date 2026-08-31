@@ -45,12 +45,12 @@ jobs:
             ".github/workflows/deploy.yml": """
 jobs:
   deploy:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
 """,
             ".github/workflows/dependabot-security-automerge.yml": """
 jobs:
   automerge:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_dependabot-security-automerge.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_dependabot-security-automerge.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
 """,
         }
         dependabot = "version: 2\nupdates: []\n"
@@ -123,15 +123,15 @@ jobs:
             ".github/workflows/reusable.yml": """
 jobs:
   gate:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_docker-compose-validate.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_docker-compose-validate.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
     with:
       workspace: .
   security:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_security-gate.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_security-gate.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
   lint:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_static-lint.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_static-lint.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
   python:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_python-uv-test.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_python-uv-test.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
 """,
         }
 
@@ -167,7 +167,7 @@ jobs:
             ".github/workflows/validate.yml": """
 jobs:
   gate:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_repository-validation.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_repository-validation.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
     with:
       skip: "true"
 """
@@ -198,7 +198,7 @@ jobs:
 jobs:
   gate:
     runs-on: ubuntu-latest
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_repository-validation.yml@v1
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_repository-validation.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
   deploy:
     runs-on: self-hosted
     steps:

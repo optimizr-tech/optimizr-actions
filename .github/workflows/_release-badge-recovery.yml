@@ -47,14 +47,14 @@ jobs:
           persist-credentials: true
       - name: Resolve validated release version
         id: version
-        uses: optimizr-tech/optimizr-actions/.github/actions/release-badge-resolver@v1
+        uses: optimizr-tech/optimizr-actions/.github/actions/release-badge-resolver@f042163c0d83712736bbc9cc168c4f9f98c488cf
         with:
           requested_tag: ${{ inputs.tag }}
           event_tag: ${{ github.event.release.tag_name }}
           branch: ${{ inputs.branch }}
           badge_path: ${{ inputs.badge_path }}
       - name: Update release badge when needed
-        uses: optimizr-tech/optimizr-actions/.github/actions/update-release-badge@v1
+        uses: optimizr-tech/optimizr-actions/.github/actions/update-release-badge@f042163c0d83712736bbc9cc168c4f9f98c488cf
         with:
           version: ${{ steps.version.outputs.version }}
           badge_path: ${{ inputs.badge_path }}

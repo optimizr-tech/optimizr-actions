@@ -195,7 +195,7 @@ jobs:
           version: ${{ inputs.pnpm_version }}
       - name: Run repository contract
         id: contract
-        uses: optimizr-tech/optimizr-actions/.github/actions/repository-validation@v1
+        uses: optimizr-tech/optimizr-actions/.github/actions/repository-validation@f042163c0d83712736bbc9cc168c4f9f98c488cf
         with:
           script_path: ${{ inputs.script_path }}
           args_json: ${{ inputs.args_json }}

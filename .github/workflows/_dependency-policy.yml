@@ -114,7 +114,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Enforce dependency policy
-        uses: optimizr-tech/optimizr-actions/.github/actions/dependency-policy@v1
+        uses: optimizr-tech/optimizr-actions/.github/actions/dependency-policy@f042163c0d83712736bbc9cc168c4f9f98c488cf
         with:
           working_directory: ${{ inputs.working_directory }}
           policy_file: ${{ inputs.policy_file }}

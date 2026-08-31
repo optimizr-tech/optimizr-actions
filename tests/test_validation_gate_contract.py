@@ -7,9 +7,9 @@ ROOT = Path(__file__).resolve().parents[1]
 class ValidationGateContractTests(unittest.TestCase):
     def test_gate_exposes_one_attestation_for_release_and_deploy(self):
         text = (ROOT / ".github/workflows/_validation-gate.yml").read_text()
-        self.assertIn("_repository-validation.yml@v1", text)
-        self.assertIn("_security-suite.yml@v1", text)
-        self.assertIn("validation-attestation@v1", text)
+        self.assertIn("_repository-validation.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf", text)
+        self.assertIn("_security-suite.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf", text)
+        self.assertIn("validation-attestation@f042163c0d83712736bbc9cc168c4f9f98c488cf", text)
         self.assertNotIn("62ea4fba2da72e502a3141391a5db988f8a98c16", text)
         for output in (
             "result:",
