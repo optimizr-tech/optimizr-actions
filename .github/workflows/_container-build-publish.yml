@@ -60,6 +60,11 @@ on:
         required: false
         type: number
         default: 30
+      max_parallel:
+        description: Maximum concurrent image builds on the selected runner
+        required: false
+        type: number
+        default: 1
       security_severity:
         description: Blocking Trivy severities for the exact candidate image
         required: false
@@ -118,6 +123,7 @@ jobs:
           CACHE_SCOPE_PREFIX: ${{ inputs.cache_scope_prefix }}
           PROVENANCE: ${{ inputs.provenance }}
           SBOM: ${{ inputs.sbom }}
+          MAX_PARALLEL: ${{ inputs.max_parallel }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -130,6 +136,12 @@ jobs:
               raise SystemExit("candidate_sha must be a full hexadecimal commit SHA")
           if os.environ["PROVENANCE"] != "true" or os.environ["SBOM"] != "true":
               raise SystemExit("published container releases require both SBOM and provenance")
+          try:
+              max_parallel = int(os.environ["MAX_PARALLEL"])
+          except ValueError as exc:
+              raise SystemExit("max_parallel must be an integer between 1 and 8") from exc
+          if not 1 <= max_parallel <= 8:
+              raise SystemExit("max_parallel must be between 1 and 8")
 
           for key in ("REGISTRY", "IMAGE_NAMESPACE", "CACHE_SCOPE_PREFIX"):
               value = os.environ[key]
@@ -173,7 +185,7 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: ${{ inputs.max_parallel }}
       matrix:
         service: ${{ fromJSON(needs.validate.outputs.services_json) }}
     env:
