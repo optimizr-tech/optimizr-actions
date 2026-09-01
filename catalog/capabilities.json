@@ -63,6 +63,7 @@
       "evidence": "Docker prune operation evidence; never touches volumes or networks",
       "examples": [],
       "inputs": {
+        "allow_global_prune": "",
         "docker_mode": "",
         "image_age_threshold": ""
       },
@@ -78,7 +79,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "a46f32953a0df84c3090bfc015ff15415b603c096a58d840dd59d2b620cdc302",
+      "source_sha256": "ca28dca77adb6416147ac191d2e39560d4210a7d405ff6849eb4798e11d9aa63",
       "trust_boundary": "trusted-push"
     },
     {
@@ -2040,7 +2041,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "b50a6742af340ba09b604c090abf1061d35ea09d82571b6b65d9dd59504935e4",
+      "source_sha256": "161cb60be6a74fea8e0a16b9a4d343ef16fdee7a69d81f7b3b465c30845ed805",
       "trust_boundary": "trusted-push"
     },
     {
@@ -2104,7 +2105,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "d355e68017790391c48eab454fb124ffcde10148a82780839d953a6a998a7709",
+      "source_sha256": "c247b1e7e1d50f35ffd64576e5a5bba875b24fbfe3fccbbcf2318b341a1b5382",
       "trust_boundary": "trusted-push"
     },
     {

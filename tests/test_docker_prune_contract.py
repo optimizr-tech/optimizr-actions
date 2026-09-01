@@ -29,6 +29,9 @@ class DockerPruneContractTests(unittest.TestCase):
         self.assertIn("/tmp/optimizr-docker-prune-safe.lock", content)
         self.assertIn("flock -w 60 9", content)
         self.assertIn("skipping Docker cleanup", content)
+        self.assertIn("allow_global_prune", content)
+        self.assertIn("Global Docker pruning is disabled", content)
+        self.assertIn("Unsupported allow_global_prune", content)
         self.assertNotIn("docker volume prune", content)
         self.assertNotIn("docker network prune", content)
 
@@ -47,6 +50,7 @@ class DockerPruneContractTests(unittest.TestCase):
                     content,
                 )
                 self.assertIn("deploy_snapshot_retention_count:", content)
+                self.assertIn("allow_global_prune: true", content)
                 self.assertNotIn("docker container prune", content)
                 self.assertNotIn("docker image prune", content)
                 self.assertNotIn("docker builder prune", content)

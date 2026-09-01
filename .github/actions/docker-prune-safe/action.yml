@@ -1,8 +1,8 @@
-# Composite action: prune Docker safe (containers/images/builder; nunca volumes/networks).
+# Composite action: host-wide Docker prune (containers/images/builder; nunca volumes/networks).
 # Uso: uses: optimizr-tech/optimizr-actions/.github/actions/docker-prune-safe@f042163c0d83712736bbc9cc168c4f9f98c488cf
 
 name: docker-prune-safe
-description: Prune containers/images/builder + workspace temp; nunca toca volumes ou networks
+description: Explicitly opt-in host-wide prune of containers/images/builder + workspace temp; never touches volumes or networks
 
 inputs:
   image_age_threshold:
@@ -13,6 +13,10 @@ inputs:
     description: "Local Docker access mode: direct, sudo, or auto"
     required: false
     default: "sudo"
+  allow_global_prune:
+    description: "Explicitly allow host-wide Docker pruning on a trusted shared runner"
+    required: false
+    default: "false"
 
 runs:
   using: composite
@@ -21,6 +25,7 @@ runs:
       env:
         IMAGE_AGE: ${{ inputs.image_age_threshold }}
         DOCKER_MODE: ${{ inputs.docker_mode }}
+        ALLOW_GLOBAL_PRUNE: ${{ inputs.allow_global_prune }}
       run: |
         set -euo pipefail
         case "$DOCKER_MODE" in
@@ -60,10 +65,23 @@ runs:
           exit 0
         fi
 
-        docker_cmd container prune -f
-        docker_cmd image prune -f
-        docker_cmd image prune -af --filter "until=${IMAGE_AGE}"
-        docker_cmd builder prune -af --filter "until=${IMAGE_AGE}"
+        case "$ALLOW_GLOBAL_PRUNE" in
+          true)
+            # This daemon is shared by trusted VPS deployments. The explicit
+            # opt-in keeps accidental reuse from pruning another stack.
+            docker_cmd container prune -f
+            docker_cmd image prune -f
+            docker_cmd image prune -af --filter "until=${IMAGE_AGE}"
+            docker_cmd builder prune -af --filter "until=${IMAGE_AGE}"
+            ;;
+          false)
+            echo "::notice::Global Docker pruning is disabled; workspace cleanup only"
+            ;;
+          *)
+            echo "Unsupported allow_global_prune: $ALLOW_GLOBAL_PRUNE" >&2
+            exit 2
+            ;;
+        esac
 
         if [ -n "${RUNNER_WORKSPACE:-}" ]; then
           runner_root="$(dirname "$RUNNER_WORKSPACE")"

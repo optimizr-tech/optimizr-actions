@@ -13,9 +13,11 @@ policy is a default budget, not a replacement for measuring a larger runner.
 - Callers may opt into more parallelism only after proving that their runner
   has enough CPU, memory, and isolated Docker capacity.
 
-The reusable workflows do not run global Docker prune commands. Cleanup of
-disposable Compose projects belongs to the host runner guard and to the caller
-workflow's scoped Compose teardown.
+The notebook runner does not invoke the host-wide prune action. Its cleanup is
+performed by the host runner guard and by each caller's scoped Compose teardown.
+The two trusted VPS deploy reusables invoke the canonical prune action with
+`allow_global_prune: true` explicitly because that daemon is shared; any other
+consumer gets workspace cleanup only unless it makes the same reviewed opt-in.
 
 ## Migration
 
