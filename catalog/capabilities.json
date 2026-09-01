@@ -1039,6 +1039,7 @@
         "control_runner_json": "",
         "github_attestation": "",
         "image_namespace": "",
+        "max_parallel": "",
         "provenance": "",
         "push": "",
         "registry": "",
@@ -1066,7 +1067,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "16e6c75fd6377ecfa03194f52602520876decf6cc7fac392f5eb6c1faac97399",
+      "source_sha256": "fe92b5c096ae2e2fc8d26dd3da733923d6dcb82ff1710731a9b8eb19445f4244",
       "trust_boundary": "trusted-push"
     },
     {
@@ -1367,7 +1368,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "45d4fcf516d87b24126715f387de34e31c3e8b43c4a0a7cadeb42c05a588cbba",
+      "source_sha256": "f94dff975f361deb41d94ee48b68be3501beabcf9f6c8ba2b0f1b0b88dc1140d",
       "trust_boundary": "trusted-pr"
     },
     {
