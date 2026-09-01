@@ -78,7 +78,7 @@ def _canonical_present(joined: str) -> dict[str, bool]:
         present[capability] = any(
             re.search(
                 re.escape(f"optimizr-tech/{target.rsplit('@', 1)[0]}")
-                + r"@(?:v1|[0-9a-f]{40})(?=$|[^A-Za-z0-9_-])",
+                + r"@(?:v1|[0-9a-f]{40})(?=$|[\s\"'#,)\]])",
                 joined,
             )
             for target in targets
@@ -89,7 +89,7 @@ def _canonical_present(joined: str) -> dict[str, bool]:
 def _has_governed_internal_ref(content: str, artifact_path: str) -> bool:
     return re.search(
         rf"optimizr-tech/optimizr-actions/{re.escape(artifact_path)}@"
-        r"(?:v1|[0-9a-f]{40})(?=$|[^A-Za-z0-9_-])",
+        r"(?:v1|[0-9a-f]{40})(?=$|[\s\"'#,)\]])",
         content,
     ) is not None
 

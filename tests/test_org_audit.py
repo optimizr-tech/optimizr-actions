@@ -9,15 +9,42 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from org_audit.audit import (
     Finding,
     _has_event,
+    _has_governed_internal_ref,
     audit_workflows,
     public_alias,
     render_markdown,
     render_json,
     update_marked_section,
 )
+from org_audit.combined import (
+    _canonical_present,
+    _has_governed_internal_ref as combined_has_governed_internal_ref,
+)
 
 
 class OrgAuditTests(unittest.TestCase):
+    def test_governed_internal_ref_requires_a_complete_ref_token(self):
+        artifact = ".github/workflows/_validate-pr.yml"
+        prefix = f"uses: optimizr-tech/optimizr-actions/{artifact}@"
+        immutable_sha = "f042163c0d83712736bbc9cc168c4f9f98c488cf"
+
+        for detector in (_has_governed_internal_ref, combined_has_governed_internal_ref):
+            self.assertTrue(detector(prefix + "v1\n", artifact))
+            self.assertTrue(detector(prefix + immutable_sha + " # governed\n", artifact))
+            self.assertFalse(detector(prefix + "v1.2\n", artifact))
+            self.assertFalse(detector(prefix + "v1-beta\n", artifact))
+
+        self.assertTrue(
+            _canonical_present(
+                prefix + "v1\n",
+            )["validate_pr"]
+        )
+        self.assertFalse(
+            _canonical_present(
+                prefix + "v1.2\n",
+            )["validate_pr"]
+        )
+
     def test_detects_legacy_refs_temp_sha_unpinned_actions_permissions_paths_and_self_hosted_pr(self):
         workflows = {
             ".github/workflows/ci.yml": """

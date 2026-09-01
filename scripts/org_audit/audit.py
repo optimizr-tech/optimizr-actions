@@ -141,7 +141,7 @@ def _has_governed_internal_ref(content: str, artifact_path: str) -> bool:
     """Return whether an internal reusable is referenced by v1 or an immutable SHA."""
     return re.search(
         rf"optimizr-tech/optimizr-actions/{re.escape(artifact_path)}@"
-        r"(?:v1|[0-9a-f]{40})(?=$|[^A-Za-z0-9_-])",
+        r"(?:v1|[0-9a-f]{40})(?=$|[\s\"'#,)\]])",
         content,
     ) is not None
 
