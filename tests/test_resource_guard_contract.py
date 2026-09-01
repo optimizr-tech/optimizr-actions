@@ -10,7 +10,8 @@ BUILD_WORKFLOW = ROOT / ".github/workflows/_container-build-publish.yml"
 class ResourceGuardContractTests(unittest.TestCase):
     def test_integration_services_have_explicit_resource_caps(self) -> None:
         text = PYTHON_WORKFLOW.read_text(encoding="utf-8")
-        self.assertEqual(4, text.count("--memory 512m"))
+        self.assertEqual(2, text.count("--memory 512m"))
+        self.assertEqual(2, text.count("--memory 1g"))
         self.assertEqual(2, text.count("--memory 256m"))
         self.assertEqual(4, text.count("--pids-limit 128"))
         self.assertEqual(2, text.count("--pids-limit 64"))

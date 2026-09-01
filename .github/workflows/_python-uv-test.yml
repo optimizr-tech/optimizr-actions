@@ -415,7 +415,7 @@ jobs:
         ports:
           - 5672:5672
         options: >-
-          --memory 512m
+          --memory 1g
           --cpus 0.50
           --pids-limit 128
           --health-cmd "rabbitmq-diagnostics -q check_running"
@@ -529,7 +529,7 @@ jobs:
         ports:
           - 5672:5672
         options: >-
-          --memory 512m
+          --memory 1g
           --cpus 0.50
           --pids-limit 128
           --health-cmd "rabbitmq-diagnostics -q check_running"

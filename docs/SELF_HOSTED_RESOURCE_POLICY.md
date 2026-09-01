@@ -8,8 +8,8 @@ policy is a default budget, not a replacement for measuring a larger runner.
 - Container image builds use `max_parallel: 1` by default and reject values
   outside `1..8`.
 - Python integration services are bounded per job: PostgreSQL 512 MiB/0.50
-  CPU/128 PIDs, Redis 256 MiB/0.25 CPU/64 PIDs, and RabbitMQ 512 MiB/0.50
-  CPU/128 PIDs.
+  CPU/128 PIDs, Redis 256 MiB/0.25 CPU/64 PIDs, and RabbitMQ 1 GiB/0.50
+  CPU/128 PIDs. RabbitMQ keeps its proven 1 GiB compatibility floor.
 - Callers may opt into more parallelism only after proving that their runner
   has enough CPU, memory, and isolated Docker capacity.
 
