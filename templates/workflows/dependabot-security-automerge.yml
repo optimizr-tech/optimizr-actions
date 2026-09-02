@@ -10,6 +10,6 @@ permissions:
 
 jobs:
   automerge:
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_dependabot-security-automerge.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_dependabot-security-automerge.yml@v1
     with:
       allow_minor: false

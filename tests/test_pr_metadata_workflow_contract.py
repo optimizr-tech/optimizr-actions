@@ -14,7 +14,7 @@ class PRMetadataWorkflowContractTests(unittest.TestCase):
         self.assertIn("ephemeral-pr", text)
         self.assertIn("contents: read", text)
         self.assertIn("pull-requests: read", text)
-        self.assertIn("pr-metadata-validation@f042163c0d83712736bbc9cc168c4f9f98c488cf", text)
+        self.assertIn("pr-metadata-validation@v1", text)
         for forbidden in (
             "actions/checkout",
             "actions/setup-node",

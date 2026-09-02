@@ -34,7 +34,7 @@ class DependabotAutomergeContractTests(unittest.TestCase):
         self.assertIn("types: [opened, synchronize, reopened]", content)
         self.assertIn(
             "optimizr-tech/optimizr-actions/.github/workflows/"
-            "_dependabot-security-automerge.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf",
+            "_dependabot-security-automerge.yml@v1",
             content,
         )
         self.assertNotIn("actions/checkout", content)

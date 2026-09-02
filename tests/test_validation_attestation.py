@@ -35,7 +35,7 @@ class ValidationAttestationTests(unittest.TestCase):
                     "--required-checks-json", '["repository_validation","security_suite"]',
                     "--results-json", json.dumps(results),
                     "--workflow-repository", "optimizr-tech/optimizr-actions",
-                    "--workflow-ref", "optimizr-tech/optimizr-actions/.github/workflows/_validation-gate.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf",
+                    "--workflow-ref", "optimizr-tech/optimizr-actions/.github/workflows/_validation-gate.yml@v1",
                     "--workflow-sha", "b" * 40,
                     "--run-id", "123",
                     "--evidence", str(evidence),

@@ -194,7 +194,7 @@ jobs:
         with:
           node-version: ${{ inputs.node_version }}
       - name: Run bounded Node project validation
-        uses: optimizr-tech/optimizr-actions/.github/actions/node-project-test@f042163c0d83712736bbc9cc168c4f9f98c488cf
+        uses: optimizr-tech/optimizr-actions/.github/actions/node-project-test@v1
         with:
           project_json: ${{ toJSON(matrix.project) }}
       - name: Upload project evidence and collected artifacts

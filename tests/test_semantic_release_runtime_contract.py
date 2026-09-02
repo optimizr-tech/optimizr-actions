@@ -49,6 +49,7 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("releaserc_source:", text)
         self.assertIn("actions_ref:", text)
+        self.assertIn('default: "v1"', text)
         self.assertIn("update_release_badge:", text)
         self.assertIn("protected_main_mode:", text)
         self.assertIn("skip:", text)
@@ -57,7 +58,10 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
             text,
         )
         self.assertRegex(text, r"actions/checkout@[0-9a-f]{40}")
-        self.assertRegex(text, r"optimizr-tech/optimizr-actions/.github/actions/update-release-badge@[0-9a-f]{40}")
+        self.assertIn(
+            "optimizr-tech/optimizr-actions/.github/actions/update-release-badge@v1",
+            text,
+        )
 
     def test_documentation_defines_runtime_migration_and_rollback(self):
         text = DOC.read_text(encoding="utf-8")

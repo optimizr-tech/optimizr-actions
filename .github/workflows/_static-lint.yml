@@ -99,7 +99,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Run portable static lint
-        uses: optimizr-tech/optimizr-actions/.github/actions/static-lint@f042163c0d83712736bbc9cc168c4f9f98c488cf
+        uses: optimizr-tech/optimizr-actions/.github/actions/static-lint@v1
         with:
           shellcheck_severity: ${{ inputs.shellcheck_severity }}
           exclusions: ${{ inputs.exclusions }}

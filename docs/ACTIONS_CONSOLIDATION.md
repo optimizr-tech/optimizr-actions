@@ -69,6 +69,11 @@ This keeps a consumer using floating `@v1` aligned with the exact revision GitHu
 
 The resolved reusable SHA is audit evidence. It does not replace the governed floating `@v1` consumer contract.
 
+All executable first-party references inside this repository and in its
+consumer templates must use the floating `@v1` tag. An internal commit SHA is
+not an approved consumer pin; immutable SHAs remain appropriate for
+third-party actions and for runtime evidence such as `job.workflow_sha`.
+
 ## Compatibility policy
 
 Existing `v1` inputs remain accepted when they can safely become compatibility no-ops. In particular, the historical quality-gate inputs and secret declaration referring to `infra-ops` remain declared temporarily so existing callers do not fail workflow validation, but they are not read and do not authorize external checkout.

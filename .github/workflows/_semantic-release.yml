@@ -1,5 +1,5 @@
 # Reusable: semantic-release with a dry-run and optional release badge update.
-# Consume via: uses: optimizr-tech/optimizr-actions/.github/workflows/_semantic-release.yml@<immutable-sha>
+# Consume via: uses: optimizr-tech/optimizr-actions/.github/workflows/_semantic-release.yml@v1
 
 name: _semantic-release
 
@@ -45,10 +45,10 @@ on:
         type: string
         default: "local"
       actions_ref:
-        description: "Tag or immutable SHA used for canonical assets in normal mode; protected mode uses the exact called workflow SHA"
+        description: "Governed v1 tag used for canonical assets in normal mode; protected mode uses the exact called workflow SHA"
         required: false
         type: string
-        default: "main"
+        default: "v1"
       update_release_badge:
         description: "Update assets/badges/release.svg after semantic-release completes"
         required: false
@@ -321,6 +321,6 @@ jobs:
 
       - name: Update badge
         if: steps.tag.outputs.version != ''
-        uses: optimizr-tech/optimizr-actions/.github/actions/update-release-badge@10c7623bf2a5fb1db1d0e11f3b21e00ae6d442a1
+        uses: optimizr-tech/optimizr-actions/.github/actions/update-release-badge@v1
         with:
           version: ${{ steps.tag.outputs.version }}

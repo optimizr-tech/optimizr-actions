@@ -12,11 +12,11 @@ class SecuritySuiteContractTests(unittest.TestCase):
         for profile in ("python)", "node)", "compose|infra)", "monorepo)"):
             self.assertIn(profile, self.text)
         for workflow in (
-            "_static-lint.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf",
-            "_security-gate.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf",
-            "_dependency-policy.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf",
-            "_sast-gate.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf",
-            "_supply-chain-evidence.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf",
+            "_static-lint.yml@v1",
+            "_security-gate.yml@v1",
+            "_dependency-policy.yml@v1",
+            "_sast-gate.yml@v1",
+            "_supply-chain-evidence.yml@v1",
         ):
             self.assertIn(workflow, self.text)
 
@@ -31,7 +31,7 @@ class SecuritySuiteContractTests(unittest.TestCase):
     def test_dependency_subdirectory_is_propagated_to_confined_gate(self):
         self.assertIn("dependency_working_directory:", self.text)
         self.assertIn("working_directory: ${{ inputs.dependency_working_directory }}", self.text)
-        self.assertIn("_dependency-policy.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf", self.text)
+        self.assertIn("_dependency-policy.yml@v1", self.text)
 
     def test_summary_always_uploads_sanitized_evidence(self):
         self.assertIn("if: always()", self.text)

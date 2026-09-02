@@ -20,7 +20,7 @@ class SecuritySelfHealingContractTests(unittest.TestCase):
         self.assertEqual(
             1,
             content.count(
-                "optimizr-tech/optimizr-actions/.github/actions/security-rebuild@f042163c0d83712736bbc9cc168c4f9f98c488cf"
+                "optimizr-tech/optimizr-actions/.github/actions/security-rebuild@v1"
             ),
         )
         self.assertIn(
@@ -57,7 +57,7 @@ class SecuritySelfHealingContractTests(unittest.TestCase):
         self.assertIn("Filesystem security gate blocked deployment", filesystem_check)
         self.assertNotIn("inputs.security_require_image_scan && always()", content)
         self.assertIn(
-            "optimizr-tech/optimizr-actions/.github/actions/security-retry-result@f042163c0d83712736bbc9cc168c4f9f98c488cf",
+            "optimizr-tech/optimizr-actions/.github/actions/security-retry-result@v1",
             content,
         )
         self.assertIn("initial_refs: ${{ steps.security-images-initial.outputs.refs }}", content)

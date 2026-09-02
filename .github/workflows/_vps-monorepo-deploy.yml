@@ -440,7 +440,7 @@ jobs:
       - name: Security gate (filesystem)
         id: security-filesystem-gate
         continue-on-error: true
-        uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@f042163c0d83712736bbc9cc168c4f9f98c488cf
+        uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@v1
         with:
           scan_type: fs
           scan_ref: .
@@ -567,7 +567,7 @@ jobs:
 
       - name: Prune deploy snapshots
         if: success() && steps.deploy-snapshot.outputs.snapshot_created == 'true'
-        uses: optimizr-tech/optimizr-actions/.github/actions/deploy-snapshot-retention@f042163c0d83712736bbc9cc168c4f9f98c488cf
+        uses: optimizr-tech/optimizr-actions/.github/actions/deploy-snapshot-retention@v1
         with:
           root: /opt/optimizr/backups/${{ inputs.service_name }}/deploys
           max_count: ${{ inputs.deploy_snapshot_retention_count }}
@@ -687,7 +687,7 @@ jobs:
         id: security-images-initial-gate
         if: inputs.security_require_image_scan
         continue-on-error: true
-        uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@f042163c0d83712736bbc9cc168c4f9f98c488cf
+        uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@v1
         with:
           scan_type: image
           image_refs: ${{ steps.security-images-initial.outputs.refs }}
@@ -711,7 +711,7 @@ jobs:
           inputs.deployment_mode != 'prebuilt-images' &&
           steps.security-images-initial-gate.outputs.classification == 'actionable_vulnerability'
         continue-on-error: true
-        uses: optimizr-tech/optimizr-actions/.github/actions/security-rebuild@f042163c0d83712736bbc9cc168c4f9f98c488cf
+        uses: optimizr-tech/optimizr-actions/.github/actions/security-rebuild@v1
         with:
           deploy_path: ${{ env.DEPLOY_PATH }}
           compose_file: ${{ inputs.compose_file }}
@@ -763,7 +763,7 @@ jobs:
         id: security-images-final-gate
         if: steps.security-images-remediated.outcome == 'success'
         continue-on-error: true
-        uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@f042163c0d83712736bbc9cc168c4f9f98c488cf
+        uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@v1
         with:
           scan_type: image
           image_refs: ${{ steps.security-images-remediated.outputs.refs }}
@@ -783,7 +783,7 @@ jobs:
         id: security-final
         if: inputs.security_require_image_scan
         continue-on-error: true
-        uses: optimizr-tech/optimizr-actions/.github/actions/security-retry-result@f042163c0d83712736bbc9cc168c4f9f98c488cf
+        uses: optimizr-tech/optimizr-actions/.github/actions/security-retry-result@v1
         with:
           initial_outcome: ${{ steps.security-images-initial-gate.outcome }}
           initial_classification: ${{ steps.security-images-initial-gate.outputs.classification }}
@@ -908,7 +908,7 @@ jobs:
 
       - name: Cleanup runner and Docker leftovers
         if: always() && inputs.run_prune
-        uses: optimizr-tech/optimizr-actions/.github/actions/docker-prune-safe@f042163c0d83712736bbc9cc168c4f9f98c488cf
+        uses: optimizr-tech/optimizr-actions/.github/actions/docker-prune-safe@v1
         with:
           image_age_threshold: ${{ inputs.image_age_threshold }}
           docker_mode: ${{ inputs.docker_mode }}

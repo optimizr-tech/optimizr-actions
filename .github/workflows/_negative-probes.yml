@@ -92,7 +92,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Run bounded negative probes
-        uses: optimizr-tech/optimizr-actions/.github/actions/negative-probes@f042163c0d83712736bbc9cc168c4f9f98c488cf
+        uses: optimizr-tech/optimizr-actions/.github/actions/negative-probes@v1
         env:
           PROBE_TARGET_1: ${{ secrets.PROBE_TARGET_1 }}
           PROBE_TARGET_2: ${{ secrets.PROBE_TARGET_2 }}

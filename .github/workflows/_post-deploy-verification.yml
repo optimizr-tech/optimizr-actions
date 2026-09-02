@@ -77,7 +77,7 @@ jobs:
           ref: ${{ inputs.deployed_sha }}
           persist-credentials: false
       - name: Run positive verification
-        uses: optimizr-tech/optimizr-actions/.github/actions/post-deploy-verification@f042163c0d83712736bbc9cc168c4f9f98c488cf
+        uses: optimizr-tech/optimizr-actions/.github/actions/post-deploy-verification@v1
         env:
           VERIFY_TARGET_1: ${{ secrets.VERIFY_TARGET_1 }}
           VERIFY_TARGET_2: ${{ secrets.VERIFY_TARGET_2 }}
@@ -101,7 +101,7 @@ jobs:
     name: Negative boundary probes
     needs: verification
     if: always() && inputs.negative_manifest_path != '' && needs.verification.result != 'cancelled'
-    uses: optimizr-tech/optimizr-actions/.github/workflows/_negative-probes.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_negative-probes.yml@v1
     with:
       environment_name: ${{ inputs.environment_name }}
       runner_json: ${{ inputs.runner_json }}

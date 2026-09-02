@@ -69,7 +69,7 @@ jobs:
           PY
 
       - name: Validate title, body and commit subjects
-        uses: optimizr-tech/optimizr-actions/.github/actions/pr-metadata-validation@f042163c0d83712736bbc9cc168c4f9f98c488cf
+        uses: optimizr-tech/optimizr-actions/.github/actions/pr-metadata-validation@v1
         with:
           token: ${{ github.token }}
           repository: ${{ github.repository }}

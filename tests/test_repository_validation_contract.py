@@ -65,7 +65,7 @@ class RepositoryValidationContractTests(unittest.TestCase):
     def test_emergency_dispatch_is_a_consumer_caller_template(self):
         text = (ROOT / "templates/workflows/repository-validation-emergency.yml").read_text()
         self.assertIn("workflow_dispatch:", text)
-        self.assertIn("_repository-validation-emergency.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf", text)
+        self.assertIn("_repository-validation-emergency.yml@v1", text)
         self.assertIn("environment_name:", text)
         self.assertNotIn("run:", text)
 

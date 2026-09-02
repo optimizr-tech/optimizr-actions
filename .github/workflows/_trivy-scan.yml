@@ -87,7 +87,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Run Trivy vulnerability scanner
-        uses: optimizr-tech/optimizr-actions/.github/actions/trivy-scan@f042163c0d83712736bbc9cc168c4f9f98c488cf
+        uses: optimizr-tech/optimizr-actions/.github/actions/trivy-scan@v1
         with:
           scan_type: ${{ inputs.scan_type }}
           scan_ref: ${{ inputs.scan_ref }}

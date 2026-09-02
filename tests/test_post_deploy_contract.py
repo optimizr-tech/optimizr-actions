@@ -13,7 +13,7 @@ class PostDeployContractTests(unittest.TestCase):
         self.assertIn("contents: read", text)
         self.assertNotIn("secrets: inherit", text)
         self.assertIn("if: always()", text)
-        self.assertIn("_negative-probes.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf", text)
+        self.assertIn("_negative-probes.yml@v1", text)
         self.assertIn("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", text)
         self.assertIn("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a", text)
 

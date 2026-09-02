@@ -21,7 +21,7 @@ TEMPORARY_ACTIONS_SHA = "7925034d32f769326a45f6af155c95dac6aefc55"
 REPO_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$")
 USES_RE = re.compile(r"(?m)^\s*-?\s*uses:\s*([^\s#]+)")
 INTERNAL_REF_RE = re.compile(r"optimizr-tech/optimizr-actions/(?:\.github/(?:workflows|actions)/[^@\s]+)@([^\s#]+)")
-GOVERNED_INTERNAL_REF_RE = re.compile(r"^(?:v1|[0-9a-f]{40})$")
+GOVERNED_INTERNAL_REF_RE = re.compile(r"^v1$")
 THIRD_PARTY_RE = re.compile(r"^(?!\./)([^/\s]+)/([^@\s]+)@([^\s]+)$")
 PR_BILLING_SKIP_GUARD_RE = re.compile(
     r"!\s*contains\(\s*github\.event\.pull_request\.title\s*,\s*"
@@ -138,10 +138,10 @@ def _write_permissions(content: str) -> set[str]:
 
 
 def _has_governed_internal_ref(content: str, artifact_path: str) -> bool:
-    """Return whether an internal reusable is referenced by v1 or an immutable SHA."""
+    """Return whether an internal reusable is referenced by the governed v1 tag."""
     return re.search(
         rf"optimizr-tech/optimizr-actions/{re.escape(artifact_path)}@"
-        r"(?:v1|[0-9a-f]{40})(?=$|[\s\"'#,)\]])",
+        r"v1(?=$|[\s\"'#,)\]])",
         content,
     ) is not None
 
@@ -186,7 +186,7 @@ def audit_workflows(repository: str, visibility: str, workflows: Mapping[str, st
             add("TEMPORARY_ACTIONS_SHA", "Workflow still references the temporary semantic-release compatibility SHA.")
         for ref in INTERNAL_REF_RE.findall(content):
             if not GOVERNED_INTERNAL_REF_RE.fullmatch(ref):
-                add("INTERNAL_REF_NOT_V1", "First-party portable automation does not use the governed v1 contract or an immutable 40-character commit SHA.")
+                add("INTERNAL_REF_NOT_V1", "First-party portable automation must use the governed floating v1 contract; internal SHA pins are prohibited.")
                 break
         for use in USES_RE.findall(content):
             match = THIRD_PARTY_RE.fullmatch(use)

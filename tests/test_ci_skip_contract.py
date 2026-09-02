@@ -19,7 +19,7 @@ class CiSkipContractTests(unittest.TestCase):
         self.assertIn("github.event.pull_request.title", content)
         self.assertIn("!contains", content)
         self.assertIn("'[skip-tests]'", content)
-        self.assertIn("_commitlint.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf", content)
+        self.assertIn("_commitlint.yml@v1", content)
         self.assertIn("base_sha:", content)
         self.assertIn("head_sha:", content)
 
@@ -29,7 +29,7 @@ class CiSkipContractTests(unittest.TestCase):
         self.assertIn("github.event.pull_request.title", content)
         self.assertIn("!contains", content)
         self.assertIn("'[skip-tests]'", content)
-        self.assertIn("_validate-pr.yml@f042163c0d83712736bbc9cc168c4f9f98c488cf", content)
+        self.assertIn("_validate-pr.yml@v1", content)
         self.assertIn("pr_title:", content)
         self.assertIn("pr_body:", content)
         self.assertIn("base_sha:", content)
