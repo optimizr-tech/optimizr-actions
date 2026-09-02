@@ -17,7 +17,7 @@ Portable workflow, composite-action, parser, policy-evaluation and evidence-gene
 | Quality-gate package | `scripts/quality_gate/` | parsers, comparison, baseline, comment and legacy interface are local |
 | Quality-gate workflows | `.github/workflows/_quality-gate*.yml` | execute the exact reusable revision through `job.workflow_repository` and `job.workflow_sha` |
 | Quality-gate compatibility action | `.github/actions/quality-gate-scripts/action.yml` | materializes the package shipped with the selected Actions revision; old infra-ops inputs are ignored compatibility no-ops |
-| Docker/runner cleanup | `.github/actions/docker-prune-safe/action.yml` | job-scoped cleanup remains portable; host-wide lifecycle remains operational |
+| Docker/runner cleanup | `.github/actions/docker-prune-safe/action.yml` | workspace cleanup is portable; host-wide Docker prune requires an explicit trusted-runner opt-in |
 
 ## Machine-readable capability boundary
 
@@ -68,6 +68,11 @@ ref: ${{ job.workflow_sha }}
 This keeps a consumer using floating `@v1` aligned with the exact revision GitHub resolved for that run. It also allows candidate workflow revisions to be validated without silently importing an older `v1` implementation.
 
 The resolved reusable SHA is audit evidence. It does not replace the governed floating `@v1` consumer contract.
+
+All executable first-party references inside this repository and in its
+consumer templates must use the floating `@v1` tag. An internal commit SHA is
+not an approved consumer pin; immutable SHAs remain appropriate for
+third-party actions and for runtime evidence such as `job.workflow_sha`.
 
 ## Compatibility policy
 

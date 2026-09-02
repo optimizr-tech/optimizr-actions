@@ -8,7 +8,8 @@ Rules detect:
 
 - portable callers still hosted by `optimizr-infra-ops`;
 - the temporary semantic-release SHA;
-- first-party references not using governed `@v1`;
+- first-party executable references not using governed `@v1` (internal SHA
+  pins are rejected);
 - third-party actions not pinned to a 40-character SHA;
 - write permissions requiring least-privilege review;
 - CI/deploy triggers without path filters;

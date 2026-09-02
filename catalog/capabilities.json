@@ -63,6 +63,7 @@
       "evidence": "Docker prune operation evidence; never touches volumes or networks",
       "examples": [],
       "inputs": {
+        "allow_global_prune": "",
         "docker_mode": "",
         "image_age_threshold": ""
       },
@@ -78,7 +79,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "fa7121f81e0cf2fc70e6595d7b6fb4240dbd359db5a4bd7278aa7a8bc95981d2",
+      "source_sha256": "04a19ddd7e24b914f2fdcb0e9d932acd1ac9fb393d7f7b6329a6b732526ce31b",
       "trust_boundary": "trusted-push"
     },
     {
@@ -1039,6 +1040,7 @@
         "control_runner_json": "",
         "github_attestation": "",
         "image_namespace": "",
+        "max_parallel": "",
         "provenance": "",
         "push": "",
         "registry": "",
@@ -1066,7 +1068,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "16e6c75fd6377ecfa03194f52602520876decf6cc7fac392f5eb6c1faac97399",
+      "source_sha256": "fe92b5c096ae2e2fc8d26dd3da733923d6dcb82ff1710731a9b8eb19445f4244",
       "trust_boundary": "trusted-push"
     },
     {
@@ -1367,7 +1369,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "505c2c6b880fb9179cb06f7982994f47eaa99dc929b8e0619266583878f99513",
+      "source_sha256": "c296c4ac0b5399d78bcdfc12df006a9e925e05503461795b8a416663d8059309",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1769,7 +1771,7 @@
       "runner": [
         "hosted"
       ],
-      "source_sha256": "0c9568fa766615ba1149715ae9791f254cc72bf1517531992c4b05cdd24e793e",
+      "source_sha256": "3c7a3e5a446155dec8ad9aebe033905c37897f24c25f6efd3b9d416992de30ee",
       "trust_boundary": "trusted-push"
     },
     {
@@ -2039,7 +2041,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "b7da9fa9239a2faf5150097785eeb067133d359d9430751e1ba017f39b7d5feb",
+      "source_sha256": "9e6dab4beda69916fba89e8fbda25b64b3e325797464b0285233305b6ae20712",
       "trust_boundary": "trusted-push"
     },
     {
@@ -2103,7 +2105,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "02a9380af462295043cae01f6dac38c3e2e33b1fe10bbe2ced1517c091b406c8",
+      "source_sha256": "f5e375b544f30949eaf845da3fb420e0ff56961b5839ad07e147a3333f03a857",
       "trust_boundary": "trusted-push"
     },
     {

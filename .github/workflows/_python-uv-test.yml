@@ -391,6 +391,9 @@ jobs:
         ports:
           - 5432:5432
         options: >-
+          --memory 512m
+          --cpus 0.50
+          --pids-limit 128
           --health-cmd "pg_isready -U serve_app -d serve_test"
           --health-interval 5s
           --health-timeout 3s
@@ -400,6 +403,9 @@ jobs:
         ports:
           - 6379:6379
         options: >-
+          --memory 256m
+          --cpus 0.25
+          --pids-limit 64
           --health-cmd "redis-cli ping"
           --health-interval 5s
           --health-timeout 3s
@@ -410,6 +416,8 @@ jobs:
           - 5672:5672
         options: >-
           --memory 1g
+          --cpus 0.50
+          --pids-limit 128
           --health-cmd "rabbitmq-diagnostics -q check_running"
           --health-interval 10s
           --health-timeout 5s
@@ -497,6 +505,9 @@ jobs:
         ports:
           - 5432:5432
         options: >-
+          --memory 512m
+          --cpus 0.50
+          --pids-limit 128
           --health-cmd "pg_isready -U serve_app -d serve_test"
           --health-interval 5s
           --health-timeout 3s
@@ -506,6 +517,9 @@ jobs:
         ports:
           - 6379:6379
         options: >-
+          --memory 256m
+          --cpus 0.25
+          --pids-limit 64
           --health-cmd "redis-cli ping"
           --health-interval 5s
           --health-timeout 3s
@@ -516,6 +530,8 @@ jobs:
           - 5672:5672
         options: >-
           --memory 1g
+          --cpus 0.50
+          --pids-limit 128
           --health-cmd "rabbitmq-diagnostics -q check_running"
           --health-interval 10s
           --health-timeout 5s

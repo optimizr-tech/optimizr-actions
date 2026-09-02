@@ -912,6 +912,9 @@ jobs:
         with:
           image_age_threshold: ${{ inputs.image_age_threshold }}
           docker_mode: ${{ inputs.docker_mode }}
+          # This reusable runs only on the trusted VPS lane. Keep the
+          # host-wide operation explicit because the daemon is shared.
+          allow_global_prune: true
 
       - name: Clean registry authentication state
         if: always() && inputs.deployment_mode == 'prebuilt-images' && inputs.registry_auth_mode != 'anonymous'

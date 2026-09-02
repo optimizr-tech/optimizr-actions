@@ -75,8 +75,23 @@ def _canonical_present(joined: str) -> dict[str, bool]:
     present: dict[str, bool] = {}
     for capability, suffix in CANONICAL_REUSABLE_SUFFIX.items():
         targets = (suffix,) if isinstance(suffix, str) else suffix
-        present[capability] = any(f"optimizr-tech/{target}" in joined for target in targets)
+        present[capability] = any(
+            re.search(
+                re.escape(f"optimizr-tech/{target.rsplit('@', 1)[0]}")
+                + r"@v1(?=$|[\s\"'#,)\]])",
+                joined,
+            )
+            for target in targets
+        )
     return present
+
+
+def _has_governed_internal_ref(content: str, artifact_path: str) -> bool:
+    return re.search(
+        rf"optimizr-tech/optimizr-actions/{re.escape(artifact_path)}@"
+        r"v1(?=$|[\s\"'#,)\]])",
+        content,
+    ) is not None
 
 
 def audit_functional_duplication(
@@ -139,8 +154,8 @@ def audit_functional_duplication(
             )
         for job_name, job_block in _job_blocks(content):
             mandatory = (
-                "optimizr-actions/.github/workflows/_repository-validation.yml@v1" in job_block
-                or "optimizr-actions/.github/workflows/_validate-pr.yml@v1" in job_block
+                _has_governed_internal_ref(job_block, ".github/workflows/_repository-validation.yml")
+                or _has_governed_internal_ref(job_block, ".github/workflows/_validate-pr.yml")
             )
             if mandatory and re.search(r"skip\s*:\s*[\"']?true[\"']?", job_block):
                 add(
@@ -213,8 +228,7 @@ def audit_security_adoption(
         )
 
     if not any(
-        "optimizr-actions/.github/workflows/_dependabot-security-automerge.yml@v1"
-        in content
+        _has_governed_internal_ref(content, ".github/workflows/_dependabot-security-automerge.yml")
         for content in contents
     ):
         findings.append(
@@ -232,10 +246,8 @@ def audit_security_adoption(
         for path, content in workflows.items()
     )
     canonical_deploy = any(
-        "optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@v1"
-        in content
-        or "optimizr-actions/.github/workflows/_vps-monorepo-deploy.yml@v1"
-        in content
+        _has_governed_internal_ref(content, ".github/workflows/_vps-self-hosted-deploy.yml")
+        or _has_governed_internal_ref(content, ".github/workflows/_vps-monorepo-deploy.yml")
         for content in contents
     )
     if deploy_like and not canonical_deploy:
