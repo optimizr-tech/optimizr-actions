@@ -87,6 +87,8 @@ class PythonUvShardingContractTests(unittest.TestCase):
         self.assertIn('if [ "$found_count" -ne "$EXPECTED_COUNT" ]; then', aggregate_section)
         self.assertIn("coverage_gate_enabled: false", self.workflow)
         self.assertIn('default: "true"', self.action)
+        upload_section = self.action.split("- name: Upload coverage artifact", 1)[1]
+        self.assertIn("include-hidden-files: true", upload_section)
 
     def test_third_party_actions_remain_immutable(self) -> None:
         for text in (self.workflow, self.action):

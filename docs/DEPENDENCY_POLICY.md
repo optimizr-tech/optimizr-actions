@@ -12,6 +12,8 @@ For uv projects, `requires-python` must declare a minimum Python version, such
 as `>=3.14` or `>=3.14,<3.15`. The action normalizes that lower bound to the
 concrete runtime passed to uv (`3.14`); a constraint without a lower bound
 fails closed.
+The parser itself runs through the action's controlled Python 3.12 runtime, so
+the host's system `python3` does not need to provide `tomllib`.
 
 For Node projects, the organization defaults are Node 24 and npm 12.0.2. The
 versions are explicit reusable inputs and can be overridden only by a reviewed

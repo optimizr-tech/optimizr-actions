@@ -13,12 +13,19 @@ from typing import Any
 
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _IMAGE_DIGEST_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$", re.IGNORECASE)
+_EXCESS_FRACTIONAL_SECONDS = re.compile(
+    r"(?<=\.\d{6})\d+(?=(?:Z|[+-]\d{2}:?\d{2})?$)"
+)
 
 
 def _parse_datetime(value: Any, field: str) -> datetime:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"database metadata field {field} must be a timestamp")
     normalized = value.strip()
+    # Trivy serializes Go timestamps with nanosecond precision. Python 3.10's
+    # datetime.fromisoformat accepts ISO-8601 but only stores six fractional
+    # digits, so discard sub-microsecond precision before parsing.
+    normalized = _EXCESS_FRACTIONAL_SECONDS.sub("", normalized)
     if normalized.endswith("Z"):
         normalized = normalized[:-1] + "+00:00"
     try:

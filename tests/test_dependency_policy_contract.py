@@ -14,6 +14,8 @@ class DependencyPolicyContractTests(unittest.TestCase):
         self.assertIn("project.get(\"requires-python\")", text)
         self.assertIn("requires-python must declare a minimum Python version", text)
         self.assertIn('uv python install "$python_version"', text)
+        self.assertIn('uv run --no-project --python 3.12 python', text)
+        self.assertNotIn('python_version="$(python3 - <<', text)
         self.assertNotIn('uv python install "$python_requirement"', text)
         self.assertIn("\n        PY\n        )\"", text)
         self.assertIn("poetry check --lock", text)

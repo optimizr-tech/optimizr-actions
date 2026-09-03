@@ -49,6 +49,23 @@ class SecurityGateEvidenceTests(unittest.TestCase):
         self.assertEqual(result["age_hours"], 1.0)
         self.assertEqual(result["status"], "fresh")
 
+    def test_database_metadata_accepts_trivy_rfc3339_fractional_seconds(self) -> None:
+        metadata = self._write_json(
+            "metadata.json",
+            {
+                "Version": 2,
+                # Trivy writes nanosecond precision; Python 3.10 only accepts
+                # microsecond precision in datetime.fromisoformat().
+                "UpdatedAt": "2026-07-19T14:00:00.99504083Z",
+                "NextUpdate": "2026-07-20T14:00:00.99504023Z",
+                "DownloadedAt": "2026-07-19T19:00:00.383312039Z",
+            },
+        )
+
+        result = evidence.validate_db_metadata(metadata, max_age_hours=30, now=self.now)
+
+        self.assertEqual(result["status"], "fresh")
+
     def test_database_metadata_rejects_stale_download(self) -> None:
         metadata = self._write_json(
             "metadata.json",
