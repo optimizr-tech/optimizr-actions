@@ -303,5 +303,6 @@ runs:
       with:
         name: ${{ inputs.upload_artifact_name }}
         path: ${{ inputs.upload_artifact_paths }}
+        include-hidden-files: true
         retention-days: 7
         if-no-files-found: warn

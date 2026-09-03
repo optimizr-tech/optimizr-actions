@@ -56,9 +56,9 @@ named `<coverage_artifact_prefix>-shard-N`. The aggregate job requires exactly
 and JSON reports, and applies the original `coverage_min` threshold once to
 the combined data. Per-shard threshold enforcement is disabled only to avoid
 rejecting partial coverage; the aggregate threshold is never reduced.
-Because the raw coverage filenames begin with `.`, the aggregate artifact
-download explicitly includes hidden files. The exact shard-count check remains
-the guard against silently accepting an incomplete aggregate.
+Because the raw coverage filenames begin with `.`, both the shard upload and the
+aggregate download explicitly include hidden files. The exact shard-count check
+remains the guard against silently accepting an incomplete aggregate.
 
 The aggregate artifact is named `<coverage_artifact_prefix>`. Existing
 `upload_artifact_name` and `upload_artifact_paths` are still used unchanged

@@ -206,7 +206,7 @@ runs:
             python-uv)
               uv tool install 'uv==0.8.3'
               export PATH="$HOME/.local/bin:$PATH"
-              python_version="$(python3 - <<'PY'
+              python_version="$(uv run --no-project --python 3.12 python - <<'PY'
         from pathlib import Path
         import re
         import tomllib
