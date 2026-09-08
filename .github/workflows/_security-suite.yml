@@ -32,6 +32,11 @@ on:
         required: false
         type: string
         default: ""
+      exceptions_file:
+        description: Optional repository-relative Trivy exception policy JSON
+        required: false
+        type: string
+        default: ""
       image_refs:
         description: Optional whitespace-separated local image references for SBOM/provenance
         required: false
@@ -201,6 +206,7 @@ jobs:
       scan_ref: "."
       severity: HIGH,CRITICAL
       ignore_unfixed: false
+      exceptions_file: ${{ inputs.exceptions_file }}
       trivy_version: ${{ inputs.trivy_version }}
       artifact_name: security-suite-filesystem
       retention_days: ${{ inputs.retention_days }}
