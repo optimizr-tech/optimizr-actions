@@ -1708,6 +1708,7 @@
       "inputs": {
         "dependency_policy_file": "",
         "dependency_working_directory": "",
+        "exceptions_file": "",
         "image_refs": "",
         "node_version": "",
         "npm_version": "",
@@ -1737,7 +1738,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "39146be068fe1099286def61d3953be1ca63e87eb301ce712bfda97a4d862928",
+      "source_sha256": "b456c01dbada5dd3699b01f2abbbf6747b3984d5a9f3958d5788eab96ac471fa",
       "trust_boundary": "trusted-pr"
     },
     {
