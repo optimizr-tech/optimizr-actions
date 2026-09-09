@@ -299,6 +299,14 @@
       "evidence": "CycloneDX, SPDX and SLSA-compatible provenance evidence",
       "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_supply-chain-evidence.yml@v1"]
     },
+    ".github/workflows/_testsprite.yml": {
+      "category": "test",
+      "runner": ["self-hosted-persistent"],
+      "trust_boundary": "trusted-push",
+      "evidence": "Blocking hosted TestSprite result for an exact trusted revision and reviewed non-production target",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_testsprite.yml@v1"],
+      "known_limitations": "Requires a consumer-owned isolated HTTPS target, committed suite, protected environment, and self-hosted Linux runner"
+    },
     ".github/workflows/_trivy-scan.yml": {
       "trust_boundary": "trusted-pr",
       "evidence": "Trivy filesystem/image scan report as an artifact",
