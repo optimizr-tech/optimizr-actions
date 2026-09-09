@@ -112,6 +112,12 @@ jobs:
         self.assertNotIn("old", updated)
         self.assertEqual(update_marked_section(updated, "new report"), updated)
 
+    def test_private_report_links_the_actions_run_when_provided(self):
+        run_url = "https://github.com/optimizr-tech/optimizr-actions/actions/runs/123"
+        markdown = render_markdown([], public=False, run_url=run_url)
+        self.assertIn(f"Run: [GitHub Actions]({run_url})", markdown)
+        self.assertNotIn("Run: ", render_markdown([], public=True, run_url=run_url))
+
     def test_reports_prohibited_caller_level_skip_guard(self):
         guard = """
     if: >-

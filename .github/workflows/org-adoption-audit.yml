@@ -51,6 +51,8 @@ jobs:
 
   private-issue-report:
     name: Update private central audit issue
+    needs: [public-report]
+    if: needs.public-report.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -58,6 +60,7 @@ jobs:
       ORG_AUDIT_TOKEN: ${{ secrets.ORG_AUDIT_TOKEN }}
       ORG_AUDIT_ISSUE_REF: ${{ secrets.ORG_AUDIT_ISSUE_REF }}
       ORG_AUDIT_ISSUE_TOKEN: ${{ secrets.ORG_AUDIT_ISSUE_TOKEN }}
+      ORG_AUDIT_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Checkout audit implementation
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -91,5 +94,6 @@ jobs:
             --token-env ORG_AUDIT_TOKEN \
             --output-dir "$private_dir" \
             --issue-ref-env ORG_AUDIT_ISSUE_REF \
-            --issue-token-env ORG_AUDIT_ISSUE_TOKEN
+            --issue-token-env ORG_AUDIT_ISSUE_TOKEN \
+            --run-url-env ORG_AUDIT_RUN_URL
           rm -rf "$private_dir"
