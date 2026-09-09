@@ -31,7 +31,8 @@ class TestSpriteWorkflowContractTests(unittest.TestCase):
         preflight = self.workflow.split("  preflight:\n", 1)[1].split(
             "  testsprite:\n", 1
         )[0]
-        self.assertIn("runs-on: ubuntu-latest", preflight)
+        self.assertIn("runs-on: ${{ fromJSON(inputs.runner_json) }}", preflight)
+        self.assertNotIn("runs-on: ubuntu-latest", preflight)
         self.assertNotIn("TESTSPRITE_API_KEY", preflight)
         self.assertIn('--event-name "$EVENT_NAME"', self.workflow)
         self.assertIn('--ref "$REF"', self.workflow)

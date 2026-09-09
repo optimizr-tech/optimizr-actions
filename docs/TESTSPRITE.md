@@ -16,6 +16,9 @@ Each consumer owns a thin caller workflow and must provide:
 - a reviewed `testsprite_tests/` suite committed in the trusted main revision;
 - consumer-owned production host patterns in `forbidden_hosts_json`.
 
+Both the secret-free preflight and the secret-bearing TestSprite job use the
+caller's `runner_json` labels. The caller must therefore provide a governed
+self-hosted Linux runner that is approved for trusted `main`/dispatch work.
 The reusable workflow rejects pull-request and non-`main` execution, HTTP,
 local/private target literals, URL mismatches, production-like environments,
 unsafe suite paths, and runners without both `self-hosted` and `Linux` labels. The
