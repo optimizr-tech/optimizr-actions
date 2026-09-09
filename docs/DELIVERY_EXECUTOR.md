@@ -46,12 +46,30 @@ The CLI prints only the canonical request. Errors are written to stderr and
 return a non-zero status. Adapters can consume this interface without relying
 on `${{ github.* }}`, `GITHUB_WORKSPACE`, or GitHub APIs.
 
+## Exact-SHA checkout
+
+The checkout primitive is adapter-neutral and receives a network Git remote
+resolved from an allowlisted repository identity. It creates a new destination
+only below an explicit root, initializes a clean repository, fetches the
+trusted ref without tags, verifies that the candidate is a commit reachable
+from `FETCH_HEAD`, checks it out detached, and confirms `git rev-parse HEAD`
+equals the requested SHA.
+
+Git is invoked with an argument array and captured output; no shell is used and
+Git output or remote credentials are not returned in `CheckoutResult`. Unsafe
+remotes, existing destinations, symlink components, root escapes, fetch
+failures, ancestry failures and HEAD mismatches fail closed. A destination
+created by a failed attempt is removed when cleanup is possible.
+
+This primitive prepares source only. It does not synchronize into a deploy
+directory, preserve runtime state, run security gates or change a service.
+
 ## Next slices
 
 This contract is not a deploy implementation and must not be wired to
 production execution by itself. Follow-up PRs must separately add and verify:
 
-1. trusted exact-SHA checkout and snapshot/sync primitives;
+1. snapshot and dry-run synchronization that preserves runtime state;
 2. security/Compose/health gates and sanitized manifest output;
 3. GitHub, GitLab, Ansible, and manual adapters;
 4. canary and rollback evidence before any consumer migration.
