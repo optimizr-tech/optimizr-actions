@@ -1867,6 +1867,38 @@
       "trust_boundary": "trusted-pr"
     },
     {
+      "category": "test",
+      "evidence": "Blocking hosted TestSprite result for an exact trusted revision and reviewed non-production target",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_testsprite.yml@v1"
+      ],
+      "inputs": {
+        "base_url": "",
+        "environment_name": "",
+        "expected_base_url": "",
+        "forbidden_hosts_json": "",
+        "runner_json": "",
+        "suite_path": "",
+        "timeout_minutes": ""
+      },
+      "kind": "workflow",
+      "known_limitations": "Requires a consumer-owned isolated HTTPS target, committed suite, protected environment, and self-hosted Linux runner",
+      "maturity": "stable-v1",
+      "metadata_status": "classified",
+      "outputs": {
+        "result": ""
+      },
+      "path": ".github/workflows/_testsprite.yml",
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "self-hosted-persistent"
+      ],
+      "source_sha256": "f1c8b803379e474864f69a07056f8d509ddbaec8211a255cd2cf4d485040043a",
+      "trust_boundary": "trusted-push"
+    },
+    {
       "category": "security",
       "evidence": "Trivy filesystem/image scan report as an artifact",
       "examples": [

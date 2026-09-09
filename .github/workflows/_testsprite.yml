@@ -1,0 +1,135 @@
+name: _testsprite
+
+# Hosted TestSprite is intentionally a protected-main contract. The caller
+# owns staging deployment and must not invoke this workflow from pull requests.
+
+on:
+  workflow_call:
+    inputs:
+      base_url:
+        description: "Exact HTTPS URL of the isolated non-production target"
+        required: true
+        type: string
+      expected_base_url:
+        description: "Reviewed URL that base_url must match exactly"
+        required: true
+        type: string
+      environment_name:
+        description: "Protected non-production GitHub Environment name"
+        required: true
+        type: string
+      runner_json:
+        description: "JSON array of self-hosted Linux runner labels"
+        required: true
+        type: string
+      suite_path:
+        description: "Relative path to the committed TestSprite suite"
+        required: false
+        default: testsprite_tests
+        type: string
+      forbidden_hosts_json:
+        description: "JSON array of consumer-owned production host patterns"
+        required: false
+        default: "[]"
+        type: string
+      timeout_minutes:
+        description: "Maximum duration for the blocking TestSprite check"
+        required: false
+        default: 30
+        type: number
+    secrets:
+      TESTSPRITE_API_KEY:
+        description: "TestSprite API key from the protected environment"
+        required: true
+    outputs:
+      result:
+        description: "Result of the blocking TestSprite job"
+        value: ${{ jobs.testsprite.outputs.result }}
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: Validate TestSprite contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact reusable implementation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .optimizr-actions-source
+          persist-credentials: false
+
+      - name: Reject untrusted invocation and unsafe target
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          EXPECTED_BASE_URL: ${{ inputs.expected_base_url }}
+          ENVIRONMENT_NAME: ${{ inputs.environment_name }}
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          SUITE_PATH: ${{ inputs.suite_path }}
+          FORBIDDEN_HOSTS_JSON: ${{ inputs.forbidden_hosts_json }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          python3 .optimizr-actions-source/scripts/testsprite/validate_target.py \
+            --base-url "$BASE_URL" \
+            --expected-base-url "$EXPECTED_BASE_URL" \
+            --environment-name "$ENVIRONMENT_NAME" \
+            --runner-json "$RUNNER_JSON" \
+            --suite-path "$SUITE_PATH" \
+            --forbidden-hosts-json "$FORBIDDEN_HOSTS_JSON" \
+            --event-name "$EVENT_NAME" \
+            --ref "$REF"
+
+  testsprite:
+    name: TestSprite API/UI
+    needs: preflight
+    if: needs.preflight.result == 'success'
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    environment: ${{ inputs.environment_name }}
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    permissions:
+      contents: read
+    outputs:
+      result: ${{ steps.result.outputs.result }}
+    env:
+      TESTSPRITE_API_KEY: ${{ secrets.TESTSPRITE_API_KEY }}
+    steps:
+      - name: Checkout exact trusted revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Require a committed generated suite
+        env:
+          SUITE_PATH: ${{ inputs.suite_path }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          suite = Path(os.environ["SUITE_PATH"])
+          files = list(suite.rglob("*")) if suite.is_dir() else []
+          if not suite.is_dir() or not any(path.is_file() for path in files):
+              raise SystemExit("TestSprite suite path is missing or empty")
+          PY
+
+      - name: Run blocking TestSprite check
+        uses: TestSprite/run-action@e1793b89af73cf22d267b025e827fdb94d2c4e7d # v1
+        with:
+          testsprite-api-key: ${{ secrets.TESTSPRITE_API_KEY }}
+          base_url: ${{ inputs.base_url }}
+          blocking: "true"
+
+      - name: Publish reusable workflow result
+        if: always()
+        id: result
+        run: echo "result=${{ job.status }}" >> "$GITHUB_OUTPUT"
