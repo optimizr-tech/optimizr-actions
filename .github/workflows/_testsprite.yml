@@ -52,7 +52,10 @@ permissions:
 jobs:
   preflight:
     name: Validate TestSprite contract
-    runs-on: ubuntu-latest
+    # The caller supplies the governed self-hosted Linux labels. This keeps
+    # the secret-free preflight on the same no-billing trust boundary as the
+    # TestSprite job while the workflow remains restricted to trusted main.
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
     timeout-minutes: 5
     permissions:
       contents: read
