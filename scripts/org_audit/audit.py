@@ -312,10 +312,12 @@ def render_json(findings: Iterable[Finding], *, public: bool) -> dict[str, Any]:
     }
 
 
-def render_markdown(findings: Iterable[Finding], *, public: bool) -> str:
+def render_markdown(findings: Iterable[Finding], *, public: bool, run_url: str = "") -> str:
     items = list(findings)
     title = "# Optimizr Actions adoption audit"
     lines = [title, "", f"Findings: **{len(items)}**", ""]
+    if not public and run_url:
+        lines.extend([f"Run: [GitHub Actions]({run_url})", ""])
     if not items:
         lines.append("No findings.")
         return "\n".join(lines) + "\n"
@@ -425,6 +427,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--public", action="store_true")
     parser.add_argument("--issue-ref-env", default="")
     parser.add_argument("--issue-token-env", default="")
+    parser.add_argument("--run-url-env", default="")
     return parser
 
 
@@ -439,7 +442,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         output = Path(args.output_dir)
         output.mkdir(parents=True, exist_ok=True)
         (output / "report.json").write_text(json.dumps(render_json(findings, public=args.public), indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        markdown = render_markdown(findings, public=args.public)
+        run_url = os.environ.get(args.run_url_env, "") if args.run_url_env else ""
+        markdown = render_markdown(findings, public=args.public, run_url=run_url)
         (output / "report.md").write_text(markdown, encoding="utf-8")
         if args.issue_ref_env:
             issue_ref = os.environ.get(args.issue_ref_env, "")

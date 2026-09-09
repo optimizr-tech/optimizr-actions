@@ -59,7 +59,7 @@ product-specific extension is legitimate; consumers declare it in their
 
 The Dependabot file itself is optional to GitHub security updates, but Optimizr-managed repositories use it as a source-controlled adoption marker and to declare supported package ecosystems. Repository security settings that the contents API cannot prove remain manual organization controls and are not guessed by the auditor.
 
-The artifact created in the public repository replaces private repository names with deterministic aliases and stores no source snippets, secret names, environment values, hosts or deployment paths. A second job reruns the audit and updates a marker-delimited report in a private repository using `ORG_AUDIT_ISSUE_REF` and a separately scoped issue token. Both jobs validate their configuration before making API calls; a missing value fails the workflow and is never reported as a successful or skipped audit.
+The artifact created in the public repository replaces private repository names with deterministic aliases and stores no source snippets, secret names, environment values, hosts or deployment paths. The private issue job runs only after the public job succeeds, including successful upload of the redacted artifact; it then reruns the audit and updates a marker-delimited report in a private repository using `ORG_AUDIT_ISSUE_REF` and a separately scoped issue token. The private report includes the current GitHub Actions run link so the issue is traceable to the run and its sanitized artifact. Both jobs validate their configuration before making API calls; a missing value fails the workflow and is never reported as a successful or skipped audit.
 
 Required secrets:
 

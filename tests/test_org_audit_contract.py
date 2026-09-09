@@ -15,6 +15,14 @@ class OrgAuditContractTests(unittest.TestCase):
         self.assertIn("ORG_AUDIT_TOKEN", text)
         self.assertIn("--public", text)
         self.assertIn("public-report", text)
+        self.assertRegex(
+            text,
+            r"private-issue-report:\n    name: .*\n"
+            r"    needs: \[public-report\]\n"
+            r"    if: needs\.public-report\.result == 'success'",
+        )
+        self.assertIn("ORG_AUDIT_RUN_URL", text)
+        self.assertIn("--run-url-env ORG_AUDIT_RUN_URL", text)
         self.assertIn("Validate public audit configuration", text)
         self.assertIn("Validate private audit configuration", text)
         self.assertIn('ORG_AUDIT_ISSUE_REF is not configured', text)
