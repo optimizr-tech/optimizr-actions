@@ -132,6 +132,27 @@ does not add a CLI, production workflow wiring, provider credentials, or an
 automatic rollback policy. Those changes require separate adapter and
 cross-repository review.
 
+## Sanitized delivery manifest
+
+`write_delivery_manifest` records the result of the shared executor at an
+explicit absolute path. The manifest contains the repository, service, exact
+candidate SHA, trusted ref, adapter identity, selected runner metadata, image
+digests, synchronization summary, every sanitized gate result, final status,
+and an optional rollback reference. It is written through a temporary file,
+restricted to the caller's destination, and refuses to overwrite an existing
+manifest.
+
+The function accepts only a `DeliveryExecutorResult` produced by the shared
+executor. It revalidates the canonical request, SHA, gate evidence, image
+digests, synchronization state, and metadata before writing. Command output,
+credentials, `.env` values, private keys, and secret-like metadata are never
+serialized. A failed or incomplete result is recorded as `status: failure`
+and can never be represented as ready.
+
+This is a portable serialization contract only. It does not select a
+provider, run Docker, perform rollback, or replace the existing VPS manifest
+writer. Provider adapters may consume this result after a separate review.
+
 ## Manual adapter
 
 `scripts.delivery.manual` is the first thin adapter for a protected manual or
@@ -176,8 +197,7 @@ Follow-up PRs must separately add and verify:
 
 1. GitHub and GitLab adapters that implement the gate callbacks without
    broadening permissions;
-2. sanitized manifest integration and explicit failure evidence;
-3. canary and rollback evidence before any consumer migration.
+2. canary and rollback evidence before any consumer migration.
 
 Each slice must preserve the existing VPS reusable behavior until a reviewed
 adapter proves parity.
