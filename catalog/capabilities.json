@@ -2143,6 +2143,26 @@
       "trust_boundary": "trusted-push"
     },
     {
+      "category": "operations-adapter",
+      "evidence": "Protected GitLab delivery job serializing a service and delegating to the shared executor",
+      "examples": [
+        "extends: .optimizr-delivery"
+      ],
+      "inputs": {},
+      "kind": "template",
+      "known_limitations": "Requires a protected GitLab runner tag, protected runner attestation variable, and consumer-owned entrypoint",
+      "maturity": "canonical-template",
+      "metadata_status": "classified",
+      "outputs": {},
+      "path": "templates/gitlab/optimizr-delivery.yml",
+      "permissions": {},
+      "runner": [
+        "self-hosted-persistent"
+      ],
+      "source_sha256": "1c3056452fe68fca712f86b895246d26ccc1294337b57b54e528863cc4343d40",
+      "trust_boundary": "trusted-push"
+    },
+    {
       "category": "test",
       "evidence": "Commitlint workflow scaffold wiring the canonical reusable",
       "examples": [],
