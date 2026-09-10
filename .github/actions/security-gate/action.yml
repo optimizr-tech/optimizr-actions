@@ -412,6 +412,7 @@ runs:
           exception_args=(
             render-exceptions
             --target "$target"
+            --scan-type "$INPUT_SCAN_TYPE"
             --output "$exception_policy_file"
             --summary-output "$exception_summary"
             "${lineage_args[@]}"
