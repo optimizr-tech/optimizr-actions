@@ -129,11 +129,14 @@ def render_exception_policy(
     source: Path,
     *,
     target: str,
+    scan_type: str = "image",
     output: Path,
     today: date | None = None,
     lineage_digests: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Validate Optimizr exception metadata and render Trivy YAML as JSON."""
+    if scan_type not in {"fs", "image"}:
+        raise ValueError("scan_type must be fs or image")
     if not source.is_file():
         raise ValueError(f"exception policy is missing: {source}")
     try:
@@ -171,20 +174,41 @@ def render_exception_policy(
                 f"vulnerabilities[{index}] {vulnerability_id} expired on {expires_text}"
             )
 
+        scan_types = item.get("scan_types", ["image"])
+        if not isinstance(scan_types, list) or any(
+            not isinstance(value, str) or not value.strip() for value in scan_types
+        ):
+            raise ValueError(
+                f"vulnerabilities[{index}].scan_types must be a string array"
+            )
+        scan_types = [value.strip() for value in scan_types]
+        if not scan_types or any(value not in {"fs", "image"} for value in scan_types):
+            raise ValueError(
+                f"vulnerabilities[{index}].scan_types must contain fs or image"
+            )
+        if scan_type not in scan_types:
+            continue
+
         targets = _string_list(item, "targets", index)
         exception_lineage = _digest_list(item, "lineage_digests", index)
-        if not targets and not exception_lineage:
+        paths = _string_list(item, "paths", index)
+        purls = _string_list(item, "purls", index)
+        if scan_type == "image" and not targets and not exception_lineage:
             raise ValueError(
                 f"vulnerabilities[{index}] must scope the exception by targets or lineage_digests"
             )
-        paths = _string_list(item, "paths", index)
-        purls = _string_list(item, "purls", index)
+        if scan_type == "fs" and not paths:
+            raise ValueError(
+                f"vulnerabilities[{index}] {vulnerability_id} filesystem exceptions must target paths"
+            )
         if exception_lineage and not purls:
             raise ValueError(
                 f"vulnerabilities[{index}].purls is required for lineage-scoped exceptions"
             )
         matching_lineage = set(exception_lineage) & set(normalized_lineage)
-        if target not in targets and "*" not in targets and not matching_lineage:
+        if scan_type == "image" and (
+            target not in targets and "*" not in targets and not matching_lineage
+        ):
             continue
         matched_lineage.update(matching_lineage)
 
@@ -208,6 +232,7 @@ def render_exception_policy(
         "policy_sha256": _sha256(source),
         "active_exceptions": len(rendered),
         "target": target,
+        "scan_type": scan_type,
         "lineage_digests": normalized_lineage,
         "matched_lineage_digests": sorted(matched_lineage),
         "status": "validated",
@@ -438,6 +463,7 @@ def _command_render_exceptions(args: argparse.Namespace) -> int:
             args.source,
             target=args.target,
             output=args.output,
+            scan_type=args.scan_type,
             lineage_digests=args.lineage_digest,
         )
     else:
@@ -447,6 +473,7 @@ def _command_render_exceptions(args: argparse.Namespace) -> int:
             "policy_sha256": "none",
             "active_exceptions": 0,
             "target": args.target,
+            "scan_type": args.scan_type,
             "lineage_digests": args.lineage_digest,
             "matched_lineage_digests": [],
             "status": "not-configured",
@@ -506,6 +533,7 @@ def _build_parser() -> argparse.ArgumentParser:
     render = subparsers.add_parser("render-exceptions")
     render.add_argument("--source", type=Path)
     render.add_argument("--target", required=True)
+    render.add_argument("--scan-type", choices=("fs", "image"), default="image")
     render.add_argument("--output", type=Path, required=True)
     render.add_argument("--summary-output", type=Path, required=True)
     render.add_argument("--lineage-digest", action="append", default=[])

@@ -205,6 +205,38 @@ class SecurityGateEvidenceTests(unittest.TestCase):
             "DS-0002",
         )
 
+    def test_filesystem_exception_renders_without_an_image_target(self) -> None:
+        source = self._write_json(
+            "exceptions.json",
+            {
+                "version": 1,
+                "vulnerabilities": [
+                    {
+                        "id": "DS-0002",
+                        "scan_types": ["fs"],
+                        "owner": "security@example.invalid",
+                        "statement": "Official PostgreSQL entrypoint requires root",
+                        "compensating_control": "Private network and no published port",
+                        "expires": "2026-08-19",
+                        "paths": ["docker/postgres/Dockerfile"],
+                    }
+                ],
+            },
+        )
+        output = self.root / "generated-policy.json"
+
+        summary = evidence.render_exception_policy(
+            source,
+            target=".",
+            scan_type="fs",
+            output=output,
+            today=date(2026, 7, 19),
+        )
+
+        rendered = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(rendered["vulnerabilities"][0]["id"], "DS-0002")
+        self.assertEqual(summary["active_exceptions"], 1)
+
     def test_exception_policy_filters_only_matching_vulnerability_purls(self) -> None:
         policy = self._write_json(
             "policy.json",

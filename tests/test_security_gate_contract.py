@@ -68,6 +68,7 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertIn("chmod 700", content)
         self.assertIn("validate-db", content)
         self.assertIn("render-exceptions", content)
+        self.assertIn('--scan-type "$INPUT_SCAN_TYPE"', content)
         self.assertIn("filter-report", content)
         self.assertIn('filtered_blocking_json_report="${prefix}-filtered.json"', content)
         self.assertIn(
