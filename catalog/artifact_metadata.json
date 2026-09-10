@@ -358,6 +358,14 @@
       "trust_boundary": "untrusted-pr",
       "evidence": "PR validation workflow scaffold wiring the canonical reusable",
       "known_limitations": "Template; copy into consumer repository"
+    },
+    "templates/gitlab/optimizr-delivery.yml": {
+      "category": "operations-adapter",
+      "runner": ["self-hosted-persistent"],
+      "trust_boundary": "trusted-push",
+      "evidence": "Protected GitLab delivery job serializing a service and delegating to the shared executor",
+      "examples": ["extends: .optimizr-delivery"],
+      "known_limitations": "Requires a protected GitLab runner tag, protected runner attestation variable, and consumer-owned entrypoint"
     }
   }
 }
