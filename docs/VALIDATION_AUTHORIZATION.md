@@ -24,6 +24,7 @@ jobs:
       candidate_sha: ${{ github.sha }}
       script_path: scripts/ci/validate.sh
       security_profile: infra
+      exceptions_file: .github/security/trivy-exceptions.json
 
   authorize-validation:
     needs: [validation-gate]
