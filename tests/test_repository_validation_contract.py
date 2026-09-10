@@ -29,6 +29,31 @@ class RepositoryValidationContractTests(unittest.TestCase):
         self.assertIn("steps.contract.outputs.result", text)
         self.assertIn("inputs.candidate_sha || github.sha", text)
 
+    def test_reusable_exposes_bounded_opt_in_retry_contract(self):
+        text = (ROOT / ".github/workflows/_repository-validation.yml").read_text()
+        action = (ROOT / ".github/actions/repository-validation/action.yml").read_text()
+        for content in (text, action):
+            self.assertIn("retry_attempts", content)
+            self.assertIn("retry_backoff_seconds", content)
+            self.assertIn("failure_kind", content)
+            self.assertIn("attempt_count", content)
+        self.assertIn("retry_attempts: ${{ inputs.retry_attempts }}", text)
+        self.assertIn(
+            "retry_backoff_seconds: ${{ inputs.retry_backoff_seconds }}", text
+        )
+        self.assertIn("--retry-attempts", action)
+        self.assertIn("--retry-backoff-seconds", action)
+        self.assertIn("retryable_dependency", (ROOT / "docs/REPOSITORY_VALIDATION.md").read_text())
+
+    def test_validation_gate_forwards_retry_outputs_without_changing_default(self):
+        text = (ROOT / ".github/workflows/_validation-gate.yml").read_text()
+        self.assertIn("retry_attempts:", text)
+        self.assertIn("retry_backoff_seconds:", text)
+        self.assertIn("default: 1", text)
+        self.assertIn("failure_kind:", text)
+        self.assertIn("attempt_count:", text)
+        self.assertIn("needs.repository-validation.outputs.failure_kind", text)
+
     def test_reusable_provisions_optional_node_toolchain_before_consumer_script(self):
         text = (ROOT / ".github/workflows/_repository-validation.yml").read_text()
 

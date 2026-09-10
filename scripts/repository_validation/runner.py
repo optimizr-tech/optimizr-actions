@@ -17,6 +17,9 @@ import time
 from typing import Any, Sequence
 
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+RETRYABLE_EXIT_CODE = 75
+MAX_RETRY_ATTEMPTS = 3
+MAX_RETRY_BACKOFF_SECONDS = 60
 
 
 class ValidationError(ValueError):
@@ -121,6 +124,16 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     temporary.replace(path)
 
 
+def _failure_kind(exit_code: int, timed_out: bool) -> str:
+    if exit_code == 0:
+        return "none"
+    if timed_out:
+        return "timeout"
+    if exit_code == RETRYABLE_EXIT_CODE:
+        return "retryable_dependency"
+    return "command_failed"
+
+
 def run_validation(
     *,
     workspace: Path,
@@ -132,6 +145,8 @@ def run_validation(
     base_sha: str,
     timeout_seconds: int,
     image_refs: Sequence[str] = (),
+    retry_attempts: int = 1,
+    retry_backoff_seconds: int = 5,
 ) -> int:
     if not SHA_RE.fullmatch(head_sha):
         raise ValidationError("head_sha must be a lowercase 40-character commit SHA")
@@ -139,22 +154,55 @@ def run_validation(
         raise ValidationError("base_sha must be empty or a lowercase 40-character commit SHA")
     if timeout_seconds < 1 or timeout_seconds > 3600:
         raise ValidationError("timeout_seconds must be between 1 and 3600")
+    if retry_attempts < 1 or retry_attempts > MAX_RETRY_ATTEMPTS:
+        raise ValidationError(
+            f"retry_attempts must be between 1 and {MAX_RETRY_ATTEMPTS}"
+        )
+    if retry_backoff_seconds < 0 or retry_backoff_seconds > MAX_RETRY_BACKOFF_SECONDS:
+        raise ValidationError(
+            "retry_backoff_seconds must be between 0 and "
+            f"{MAX_RETRY_BACKOFF_SECONDS}"
+        )
     script = resolve_script(workspace, script_path)
     started = time.monotonic()
     exit_code = 1
     timed_out = False
-    try:
-        completed = subprocess.run(
-            [str(script), *args],
-            cwd=workspace,
-            check=False,
-            timeout=timeout_seconds,
+    attempts: list[dict[str, Any]] = []
+    for attempt_number in range(1, retry_attempts + 1):
+        attempt_started = time.monotonic()
+        timed_out = False
+        try:
+            completed = subprocess.run(
+                [str(script), *args],
+                cwd=workspace,
+                check=False,
+                timeout=timeout_seconds,
+            )
+            exit_code = completed.returncode
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            exit_code = 124
+        attempts.append(
+            {
+                "attempt": attempt_number,
+                "exit_code": exit_code,
+                "timed_out": timed_out,
+                "duration_ms": int((time.monotonic() - attempt_started) * 1000),
+                "failure_kind": _failure_kind(exit_code, timed_out),
+            }
         )
-        exit_code = completed.returncode
-    except subprocess.TimeoutExpired:
-        timed_out = True
-        exit_code = 124
+        if exit_code != RETRYABLE_EXIT_CODE or attempt_number == retry_attempts:
+            break
+        delay_seconds = retry_backoff_seconds * attempt_number
+        print(
+            "repository validation returned the reserved transient dependency "
+            f"status; retrying in {delay_seconds}s "
+            f"(attempt {attempt_number + 1}/{retry_attempts})",
+            file=sys.stderr,
+        )
+        time.sleep(delay_seconds)
     duration_ms = int((time.monotonic() - started) * 1000)
+    failure_kind = _failure_kind(exit_code, timed_out)
     payload = {
         "schema_version": 1,
         "repository": repository,
@@ -173,6 +221,12 @@ def run_validation(
             "timed_out": timed_out,
             "duration_ms": duration_ms,
             "status": "passed" if exit_code == 0 else "failed",
+            "failure_kind": failure_kind,
+            "attempt_count": len(attempts),
+            "attempts": attempts,
+            "retry_attempts": retry_attempts,
+            "retryable_exit_code": RETRYABLE_EXIT_CODE,
+            "retry_exhausted": exit_code == RETRYABLE_EXIT_CODE,
         },
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
@@ -240,6 +294,8 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--head-sha", required=True)
     run.add_argument("--base-sha", default="")
     run.add_argument("--timeout-seconds", type=int, default=900)
+    run.add_argument("--retry-attempts", type=int, default=1)
+    run.add_argument("--retry-backoff-seconds", type=int, default=5)
     run.add_argument("--image-refs-json", default="[]")
     trust = sub.add_parser("check-trust")
     trust.add_argument("--workspace", required=True)
@@ -269,6 +325,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             base_sha=args.base_sha,
             timeout_seconds=args.timeout_seconds,
             image_refs=parse_args_json(args.image_refs_json),
+            retry_attempts=args.retry_attempts,
+            retry_backoff_seconds=args.retry_backoff_seconds,
         )
         return status
     except (ValidationError, OSError, subprocess.CalledProcessError) as exc:

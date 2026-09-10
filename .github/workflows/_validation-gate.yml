@@ -85,6 +85,16 @@ on:
         type: number
         required: false
         default: 900
+      retry_attempts:
+        description: Maximum attempts for an explicitly declared transient dependency failure (1-3)
+        type: number
+        required: false
+        default: 1
+      retry_backoff_seconds:
+        description: Linear backoff base in seconds for transient dependency retries (0-60)
+        type: number
+        required: false
+        default: 5
     outputs:
       result:
         description: passed only when all required validation completed
@@ -101,6 +111,12 @@ on:
       actions_workflow_sha:
         description: Exact optimizr-actions revision executing the gate
         value: ${{ jobs.attest.outputs.actions_workflow_sha }}
+      failure_kind:
+        description: Sanitized repository-validation failure classification
+        value: ${{ jobs.attest.outputs.failure_kind }}
+      attempt_count:
+        description: Number of repository-validation attempts recorded
+        value: ${{ jobs.attest.outputs.attempt_count }}
 permissions:
   contents: read
 jobs:
@@ -187,6 +203,8 @@ jobs:
       artifact_name: validation-gate-repository
       retention_days: ${{ inputs.retention_days }}
       timeout_seconds: ${{ inputs.timeout_seconds }}
+      retry_attempts: ${{ inputs.retry_attempts }}
+      retry_backoff_seconds: ${{ inputs.retry_backoff_seconds }}
 
   security-suite:
     needs: [preflight, emergency-preflight]
@@ -217,6 +235,8 @@ jobs:
       validation_path: ${{ steps.attestation.outputs.validation_path }}
       evidence_digest: ${{ steps.attestation.outputs.evidence_digest }}
       actions_workflow_sha: ${{ steps.attestation.outputs.actions_workflow_sha }}
+      failure_kind: ${{ needs.repository-validation.outputs.failure_kind }}
+      attempt_count: ${{ needs.repository-validation.outputs.attempt_count }}
     steps:
       - name: Create canonical attestation
         id: attestation

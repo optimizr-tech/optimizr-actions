@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from repository_validation.runner import (  # noqa: E402
+    RETRYABLE_EXIT_CODE,
     ValidationError,
     parse_args_json,
     resolve_script,
@@ -75,6 +76,187 @@ class RepositoryValidationTests(unittest.TestCase):
             self.assertEqual(payload["result"]["exit_code"], 0)
             self.assertNotIn("environment", payload)
             self.assertNotIn("secret-value", evidence.read_text())
+
+    def test_retry_is_opt_in_and_only_retries_the_reserved_transient_code(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            script = workspace / "validate.py"
+            script.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+            script.chmod(0o700)
+            evidence = workspace / "evidence.json"
+            statuses = iter([RETRYABLE_EXIT_CODE, 0])
+
+            def fake_run(argv, **kwargs):
+                return subprocess.CompletedProcess(argv, next(statuses))
+
+            with patch(
+                "repository_validation.runner.subprocess.run", side_effect=fake_run
+            ), patch(
+                "repository_validation.runner.collect_versions", return_value={}
+            ), patch(
+                "repository_validation.runner.collect_image_identities", return_value=[]
+            ):
+                status = run_validation(
+                    workspace=workspace,
+                    script_path="validate.py",
+                    args=[],
+                    evidence_path=evidence,
+                    repository="optimizr/example",
+                    head_sha="a" * 40,
+                    base_sha="",
+                    timeout_seconds=10,
+                    retry_attempts=2,
+                    retry_backoff_seconds=0,
+                )
+
+            self.assertEqual(status, 0)
+            payload = json.loads(evidence.read_text())
+            self.assertEqual(payload["result"]["status"], "passed")
+            self.assertEqual(payload["result"]["failure_kind"], "none")
+            self.assertEqual(payload["result"]["attempt_count"], 2)
+            self.assertEqual(
+                [attempt["exit_code"] for attempt in payload["result"]["attempts"]],
+                [RETRYABLE_EXIT_CODE, 0],
+            )
+
+    def test_non_retryable_failure_is_not_retried(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            script = workspace / "validate.py"
+            script.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+            script.chmod(0o700)
+            evidence = workspace / "evidence.json"
+            calls = 0
+
+            def fake_run(argv, **kwargs):
+                nonlocal calls
+                calls += 1
+                return subprocess.CompletedProcess(argv, 2)
+
+            with patch(
+                "repository_validation.runner.subprocess.run", side_effect=fake_run
+            ), patch(
+                "repository_validation.runner.collect_versions", return_value={}
+            ), patch(
+                "repository_validation.runner.collect_image_identities", return_value=[]
+            ):
+                status = run_validation(
+                    workspace=workspace,
+                    script_path="validate.py",
+                    args=[],
+                    evidence_path=evidence,
+                    repository="optimizr/example",
+                    head_sha="a" * 40,
+                    base_sha="",
+                    timeout_seconds=10,
+                    retry_attempts=3,
+                )
+
+            self.assertEqual(status, 2)
+            payload = json.loads(evidence.read_text())
+            self.assertEqual(calls, 1)
+            self.assertEqual(payload["result"]["failure_kind"], "command_failed")
+            self.assertEqual(payload["result"]["attempt_count"], 1)
+
+    def test_exhausted_transient_retry_remains_failed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            script = workspace / "validate.py"
+            script.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+            script.chmod(0o700)
+            evidence = workspace / "evidence.json"
+
+            with patch(
+                "repository_validation.runner.subprocess.run",
+                side_effect=lambda argv, **kwargs: subprocess.CompletedProcess(
+                    argv, RETRYABLE_EXIT_CODE
+                ),
+            ), patch(
+                "repository_validation.runner.collect_versions", return_value={}
+            ), patch(
+                "repository_validation.runner.collect_image_identities", return_value=[]
+            ):
+                status = run_validation(
+                    workspace=workspace,
+                    script_path="validate.py",
+                    args=[],
+                    evidence_path=evidence,
+                    repository="optimizr/example",
+                    head_sha="a" * 40,
+                    base_sha="",
+                    timeout_seconds=10,
+                    retry_attempts=2,
+                    retry_backoff_seconds=0,
+                )
+
+            payload = json.loads(evidence.read_text())
+            self.assertEqual(status, RETRYABLE_EXIT_CODE)
+            self.assertEqual(payload["result"]["status"], "failed")
+            self.assertEqual(payload["result"]["failure_kind"], "retryable_dependency")
+            self.assertTrue(payload["result"]["retry_exhausted"])
+            self.assertEqual(payload["result"]["attempt_count"], 2)
+
+    def test_timeout_is_not_retried(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            script = workspace / "validate.py"
+            script.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+            script.chmod(0o700)
+            evidence = workspace / "evidence.json"
+            calls = 0
+
+            def fake_run(argv, **kwargs):
+                nonlocal calls
+                calls += 1
+                raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+
+            with patch(
+                "repository_validation.runner.subprocess.run", side_effect=fake_run
+            ), patch(
+                "repository_validation.runner.collect_versions", return_value={}
+            ), patch(
+                "repository_validation.runner.collect_image_identities", return_value=[]
+            ):
+                status = run_validation(
+                    workspace=workspace,
+                    script_path="validate.py",
+                    args=[],
+                    evidence_path=evidence,
+                    repository="optimizr/example",
+                    head_sha="a" * 40,
+                    base_sha="",
+                    timeout_seconds=10,
+                    retry_attempts=3,
+                    retry_backoff_seconds=0,
+                )
+
+            payload = json.loads(evidence.read_text())
+            self.assertEqual(status, 124)
+            self.assertEqual(calls, 1)
+            self.assertEqual(payload["result"]["failure_kind"], "timeout")
+            self.assertEqual(payload["result"]["attempt_count"], 1)
+
+    def test_retry_attempts_are_bounded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            script = workspace / "validate.py"
+            script.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+            script.chmod(0o700)
+            for retry_attempts in (0, 4):
+                with self.subTest(retry_attempts=retry_attempts), self.assertRaises(
+                    ValidationError
+                ):
+                    run_validation(
+                        workspace=workspace,
+                        script_path="validate.py",
+                        args=[],
+                        evidence_path=workspace / "evidence.json",
+                        repository="optimizr/example",
+                        head_sha="a" * 40,
+                        base_sha="",
+                        timeout_seconds=10,
+                        retry_attempts=retry_attempts,
+                    )
 
     def test_trusted_candidate_fetch_uses_ephemeral_token_without_argv_or_persistence(self):
         calls: list[tuple[list[str], dict[str, object]]] = []
