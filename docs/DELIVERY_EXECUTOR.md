@@ -253,6 +253,36 @@ provider from growing a parallel checkout, synchronization, lock, or gate
 sequence. Provider-specific wrappers still own their fixed gate callback and
 must pass only sanitized `GateEvidence`.
 
+## GitLab include template
+
+`templates/gitlab/optimizr-delivery.yml` is the thin GitLab job skeleton for a
+consumer repository. The consumer should include an exact reviewed Actions
+commit and extend `.optimizr-delivery`:
+
+```yaml
+include:
+  - remote: >-
+      https://raw.githubusercontent.com/optimizr-tech/optimizr-actions/
+      <reviewed-actions-sha>/templates/gitlab/optimizr-delivery.yml
+
+deliver:
+  extends: .optimizr-delivery
+  variables:
+    OPTIMIZR_DELIVERY_SERVICE: optimizr-serve
+    OPTIMIZR_DELIVERY_RUNNER_TAG: optimizr-protected
+    OPTIMIZR_DELIVERY_ENTRYPOINT: "$CI_PROJECT_DIR/scripts/delivery_gitlab.py"
+```
+
+The job is manual, serialized per service, and eligible only for a protected
+dedicated `deploy-*` tag. The runner tag must point to a GitLab protected
+self-hosted runner, and `OPTIMIZR_DELIVERY_PROTECTED_RUNNER=true` must be
+configured as a protected CI/CD variable; the template deliberately does not
+define that attestation itself. The entrypoint is confined below
+`CI_PROJECT_DIR` and must call `execute_ci_delivery` with
+`provider="gitlab-ci"`, both protected signals, and a fixed provider gate
+callback. The template never contains Compose, security, rollback, or secret
+handling logic.
+
 ## Next slices
 
 Follow-up PRs must separately add and verify:
