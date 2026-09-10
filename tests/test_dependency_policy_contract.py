@@ -52,6 +52,16 @@ class DependencyPolicyContractTests(unittest.TestCase):
         self.assertNotIn('version: "latest"', quality_gate)
         self.assertIn("uv sync ${{ inputs.uv_sync_args }}", quality_gate)
 
+    def test_pip_audit_retries_transient_registry_failures_without_masking_findings(self):
+        quality_gate = (
+            ROOT / ".github/workflows/_quality-gate-collect-security.yml"
+        ).read_text()
+
+        self.assertIn('for attempt in 1 2 3; do', quality_gate)
+        self.assertIn('if [ -s "$report" ]; then', quality_gate)
+        self.assertIn('sleep "$((attempt * 5))"', quality_gate)
+        self.assertIn('test -s "$report"', quality_gate)
+
     def test_node_toolchain_inputs_propagate_through_reusables(self):
         workflow_paths = [
             ROOT / ".github/workflows/_dependency-policy.yml",

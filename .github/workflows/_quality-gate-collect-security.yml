@@ -157,8 +157,31 @@ jobs:
           set -euo pipefail
           mkdir -p .qg-sec
           uv export --format requirements-txt --no-hashes --no-emit-project > /tmp/req.txt
-          uvx pip-audit --requirement /tmp/req.txt --format json --output .qg-sec/report.json || true
-          test -s .qg-sec/report.json
+          report=".qg-sec/report.json"
+          for attempt in 1 2 3; do
+            rm -f "$report"
+            set +e
+            uvx pip-audit --requirement /tmp/req.txt --format json --output "$report"
+            pip_audit_status=$?
+            set -e
+            # pip-audit returns non-zero when it finds vulnerabilities, but a
+            # non-empty report is valid evidence and must reach the quality
+            # gate. Retry only when the registry/tool failure produced no
+            # report, as happened with a transient PyPI read timeout.
+            if [ -s "$report" ]; then
+              if [ "$pip_audit_status" -ne 0 ]; then
+                echo "::notice::pip-audit reported findings (exit $pip_audit_status); preserving its report"
+              fi
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::pip-audit did not produce a report after $attempt attempts" >&2
+              exit 1
+            fi
+            echo "::warning::pip-audit produced no report (exit $pip_audit_status); retrying attempt $((attempt + 1))/3"
+            sleep "$((attempt * 5))"
+          done
+          test -s "$report"
 
       - name: Run pnpm audit
         if: matrix.tool == 'pnpm-audit'
