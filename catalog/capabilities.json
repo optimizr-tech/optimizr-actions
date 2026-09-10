@@ -446,6 +446,8 @@
         "image_refs_json": "",
         "repository": "",
         "require_trusted_ref": "",
+        "retry_attempts": "",
+        "retry_backoff_seconds": "",
         "script_path": "",
         "timeout_seconds": "",
         "trusted_ref": ""
@@ -455,7 +457,9 @@
       "maturity": "stable-v1",
       "metadata_status": "classified",
       "outputs": {
+        "attempt_count": "",
         "evidence_path": "",
+        "failure_kind": "",
         "result": ""
       },
       "path": ".github/actions/repository-validation/action.yml",
@@ -465,7 +469,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "fead6db205d3daa9c965b2c652d5898eaf0393d981343895522822d4d724efc5",
+      "source_sha256": "d8329be55a6198f58812fbf72017c1af9012f783a6f042c9d38e777d6cb0de93",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1599,6 +1603,8 @@
         "pnpm_version": "",
         "require_trusted_ref": "",
         "retention_days": "",
+        "retry_attempts": "",
+        "retry_backoff_seconds": "",
         "runner_json": "",
         "script_path": "",
         "timeout_seconds": "",
@@ -1609,7 +1615,9 @@
       "maturity": "stable-v1",
       "metadata_status": "classified",
       "outputs": {
+        "attempt_count": "",
         "evidence_path": "",
+        "failure_kind": "",
         "result": "",
         "validated_sha": ""
       },
@@ -1622,7 +1630,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "517b635f6eb14cd4968064ea828eb4a2b8acb15b8406f9f14a565b4c4090b5d0",
+      "source_sha256": "1f700ffd83f36690e1c311912e1c339d1635fab387c810af7f2f1184c0940f6f",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1983,6 +1991,8 @@
         "npm_version": "",
         "pnpm_version": "",
         "retention_days": "",
+        "retry_attempts": "",
+        "retry_backoff_seconds": "",
         "runner_json": "",
         "sast_baseline_file": "",
         "script_path": "",
@@ -1996,7 +2006,9 @@
       "metadata_status": "classified",
       "outputs": {
         "actions_workflow_sha": "",
+        "attempt_count": "",
         "evidence_digest": "",
+        "failure_kind": "",
         "result": "",
         "validated_sha": "",
         "validation_path": ""
@@ -2010,7 +2022,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "17c4a9cdbd9427066be1244611fff8471ff425494705bf02f6e46d240d0272e2",
+      "source_sha256": "b91180fc6d746e6482b844eb42ed95875894deb5174494138711acd4b0a85be3",
       "trust_boundary": "trusted-pr"
     },
     {

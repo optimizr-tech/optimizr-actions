@@ -18,6 +18,10 @@ jobs:
       node_version: "24"
       npm_version: "11"
       pnpm_version: "11"
+      # Optional: only for an idempotent entrypoint that reserves exit 75
+      # for a transient dependency download failure.
+      retry_attempts: 3
+      retry_backoff_seconds: 5
 ```
 
 `node_version`, `npm_version`, and `pnpm_version` are optional and are installed
@@ -37,6 +41,22 @@ Use the workflow's manual dispatch only with a protected GitHub Environment that
 
 ## Evidence and failure behavior
 
-Evidence contains repository, exact head/base SHAs, executable path, argument hashes/count, optional immutable image IDs, exit code, duration, timeout state, and available Git/Docker/Compose versions. It never serializes process environment values. Missing, non-executable, symlinked, traversing, or out-of-workspace scripts fail closed.
+Evidence contains repository, exact head/base SHAs, executable path, argument hashes/count, optional immutable image IDs, exit code, duration, timeout state, failure classification, and available Git/Docker/Compose versions. It never serializes process environment values. Missing, non-executable, symlinked, traversing, or out-of-workspace scripts fail closed.
+
+### Transient dependency retries
+
+The default is exactly one attempt. A consumer may opt into at most three
+attempts only when its entrypoint is idempotent and returns the reserved exit
+code `75` for a transient dependency download failure. The reusable applies a
+bounded linear backoff (`retry_backoff_seconds`, from `0` to `60` seconds) and
+never retries timeouts or ordinary command failures. A final exit code of `75`
+remains failed and is recorded as `retryable_dependency`; a retry cannot turn
+an incomplete final validation into success.
+
+The evidence records every attempt and the reusable exposes `failure_kind` and
+`attempt_count`. The classifications are `none`, `command_failed`, `timeout`,
+and `retryable_dependency`. A job that never starts because no matching runner
+is available cannot produce workflow evidence; runner registration, capacity,
+and alerting remain infrastructure responsibilities.
 
 Rollback is to pin the consumer to the preceding `optimizr-actions` commit while retaining an equivalent mandatory validation job. Do not replace the gate with an all-skipped path.

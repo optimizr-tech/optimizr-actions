@@ -51,6 +51,16 @@ on:
         type: number
         required: false
         default: 900
+      retry_attempts:
+        description: Maximum attempts for an explicitly declared transient dependency failure (1-3)
+        type: number
+        required: false
+        default: 1
+      retry_backoff_seconds:
+        description: Linear backoff base in seconds for transient dependency retries (0-60)
+        type: number
+        required: false
+        default: 5
       require_trusted_ref:
         description: Require candidate reachable from trusted_ref
         type: boolean
@@ -86,6 +96,12 @@ on:
       evidence_path:
         description: Repository-relative path uploaded as validation evidence
         value: ${{ jobs.validation.outputs.evidence_path }}
+      failure_kind:
+        description: Sanitized final failure classification from the validation evidence
+        value: ${{ jobs.validation.outputs.failure_kind }}
+      attempt_count:
+        description: Number of validation attempts recorded in the evidence
+        value: ${{ jobs.validation.outputs.attempt_count }}
 permissions:
   contents: read
 jobs:
@@ -97,6 +113,8 @@ jobs:
       result: ${{ steps.contract.outputs.result }}
       validated_sha: ${{ inputs.candidate_sha || github.sha }}
       evidence_path: ${{ steps.contract.outputs.evidence_path }}
+      failure_kind: ${{ steps.contract.outputs.failure_kind }}
+      attempt_count: ${{ steps.contract.outputs.attempt_count }}
     steps:
       - name: Reject unsafe persistent-runner override
         shell: bash
@@ -202,6 +220,8 @@ jobs:
           head_sha: ${{ inputs.candidate_sha || github.sha }}
           base_sha: ${{ inputs.base_sha }}
           timeout_seconds: ${{ inputs.timeout_seconds }}
+          retry_attempts: ${{ inputs.retry_attempts }}
+          retry_backoff_seconds: ${{ inputs.retry_backoff_seconds }}
           image_refs_json: ${{ inputs.image_refs_json }}
           require_trusted_ref: ${{ inputs.require_trusted_ref }}
           trusted_ref: ${{ inputs.trusted_ref }}
