@@ -15,8 +15,9 @@ from .executor import (
     SyncRunner,
     execute_delivery,
 )
+from .plan import DeliveryPathSpec, DeliveryPlanError, build_executor_spec
 from .request import DeployRequest, RequestError, load_request
-from .snapshot_sync import SyncSpec, sync_deployment
+from .snapshot_sync import sync_deployment
 
 
 class ManualAdapterError(ValueError):
@@ -96,35 +97,22 @@ def build_manual_plan(config: ManualAdapterSpec) -> ManualDeliveryPlan:
     request = _load_manual_request(config)
     remote = _resolve_remote(request, config.remote_allowlist)
     try:
-        checkout_destination = (
-            Path(config.checkout_root)
-            / f"{request.service}-{request.candidate_sha}"
+        executor = build_executor_spec(
+            request,
+            remote,
+            DeliveryPathSpec(
+                checkout_root=config.checkout_root,
+                deploy_root=config.deploy_root,
+                snapshot_root=config.snapshot_root,
+                lock_root=config.lock_root,
+                snapshot_enabled=config.snapshot_enabled,
+                deployignore=config.deployignore,
+                exclude_compose_file=config.exclude_compose_file,
+                snapshot_name=config.snapshot_name,
+                lock_timeout_seconds=config.lock_timeout_seconds,
+            ),
         )
-        destination = Path(config.deploy_root) / request.service
-        checkout = CheckoutSpec(
-            request=request,
-            remote=remote,
-            destination=checkout_destination,
-            allowed_root=Path(config.checkout_root),
-        )
-        sync = SyncSpec(
-            source=checkout_destination,
-            destination=destination,
-            snapshot_root=Path(config.snapshot_root),
-            source_root=Path(config.checkout_root),
-            destination_root=Path(config.deploy_root),
-            snapshot_enabled=config.snapshot_enabled,
-            deployignore=config.deployignore,
-            exclude_compose_file=config.exclude_compose_file,
-            snapshot_name=config.snapshot_name,
-        )
-        executor = DeliveryExecutorSpec(
-            checkout=checkout,
-            sync=sync,
-            lock_root=Path(config.lock_root),
-            lock_timeout_seconds=config.lock_timeout_seconds,
-        )
-    except (OSError, TypeError, ValueError) as exc:
+    except (DeliveryPlanError, OSError, TypeError, ValueError) as exc:
         raise ManualAdapterError("manual delivery paths are invalid") from exc
     return ManualDeliveryPlan(request=request, executor=executor)
 
