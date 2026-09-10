@@ -30,6 +30,12 @@ The project may live at the repository root or in a repository-relative `working
 
 The native package manager performs an immutable/frozen lock check. A missing tool, network failure, stale lockfile, missing advisory data, malformed policy, denied license, or unexcepted High/Critical advisory fails closed.
 
+The pip-audit collector retries up to three times with bounded backoff when a
+registry/tool failure produces no report. A non-empty report is preserved even
+when pip-audit exits non-zero for discovered vulnerabilities, so findings still
+reach the quality gate; the collector still fails closed if no report is
+produced after the retry window.
+
 The sanitized toolchain evidence records detected ecosystems, requested Node/npm versions, and resolved Python/Node/npm versions. It does not contain environment variables, registry credentials, package contents, or install logs.
 
 ```yaml
