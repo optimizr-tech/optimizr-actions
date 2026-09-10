@@ -153,6 +153,29 @@ This is a portable serialization contract only. It does not select a
 provider, run Docker, perform rollback, or replace the existing VPS manifest
 writer. Provider adapters may consume this result after a separate review.
 
+## Protected rollback plan
+
+`build_rollback_plan` validates a rollback target without changing the host.
+The caller supplies explicit existing roots for manifests and snapshots, the
+service name, the operator identity, a reason, and the literal confirmation:
+
+```text
+ROLLBACK <service> <candidate_sha>
+```
+
+The selected manifest must be schema version 1, successful and ready. Its
+synchronization evidence must prove that a changed deployment was synced and
+that a snapshot was created. The snapshot filename is restricted to a safe
+`.tar.gz` basename and the resolved regular file must remain below the
+declared snapshot root. Failed, incomplete, outside-root, malformed, or
+secret-bearing inputs fail closed.
+
+The returned plan contains only validated metadata and absolute paths to the
+approved manifest and snapshot. It does not restore files, invoke Compose,
+restart services, or bypass the normal provider gate and health checks. A
+trusted host adapter must execute the plan through its separately reviewed
+rollback procedure and record the resulting evidence.
+
 ## Manual adapter
 
 `scripts.delivery.manual` is the first thin adapter for a protected manual or
@@ -197,7 +220,7 @@ Follow-up PRs must separately add and verify:
 
 1. GitHub and GitLab adapters that implement the gate callbacks without
    broadening permissions;
-2. canary and rollback evidence before any consumer migration.
+2. canary evidence and adapter parity before any consumer migration.
 
 Each slice must preserve the existing VPS reusable behavior until a reviewed
 adapter proves parity.
