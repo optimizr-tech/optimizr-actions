@@ -60,6 +60,20 @@ class ValidationGateContractTests(unittest.TestCase):
         for input_name in ("node_version", "npm_version", "pnpm_version"):
             self.assertIn(f"{input_name}: ${{{{ inputs.{input_name} }}}}", repository_validation)
 
+    def test_gate_exposes_and_forwards_security_exceptions_file(self):
+        text = (ROOT / ".github/workflows/_validation-gate.yml").read_text()
+        declared_inputs = text.split("    outputs:", 1)[0]
+        security_suite = text.split("  security-suite:", 1)[1].split(
+            "  attest:", 1
+        )[0]
+
+        self.assertIn("      exceptions_file:", declared_inputs)
+        self.assertIn(
+            "        description: Optional repository-relative Trivy exception policy JSON",
+            declared_inputs,
+        )
+        self.assertIn("      exceptions_file: ${{ inputs.exceptions_file }}", security_suite)
+
     def test_security_suite_exports_success_result(self):
         text = (ROOT / ".github/workflows/_security-suite.yml").read_text()
         self.assertIn("jobs.summary.outputs.result", text)

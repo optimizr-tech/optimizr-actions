@@ -22,6 +22,7 @@ jobs:
       dependency_working_directory: app
       dependency_policy_file: .github/security/dependency-policy.json
       sast_baseline_file: .github/security/sast-baseline.json
+      exceptions_file: .github/security/trivy-exceptions.json
 ```
 
 `dependency_working_directory` defaults to the repository root and is passed to the dependency-policy gate, which resolves and confines it with `realpath`. SAST and filesystem scanning continue to cover the entire repository so shared code and workflow files are not silently omitted.

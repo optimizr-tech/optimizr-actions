@@ -65,6 +65,11 @@ on:
         type: string
         required: false
         default: ""
+      exceptions_file:
+        description: Optional repository-relative Trivy exception policy JSON
+        type: string
+        required: false
+        default: ""
       image_refs:
         description: Optional local images requiring supply-chain evidence
         type: string
@@ -196,6 +201,7 @@ jobs:
       node_version: ${{ inputs.node_version }}
       npm_version: ${{ inputs.npm_version }}
       sast_baseline_file: ${{ inputs.sast_baseline_file }}
+      exceptions_file: ${{ inputs.exceptions_file }}
       image_refs: ${{ inputs.image_refs }}
       retention_days: ${{ inputs.retention_days }}
 

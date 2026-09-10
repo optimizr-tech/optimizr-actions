@@ -1977,6 +1977,7 @@
         "dependency_policy_file": "",
         "dependency_working_directory": "",
         "environment_name": "",
+        "exceptions_file": "",
         "image_refs": "",
         "node_version": "",
         "npm_version": "",
@@ -2009,7 +2010,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "0e714da532006cf48a3dcf804581f9bff24ec5f07e76a4f08e310439c80a926f",
+      "source_sha256": "17c4a9cdbd9427066be1244611fff8471ff425494705bf02f6e46d240d0272e2",
       "trust_boundary": "trusted-pr"
     },
     {
