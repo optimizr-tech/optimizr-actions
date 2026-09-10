@@ -64,15 +64,37 @@ created by a failed attempt is removed when cleanup is possible.
 This primitive prepares source only. It does not synchronize into a deploy
 directory, preserve runtime state, run security gates or change a service.
 
+## Protected snapshot and synchronization
+
+The synchronization primitive receives an exact-SHA checkout, an existing
+deployment directory, and explicit roots for both paths. It first runs
+`rsync -a --delete --dry-run --itemize-changes` with portable exclusions for
+`.git`, `.github`, runtime environment and secret files, private-key suffixes,
+archives, and backup data. An optional validated `.deployignore` and prebuilt
+Compose filename are added as argument-level excludes; no shell is used.
+
+When the dry-run reports no changes, no snapshot or synchronization is
+performed. When it reports changes and snapshots are enabled, the current
+deployment directory is archived before the real `rsync`. The archive omits
+`.env`, `.env.*`, `.secrets`, private-key suffixes (`.pem`, `.key`, `.p12`,
+`.pfx`), and existing `.tar.gz` files. Snapshot names are confined to the
+explicit snapshot root, written through a temporary file, and restricted to
+mode `0600` where the platform supports Unix modes.
+
+Dry-run failures, unsafe paths, snapshot failures, and synchronization failures
+stop the primitive without claiming success. The result contains only booleans,
+a change count, and a safe snapshot filename; command output is not returned.
+This slice is not wired to production workflows and does not manage Docker,
+service health, or host retention.
+
 ## Next slices
 
 This contract is not a deploy implementation and must not be wired to
 production execution by itself. Follow-up PRs must separately add and verify:
 
-1. snapshot and dry-run synchronization that preserves runtime state;
-2. security/Compose/health gates and sanitized manifest output;
-3. GitHub, GitLab, Ansible, and manual adapters;
-4. canary and rollback evidence before any consumer migration.
+1. security/Compose/health gates and sanitized manifest output;
+2. GitHub, GitLab, Ansible, and manual adapters;
+3. canary and rollback evidence before any consumer migration.
 
 Each slice must preserve the existing VPS reusable behavior until a reviewed
 adapter proves parity.
