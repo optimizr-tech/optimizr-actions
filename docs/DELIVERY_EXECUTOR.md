@@ -132,12 +132,50 @@ does not add a CLI, production workflow wiring, provider credentials, or an
 automatic rollback policy. Those changes require separate adapter and
 cross-repository review.
 
+## Manual adapter
+
+`scripts.delivery.manual` is the first thin adapter for a protected manual or
+Ansible call. It loads the request only below an explicit request root, accepts
+only `adapter: manual`, requires the literal confirmation
+`DEPLOY <service> <candidate_sha>`, and resolves the repository through an
+explicit remote allowlist. It derives one isolated checkout destination from
+the validated service and full SHA, then creates the shared
+`DeliveryExecutorSpec`.
+
+The host wrapper supplies the prepared roots and the provider gate callback:
+
+```python
+from scripts.delivery.manual import ManualAdapterSpec, execute_manual_delivery
+
+result = execute_manual_delivery(
+    ManualAdapterSpec(
+        request_path=request_path,
+        request_root=request_root,
+        confirmation="DEPLOY optimizr-serve " + candidate_sha,
+        remote_allowlist={
+            "owner/service": "https://github.com/owner/service.git",
+        },
+        checkout_root=checkout_root,
+        deploy_root=deploy_root,
+        snapshot_root=snapshot_root,
+        lock_root=lock_root,
+    ),
+    run_gates=trusted_gate_runner,
+)
+```
+
+The adapter does not accept a command string, credential, token, arbitrary
+remote, or caller-supplied gate result. The trusted host owns the callback that
+executes its fixed filesystem, Compose, security, rollout, health, smoke, and
+rollback checks. A wrapper should treat `ready=False` as a failed delivery and
+must not bypass the executor with a parallel deploy path.
+
 ## Next slices
 
 Follow-up PRs must separately add and verify:
 
-1. provider adapters that implement the gate callbacks without broadening
-   permissions;
+1. GitHub and GitLab adapters that implement the gate callbacks without
+   broadening permissions;
 2. sanitized manifest integration and explicit failure evidence;
 3. canary and rollback evidence before any consumer migration.
 
