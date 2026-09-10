@@ -214,12 +214,51 @@ executes its fixed filesystem, Compose, security, rollout, health, smoke, and
 rollback checks. A wrapper should treat `ready=False` as a failed delivery and
 must not bypass the executor with a parallel deploy path.
 
+## Protected CI adapters
+
+`scripts.delivery.ci` provides the shared thin-adapter contract for
+`github-actions` and `gitlab-ci`. It loads a request whose adapter identity
+matches the provider, resolves the repository only through the explicit remote
+allowlist, and requires both `protected_ref=True` and
+`protected_runner=True`. The provider wrapper is responsible for deriving
+those booleans from its own protected-ref and trusted-runner controls; an
+unprotected or ambiguous signal is rejected before checkout.
+
+Both providers build the same `DeliveryExecutorSpec` through
+`build_ci_plan` and may execute it only through `execute_ci_delivery`:
+
+```python
+from scripts.delivery.ci import CiAdapterSpec, execute_ci_delivery
+
+result = execute_ci_delivery(
+    CiAdapterSpec(
+        provider="gitlab-ci",
+        request_path=request_path,
+        request_root=request_root,
+        remote_allowlist=remote_allowlist,
+        checkout_root=checkout_root,
+        deploy_root=deploy_root,
+        snapshot_root=snapshot_root,
+        lock_root=lock_root,
+        runner_name="protected-runner",
+        protected_ref=True,
+        protected_runner=True,
+    ),
+    run_gates=trusted_gate_runner,
+)
+```
+
+The shared path construction is also used by the manual adapter, preventing a
+provider from growing a parallel checkout, synchronization, lock, or gate
+sequence. Provider-specific wrappers still own their fixed gate callback and
+must pass only sanitized `GateEvidence`.
+
 ## Next slices
 
 Follow-up PRs must separately add and verify:
 
-1. GitHub and GitLab adapters that implement the gate callbacks without
-   broadening permissions;
+1. provider-specific workflow/templates that derive the protected signals and
+   invoke these thin adapters without broadening permissions;
 2. canary evidence and adapter parity before any consumer migration.
 
 Each slice must preserve the existing VPS reusable behavior until a reviewed
