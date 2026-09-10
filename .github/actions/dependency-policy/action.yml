@@ -204,8 +204,9 @@ runs:
         for ecosystem in "${ecosystems[@]}"; do
           case "$ecosystem" in
             python-uv)
-              uv tool install 'uv==0.8.3'
-              export PATH="$HOME/.local/bin:$PATH"
+              # setup-uv already resolved the version declared by the
+              # consumer project. Do not shadow it with a global tool pin:
+              # project contracts may require a newer uv release.
               python_version="$(uv run --no-project --python 3.12 python - <<'PY'
         from pathlib import Path
         import re

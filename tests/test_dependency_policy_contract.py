@@ -40,6 +40,18 @@ class DependencyPolicyContractTests(unittest.TestCase):
         self.assertIn('"node"', text)
         self.assertIn('"npm"', text)
 
+    def test_python_uv_checks_respect_the_consumer_project_pin(self):
+        dependency_policy = (
+            ROOT / ".github/actions/dependency-policy/action.yml"
+        ).read_text()
+        quality_gate = (
+            ROOT / ".github/workflows/_quality-gate-collect-security.yml"
+        ).read_text()
+
+        self.assertNotIn("uv tool install 'uv==", dependency_policy)
+        self.assertNotIn('version: "latest"', quality_gate)
+        self.assertIn("uv sync ${{ inputs.uv_sync_args }}", quality_gate)
+
     def test_node_toolchain_inputs_propagate_through_reusables(self):
         workflow_paths = [
             ROOT / ".github/workflows/_dependency-policy.yml",
@@ -60,6 +72,8 @@ class DependencyPolicyContractTests(unittest.TestCase):
         text = (ROOT / "docs/DEPENDENCY_POLICY.md").read_text()
         self.assertIn("minimum Python version", text)
         self.assertIn("`>=3.14`", text)
+        self.assertIn("`tool.uv.required-version`", text)
+        self.assertIn("never installs a second uv", text)
         self.assertIn("Node 24", text)
         self.assertIn("npm 12.0.2", text)
         self.assertIn("`npm ci --ignore-scripts --no-audit --no-fund`", text)

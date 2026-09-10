@@ -14,6 +14,10 @@ concrete runtime passed to uv (`3.14`); a constraint without a lower bound
 fails closed.
 The parser itself runs through the action's controlled Python 3.12 runtime, so
 the host's system `python3` does not need to provide `tomllib`.
+When a consumer declares `tool.uv.required-version`, setup-uv resolves that
+exact project version and the gate never installs a second uv that could
+shadow it. This keeps lock validation, export, and audit commands on one
+reproducible toolchain.
 
 For Node projects, the organization defaults are Node 24 and npm 12.0.2. The
 versions are explicit reusable inputs and can be overridden only by a reviewed
