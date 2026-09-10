@@ -1,9 +1,11 @@
-# Provider-neutral delivery request
+# Provider-neutral delivery executor
 
-The first delivery-executor slice defines a small, provider-neutral request
-contract. It is deliberately separate from GitHub Actions context and from
-the current VPS deploy workflows. It validates identity and source inputs but
-does not checkout code, sync files, invoke Docker, mutate a host, or deploy.
+The delivery executor is deliberately separate from GitHub Actions context,
+GitLab context, Ansible, and private VPS configuration. Its shared runtime
+contract validates identity, prepares an exact commit, serializes one service,
+protects synchronization, and evaluates adapter-provided gates. It does not
+know credentials, invoke a shell, choose a provider, or wire any production
+workflow.
 
 ## Request schema
 
@@ -87,13 +89,56 @@ a change count, and a safe snapshot filename; command output is not returned.
 This slice is not wired to production workflows and does not manage Docker,
 service health, or host retention.
 
+## Locked executor flow
+
+`execute_delivery` composes the primitives in this order while holding an
+exclusive OS-level lock at `<lock-root>/<service>.lock`:
+
+1. checkout the exact candidate SHA from the adapter-resolved remote;
+2. run the provider's `preflight` callback for filesystem, Compose, and
+   security evidence;
+3. stop without synchronization when any preflight gate is absent, skipped, or
+   failed;
+4. run protected dry-run/snapshot/synchronization using the verified checkout;
+5. run the provider's `postflight` callback for rollout and health evidence;
+6. return `ready=True` only when every required gate in both phases passed.
+
+The lock root must be an existing, explicit, non-root directory without
+symlink components. Lock files remain as harmless coordination files after a
+process exits; the OS releases the active lock with the file descriptor. A
+timeout is bounded to one hour and a timeout fails closed.
+
+Adapters provide the gate callback:
+
+```python
+from scripts.delivery.executor import execute_delivery
+
+result = execute_delivery(
+    spec,
+    run_gates=lambda context, phase: adapter_gates(context, phase),
+)
+if not result.ready:
+    raise RuntimeError(result.failure_reason or "delivery gates failed")
+```
+
+The callback owns provider-specific Compose, image-security, rollout, health,
+canary, and rollback commands. The executor receives only sanitized
+`GateEvidence`; it never returns command output. A postflight failure leaves
+the protected snapshot available for the adapter's separately reviewed
+rollback path and never claims the delivery is ready.
+
+The current runtime slice is a library contract with injected operations. It
+does not add a CLI, production workflow wiring, provider credentials, or an
+automatic rollback policy. Those changes require separate adapter and
+cross-repository review.
+
 ## Next slices
 
-This contract is not a deploy implementation and must not be wired to
-production execution by itself. Follow-up PRs must separately add and verify:
+Follow-up PRs must separately add and verify:
 
-1. security/Compose/health gates and sanitized manifest output;
-2. GitHub, GitLab, Ansible, and manual adapters;
+1. provider adapters that implement the gate callbacks without broadening
+   permissions;
+2. sanitized manifest integration and explicit failure evidence;
 3. canary and rollback evidence before any consumer migration.
 
 Each slice must preserve the existing VPS reusable behavior until a reviewed
