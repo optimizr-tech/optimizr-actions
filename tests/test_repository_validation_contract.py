@@ -45,6 +45,17 @@ class RepositoryValidationContractTests(unittest.TestCase):
         self.assertIn("--retry-backoff-seconds", action)
         self.assertIn("retryable_dependency", (ROOT / "docs/REPOSITORY_VALIDATION.md").read_text())
 
+    def test_reusable_verifies_checkout_integrity_before_repository_script(self):
+        text = (ROOT / ".github/workflows/_repository-validation.yml").read_text()
+
+        self.assertIn("required_paths_json:", text)
+        self.assertIn("checkout-integrity@v1", text)
+        self.assertIn("clean: true", text)
+        self.assertLess(
+            text.index("Verify checkout integrity"),
+            text.index("Run repository contract"),
+        )
+
     def test_validation_gate_forwards_retry_outputs_without_changing_default(self):
         text = (ROOT / ".github/workflows/_validation-gate.yml").read_text()
         self.assertIn("retry_attempts:", text)
@@ -53,6 +64,15 @@ class RepositoryValidationContractTests(unittest.TestCase):
         self.assertIn("failure_kind:", text)
         self.assertIn("attempt_count:", text)
         self.assertIn("needs.repository-validation.outputs.failure_kind", text)
+
+    def test_validation_gate_forwards_required_checkout_paths(self):
+        text = (ROOT / ".github/workflows/_validation-gate.yml").read_text()
+
+        self.assertIn("required_paths_json:", text)
+        self.assertIn(
+            "required_paths_json: ${{ inputs.required_paths_json }}",
+            text,
+        )
 
     def test_reusable_provisions_optional_node_toolchain_before_consumer_script(self):
         text = (ROOT / ".github/workflows/_repository-validation.yml").read_text()

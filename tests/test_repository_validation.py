@@ -16,11 +16,101 @@ from repository_validation.runner import (  # noqa: E402
     parse_args_json,
     resolve_script,
     run_validation,
+    verify_workspace,
     verify_trusted_candidate,
 )
 
 
 class RepositoryValidationTests(unittest.TestCase):
+    def test_verify_workspace_accepts_exact_clean_checkout_and_required_paths(self):
+        with tempfile.TemporaryDirectory() as tmp, patch(
+            "repository_validation.runner.subprocess.run"
+        ) as run:
+            workspace = Path(tmp)
+            (workspace / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+            run.side_effect = [
+                subprocess.CompletedProcess(
+                    ["git", "rev-parse", "HEAD"], 0, stdout="a" * 40 + "\n"
+                ),
+                subprocess.CompletedProcess(
+                    ["git", "rev-parse", "--show-toplevel"],
+                    0,
+                    stdout=str(workspace) + "\n",
+                ),
+                subprocess.CompletedProcess(
+                    ["git", "status", "--porcelain", "--untracked-files=all"],
+                    0,
+                    stdout="",
+                ),
+            ]
+
+            result = verify_workspace(
+                workspace=workspace,
+                expected_sha="a" * 40,
+                required_paths=["pyproject.toml"],
+            )
+
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["actual_sha"], "a" * 40)
+        self.assertEqual(result["required_paths"], ["pyproject.toml"])
+
+    def test_verify_workspace_fails_when_checkout_does_not_materialize_required_path(self):
+        with tempfile.TemporaryDirectory() as tmp, patch(
+            "repository_validation.runner.subprocess.run"
+        ) as run:
+            workspace = Path(tmp)
+            run.side_effect = [
+                subprocess.CompletedProcess(
+                    ["git", "rev-parse", "HEAD"], 0, stdout="a" * 40 + "\n"
+                ),
+                subprocess.CompletedProcess(
+                    ["git", "rev-parse", "--show-toplevel"],
+                    0,
+                    stdout=str(workspace) + "\n",
+                ),
+                subprocess.CompletedProcess(
+                    ["git", "status", "--porcelain", "--untracked-files=all"],
+                    0,
+                    stdout="",
+                ),
+            ]
+
+            with self.assertRaisesRegex(
+                ValidationError, "required checkout path is missing: pyproject.toml"
+            ):
+                verify_workspace(
+                    workspace=workspace,
+                    expected_sha="a" * 40,
+                    required_paths=["pyproject.toml"],
+                )
+
+    def test_verify_workspace_fails_when_persistent_worktree_is_dirty(self):
+        with tempfile.TemporaryDirectory() as tmp, patch(
+            "repository_validation.runner.subprocess.run"
+        ) as run:
+            workspace = Path(tmp)
+            run.side_effect = [
+                subprocess.CompletedProcess(
+                    ["git", "rev-parse", "HEAD"], 0, stdout="a" * 40 + "\n"
+                ),
+                subprocess.CompletedProcess(
+                    ["git", "rev-parse", "--show-toplevel"],
+                    0,
+                    stdout=str(workspace) + "\n",
+                ),
+                subprocess.CompletedProcess(
+                    ["git", "status", "--porcelain", "--untracked-files=all"],
+                    0,
+                    stdout=" D pyproject.toml\n",
+                ),
+            ]
+
+            with self.assertRaisesRegex(ValidationError, "checkout is not clean"):
+                verify_workspace(
+                    workspace=workspace,
+                    expected_sha="a" * 40,
+                )
+
     def test_parse_args_accepts_only_bounded_string_array(self):
         self.assertEqual(parse_args_json('["--check", "value"]'), ["--check", "value"])
         for invalid in ('{"x": 1}', '[1]', '["bad\\u0000value"]'):

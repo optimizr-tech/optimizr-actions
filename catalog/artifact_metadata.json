@@ -1,6 +1,13 @@
 {
   "schema_version": 1,
   "entries": {
+    ".github/actions/checkout-integrity/action.yml": {
+      "category": "governance",
+      "trust_boundary": "trusted-pr",
+      "evidence": "Sanitized exact-SHA, clean-worktree and required-path checkout verification",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/actions/checkout-integrity@v1"],
+      "known_limitations": "Runner recovery, registration and host-wide serialization remain infrastructure responsibilities"
+    },
     ".github/actions/dependency-policy/action.yml": {
       "trust_boundary": "trusted-pr",
       "evidence": "Trivy vulnerability and license policy report plus lockfile audit evidence",

@@ -40,6 +40,23 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
                 self.assertNotIn("[skip-tests]", text)
                 self.assertNotIn("github.event.head_commit.message", text)
 
+    def test_candidate_checkouts_are_explicitly_clean_and_verified(self):
+        for name in (
+            "_dependency-policy.yml",
+            "_docker-compose-validate.yml",
+            "_node-project-test.yml",
+            "_quality-gate-collect-dup.yml",
+            "_quality-gate-collect-security.yml",
+            "_sast-gate.yml",
+            "_security-gate.yml",
+            "_static-lint.yml",
+            "_supply-chain-evidence.yml",
+        ):
+            text = (ROOT / ".github/workflows" / name).read_text()
+            with self.subTest(workflow=name):
+                self.assertIn("clean: true", text)
+                self.assertIn("checkout-integrity@v1", text)
+
     def test_pr_capable_workflows_require_ephemeral_self_hosted_runners(self):
         for name in (
             "_commitlint.yml",

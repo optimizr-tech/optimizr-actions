@@ -96,8 +96,13 @@ jobs:
       - name: Checkout exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          clean: true
           fetch-depth: 0
           persist-credentials: false
+      - name: Verify checkout integrity
+        uses: optimizr-tech/optimizr-actions/.github/actions/checkout-integrity@v1
+        with:
+          expected_sha: ${{ github.sha }}
       - name: Run portable static lint
         uses: optimizr-tech/optimizr-actions/.github/actions/static-lint@v1
         with:

@@ -16,6 +16,11 @@ on:
         type: string
         required: false
         default: "[]"
+      required_paths_json:
+        description: Optional JSON array of repository-relative paths required after checkout
+        type: string
+        required: false
+        default: "[]"
       node_version:
         description: Optional controlled Node.js version for repository-owned scripts
         type: string
@@ -170,8 +175,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           ref: ${{ inputs.candidate_sha || github.sha }}
+          clean: true
           fetch-depth: 0
           persist-credentials: false
+      - name: Verify checkout integrity
+        uses: optimizr-tech/optimizr-actions/.github/actions/checkout-integrity@v1
+        with:
+          expected_sha: ${{ inputs.candidate_sha || github.sha }}
+          required_paths_json: ${{ inputs.required_paths_json }}
       - name: Validate requested Node toolchain
         if: inputs.node_version != '' || inputs.npm_version != '' || inputs.pnpm_version != ''
         shell: bash

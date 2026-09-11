@@ -1,0 +1,35 @@
+name: Optimizr checkout integrity
+description: Verify that a checkout materialized the expected clean commit and required paths
+inputs:
+  expected_sha:
+    description: Exact commit SHA expected in the current workspace
+    required: true
+  required_paths_json:
+    description: Optional JSON array of repository-relative paths that must exist
+    required: false
+    default: "[]"
+runs:
+  using: composite
+  steps:
+    - name: Verify checkout materialization
+      shell: bash
+      env:
+        WORKSPACE: ${{ github.workspace }}
+        EXPECTED_SHA: ${{ inputs.expected_sha }}
+        REQUIRED_PATHS_JSON: ${{ inputs.required_paths_json }}
+      run: |
+        set -euo pipefail
+        result="$(python3 "$GITHUB_ACTION_PATH/../../../scripts/repository_validation/runner.py" \
+          check-workspace \
+          --workspace "$WORKSPACE" \
+          --expected-sha "$EXPECTED_SHA" \
+          --required-paths-json "$REQUIRED_PATHS_JSON")"
+        printf '%s\n' "$result"
+        if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+          {
+            printf '%s\n' '### Checkout integrity'
+            printf '%s\n' '' '```json'
+            printf '%s\n' "$result"
+            printf '%s\n' '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+        fi

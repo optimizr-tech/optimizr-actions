@@ -30,6 +30,11 @@ on:
         type: string
         required: false
         default: "[]"
+      required_paths_json:
+        description: Optional JSON array of repository-relative paths required after checkout
+        type: string
+        required: false
+        default: "[]"
       security_profile:
         description: python, node, compose, infra, or monorepo
         type: string
@@ -194,6 +199,7 @@ jobs:
       runner_json: ${{ inputs.runner_json }}
       script_path: ${{ inputs.script_path }}
       args_json: ${{ inputs.args_json }}
+      required_paths_json: ${{ inputs.required_paths_json }}
       node_version: ${{ inputs.node_version }}
       npm_version: ${{ inputs.npm_version }}
       pnpm_version: ${{ inputs.pnpm_version }}
