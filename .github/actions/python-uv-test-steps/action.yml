@@ -126,6 +126,22 @@ runs:
           exit 1
         fi
 
+    - name: Verify checkout integrity
+      uses: optimizr-tech/optimizr-actions/.github/actions/checkout-integrity@v1
+      with:
+        expected_sha: ${{ github.sha }}
+
+    - name: Validate Python project materialization
+      shell: bash
+      env:
+        WORKING_DIRECTORY: ${{ inputs.working_directory }}
+      run: |
+        set -euo pipefail
+        if [ ! -f "$WORKING_DIRECTORY/pyproject.toml" ]; then
+          echo "::error::checkout integrity failed: missing $WORKING_DIRECTORY/pyproject.toml" >&2
+          exit 1
+        fi
+
     - name: Install dependencies
       shell: bash
       env:

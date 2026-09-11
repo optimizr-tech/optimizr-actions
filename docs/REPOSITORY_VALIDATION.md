@@ -13,6 +13,7 @@ jobs:
     with:
       script_path: scripts/ci/validate.sh
       args_json: '["--ci"]'
+      required_paths_json: '["pyproject.toml", "uv.lock"]'
       runner_json: '["self-hosted","Linux","security"]'
       require_trusted_ref: true
       node_version: "24"
@@ -34,6 +35,15 @@ entrypoint such as `scripts/ci-local.sh all` can use both npm and pnpm without
 duplicating setup steps.
 
 The default trust boundary requires the candidate to be reachable from `refs/heads/main`. A persistent self-hosted runner cannot disable that requirement. Hosted pull-request callers may deliberately set `require_trusted_ref: false`, but must not reuse that caller on a persistent production runner.
+
+After checkout, the reusable verifies that `git rev-parse HEAD` matches the
+requested candidate, that the Git root is the requested workspace, and that the
+worktree is clean. `required_paths_json` is optional and accepts a bounded JSON
+array of repository-relative files or directories that must be materialized
+before the consumer script starts. The check emits a sanitized step summary
+with the runner, workspace and exact SHA; a mismatch or missing path fails
+closed. Runner registration, workspace recovery and host-wide serialization
+remain responsibilities of `optimizr-infra-ops`.
 
 ## Billing emergency
 

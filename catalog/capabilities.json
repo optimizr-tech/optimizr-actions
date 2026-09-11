@@ -1,6 +1,31 @@
 {
   "artifacts": [
     {
+      "category": "governance",
+      "evidence": "Sanitized exact-SHA, clean-worktree and required-path checkout verification",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/actions/checkout-integrity@v1"
+      ],
+      "inputs": {
+        "expected_sha": "",
+        "required_paths_json": ""
+      },
+      "kind": "action",
+      "known_limitations": "Runner recovery, registration and host-wide serialization remain infrastructure responsibilities",
+      "maturity": "stable-v1",
+      "metadata_status": "classified",
+      "outputs": {},
+      "path": ".github/actions/checkout-integrity/action.yml",
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "754a53fd67730cab6fe884290055178a90a85dbaf0f85607f8df596b976072e9",
+      "trust_boundary": "trusted-pr"
+    },
+    {
       "category": "security",
       "evidence": "Trivy vulnerability and license policy report plus lockfile audit evidence",
       "examples": [
@@ -335,7 +360,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "fbfb305dd5e0da00b618a0f02bb6356358120ccdccc0be52760f6e1edd04edb4",
+      "source_sha256": "be66c73bfd910b732df439ac337184da629b0dd6bbe4f63c58c2d56f6d5918a9",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1129,7 +1154,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "9bd6dda53dccb25ebe9b888ca88bd2f7160cf2eb75c3457e9e0df3346ef724d8",
+      "source_sha256": "5e72abe25ee31507639f950a7a39de8563aa73555cef132a20a394a26bfcfa66",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1160,7 +1185,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "5684d8e0241ac294b856997d9ccbb338ff3c3c70029f14aa8b44f46bf4af58ec",
+      "source_sha256": "35c73f86d465a5a11758926c0d61c55da870fd291ef97ab3fb4d1e4cc99bf662",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1220,7 +1245,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "a30074de87c3e5cc15345a2f6b015847f2025a9189b01ce571f47c54487a0123",
+      "source_sha256": "bd1c71d5e78ccc52ae8d1b3ab60ea06ccab7453ed41f43b58a9f1fc0a6cc8f2a",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1373,7 +1398,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "c296c4ac0b5399d78bcdfc12df006a9e925e05503461795b8a416663d8059309",
+      "source_sha256": "7697997a1fcd9673635b46f6ab6e14daa5d154b14c23b00273b407e158aa6143",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1429,7 +1454,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "c7df5dd27ad5d7a6b4a349ec99cf3edb903a9575eb6a17b7f1aec0328461f9ce",
+      "source_sha256": "37f93dfac34a787627da7ae0418a18e7a58ea3e48a944a5d4c6f013dbc286ef0",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1458,7 +1483,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "b5a77b8eee0d4aa131c0c309d82ca590ebc86813e41ad159c9788e8eedd64786",
+      "source_sha256": "647aa015165c896a7f9127e3aa78103076dfb121ed1fb9c6831eb1e34dbcd68e",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1582,7 +1607,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "3b93bfe43ce1b0ab5349d1e153acdff1eab1f3fd50a47cf57e8fe5721c2f6596",
+      "source_sha256": "c72dbca8212704b10f4fb318615ee7bddf4769ec7064554ca8d6631619589136",
       "trust_boundary": "trusted-push"
     },
     {
@@ -1602,6 +1627,7 @@
         "npm_version": "",
         "pnpm_version": "",
         "require_trusted_ref": "",
+        "required_paths_json": "",
         "retention_days": "",
         "retry_attempts": "",
         "retry_backoff_seconds": "",
@@ -1630,7 +1656,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "1f700ffd83f36690e1c311912e1c339d1635fab387c810af7f2f1184c0940f6f",
+      "source_sha256": "c22e937296700c21216574f164360ab5d8d62a4e687f385c263d0e27128836dc",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1661,7 +1687,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "74afaa01816315197e5da05b10a30a9131b6489a7f71c45134b4147922c30376",
+      "source_sha256": "7d86917b50c51ea73dc85a8a4ecac8de4cad7edda09fbe9fe966eb3620942de9",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1704,7 +1730,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "b1be2919d415f402ef638915a41ce5f5e1403c62959e909084764a1a89cac6fd",
+      "source_sha256": "6a767834ca73d03ee03d1bfe2eeccdfefdcb183c5e26782d23a8b5b7487e6c73",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1811,7 +1837,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "23cee26f04ae66830ca0146046cbd6972010897285df5619427a5928e9ac950b",
+      "source_sha256": "59e85cb8accc8967f5841549d4a379b8f107298397b3d1182a781739451a1e29",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1871,7 +1897,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "089cdf68c2073d54920a68ce39f1a3d4426fbbc13b40d4da44cced47952a8edc",
+      "source_sha256": "b2a58cd40640c97a2b81c1ff5ffc3fe351bcd68bf10701016f264dbc349e15fb",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1990,6 +2016,7 @@
         "node_version": "",
         "npm_version": "",
         "pnpm_version": "",
+        "required_paths_json": "",
         "retention_days": "",
         "retry_attempts": "",
         "retry_backoff_seconds": "",
@@ -2022,7 +2049,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "b91180fc6d746e6482b844eb42ed95875894deb5174494138711acd4b0a85be3",
+      "source_sha256": "7a4d4a90f50c365fca8996abf958a87c5e0182c0f2903e16f3629e06154fc36e",
       "trust_boundary": "trusted-pr"
     },
     {

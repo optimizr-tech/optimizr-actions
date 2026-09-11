@@ -22,6 +22,10 @@ with:
   fixture consumers. Its default is `.` and the action rejects absolute paths,
   traversal and missing directories. Artifact paths remain workspace-relative;
   the reusable prefixes raw shard coverage with this directory automatically.
+- Before `uv sync`, the shared Python steps verify the exact Git SHA, the clean
+  materialized workspace and the presence of
+  `<working_directory>/pyproject.toml`. A missing project file is reported as
+  checkout-integrity failure instead of an ambiguous toolchain error.
 - Values above eight are rejected. `max_parallel` must be between `1` and
   `shard_count`; start with `1` on shared self-hosted capacity and raise it
   only after measuring service and database contention.

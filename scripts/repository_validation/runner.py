@@ -117,6 +117,121 @@ def collect_versions() -> dict[str, str]:
     return versions
 
 
+def _git_output(workspace: Path, *arguments: str) -> str:
+    try:
+        completed = subprocess.run(
+            ["git", *arguments],
+            cwd=workspace,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        raise ValidationError(
+            f"checkout integrity could not execute git {arguments[0]}"
+        ) from exc
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "").strip()
+        raise ValidationError(
+            f"checkout integrity git {' '.join(arguments)} failed"
+            + (f": {detail[:300]}" if detail else "")
+        )
+    return (completed.stdout or "").strip()
+
+
+def _workspace_failure(workspace: Path, reason: str) -> ValidationError:
+    runner = os.environ.get("RUNNER_NAME", "unknown")
+    return ValidationError(
+        "checkout integrity failed "
+        f"(runner={runner}, workspace={workspace}): {reason}"
+    )
+
+
+def verify_workspace(
+    *,
+    workspace: Path,
+    expected_sha: str,
+    required_paths: Sequence[str] = (),
+) -> dict[str, Any]:
+    """Verify that checkout materialized the expected clean repository tree."""
+    if not SHA_RE.fullmatch(expected_sha):
+        raise ValidationError("expected_sha must be a lowercase 40-character commit SHA")
+    if len(required_paths) > 64:
+        raise ValidationError("required_paths must contain at most 64 entries")
+    if any(not isinstance(path, str) or len(path) > 4096 for path in required_paths):
+        raise ValidationError("required_paths entries must be bounded strings")
+
+    try:
+        resolved_workspace = workspace.resolve(strict=True)
+    except OSError as exc:
+        raise _workspace_failure(workspace, "workspace does not exist") from exc
+    if not resolved_workspace.is_dir():
+        raise _workspace_failure(resolved_workspace, "workspace is not a directory")
+
+    actual_sha = _git_output(resolved_workspace, "rev-parse", "HEAD")
+    if actual_sha != expected_sha:
+        raise _workspace_failure(
+            resolved_workspace,
+            f"HEAD {actual_sha or '<empty>'} does not match expected SHA {expected_sha}",
+        )
+
+    git_root_text = _git_output(resolved_workspace, "rev-parse", "--show-toplevel")
+    try:
+        git_root = Path(git_root_text).resolve(strict=True)
+    except OSError as exc:
+        raise _workspace_failure(resolved_workspace, "git root is not materialized") from exc
+    if git_root != resolved_workspace:
+        raise _workspace_failure(
+            resolved_workspace,
+            f"git root is {git_root}, not the requested workspace",
+        )
+
+    status = _git_output(
+        resolved_workspace,
+        "status",
+        "--porcelain",
+        "--untracked-files=all",
+    )
+    if status:
+        raise _workspace_failure(resolved_workspace, "checkout is not clean")
+
+    normalized_paths: list[str] = []
+    for path in required_paths:
+        relative = Path(path)
+        if (
+            not path
+            or relative.is_absolute()
+            or ".." in relative.parts
+            or _contains_symlink(resolved_workspace, relative)
+        ):
+            raise _workspace_failure(
+                resolved_workspace,
+                f"required checkout path is unsafe: {path or '<empty>'}",
+            )
+        candidate = (resolved_workspace / relative).resolve(strict=False)
+        if not candidate.is_relative_to(resolved_workspace):
+            raise _workspace_failure(
+                resolved_workspace,
+                f"required checkout path escapes workspace: {path}",
+            )
+        if not candidate.exists():
+            raise _workspace_failure(
+                resolved_workspace,
+                f"required checkout path is missing: {path}",
+            )
+        normalized_paths.append(path)
+
+    return {
+        "status": "passed",
+        "expected_sha": expected_sha,
+        "actual_sha": actual_sha,
+        "workspace": str(resolved_workspace),
+        "runner": os.environ.get("RUNNER_NAME", "unknown"),
+        "required_paths": normalized_paths,
+    }
+
+
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -301,6 +416,11 @@ def _parser() -> argparse.ArgumentParser:
     trust.add_argument("--workspace", required=True)
     trust.add_argument("--candidate-sha", required=True)
     trust.add_argument("--trusted-ref", default="refs/heads/main")
+    check_workspace = sub.add_parser("check-workspace")
+    check_workspace.add_argument("--workspace", required=True)
+    check_workspace.add_argument("--expected-sha", required=True)
+    check_workspace.add_argument("--required-path", action="append", default=[])
+    check_workspace.add_argument("--required-paths-json", default="[]")
     return parser
 
 
@@ -313,6 +433,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.candidate_sha,
                 args.trusted_ref,
                 github_token=os.environ.get("VALIDATION_GITHUB_TOKEN", ""),
+            )
+            return 0
+        if args.command == "check-workspace":
+            print(
+                json.dumps(
+                    verify_workspace(
+                        workspace=Path(args.workspace),
+                        expected_sha=args.expected_sha,
+                        required_paths=[
+                            *args.required_path,
+                            *parse_args_json(args.required_paths_json),
+                        ],
+                    ),
+                    sort_keys=True,
+                )
             )
             return 0
         status = run_validation(
