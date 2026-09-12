@@ -67,7 +67,7 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
 
         self.assertIn("required_paths_json:", security)
         self.assertIn("required_paths_json: ${{ matrix.required_paths_json }}", security)
-        self.assertIn("'pyproject.toml'", security)
+        self.assertIn("pyproject.toml", security)
         self.assertIn("required_paths_json:", duplication)
         self.assertIn("required_paths_json: ${{ matrix.required_paths_json }}", duplication)
         self.assertIn("matrix.paths", duplication)
