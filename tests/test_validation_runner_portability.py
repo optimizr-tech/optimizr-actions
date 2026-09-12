@@ -57,6 +57,21 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
                 self.assertIn("clean: true", text)
                 self.assertIn("checkout-integrity@v1", text)
 
+    def test_matrix_reusables_require_materialized_paths_before_consuming_workspace(self):
+        security = (
+            ROOT / ".github/workflows/_quality-gate-collect-security.yml"
+        ).read_text()
+        duplication = (
+            ROOT / ".github/workflows/_quality-gate-collect-dup.yml"
+        ).read_text()
+
+        self.assertIn("required_paths_json:", security)
+        self.assertIn("required_paths_json: ${{ matrix.required_paths_json }}", security)
+        self.assertIn("'pyproject.toml'", security)
+        self.assertIn("required_paths_json:", duplication)
+        self.assertIn("required_paths_json: ${{ matrix.required_paths_json }}", duplication)
+        self.assertIn("matrix.paths", duplication)
+
     def test_pr_capable_workflows_require_ephemeral_self_hosted_runners(self):
         for name in (
             "_commitlint.yml",

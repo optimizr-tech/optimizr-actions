@@ -82,22 +82,59 @@ jobs:
           import json, os
           tools = [t.strip() for t in os.environ.get('TOOLS', '').split(',') if t.strip()]
           apps = [a.strip() for a in os.environ.get('PNPM_APPS', '').split(',') if a.strip()]
+          python_app_path = os.environ.get('PYTHON_APP_PATH', 'app/').rstrip('/') or '.'
+
+          def required_paths(*paths):
+              return json.dumps(
+                  [path.rstrip('/') or '.' for path in paths],
+                  separators=(',', ':'),
+              )
+
           include = []
           if 'bandit' in tools:
-              include.append({'tool': 'bandit', 'scope': 'backend', 'artifact': 'security-bandit', 'workdir': '.'})
+              include.append({
+                  'tool': 'bandit',
+                  'scope': 'backend',
+                  'artifact': 'security-bandit',
+                  'workdir': '.',
+                  'required_paths_json': required_paths('pyproject.toml', python_app_path),
+              })
           if 'pip-audit' in tools:
-              include.append({'tool': 'pip-audit', 'scope': 'backend', 'artifact': 'security-pip-audit', 'workdir': '.'})
+              include.append({
+                  'tool': 'pip-audit',
+                  'scope': 'backend',
+                  'artifact': 'security-pip-audit',
+                  'workdir': '.',
+                  'required_paths_json': required_paths('pyproject.toml'),
+              })
           if 'pnpm-audit' in tools:
               for app in apps:
-                  include.append({'tool': 'pnpm-audit', 'scope': f'frontend-{app}', 'artifact': f'security-pnpm-audit-{app}', 'workdir': f'frontend/apps/{app}'})
+                  workdir = f'frontend/apps/{app}'
+                  include.append({
+                      'tool': 'pnpm-audit',
+                      'scope': f'frontend-{app}',
+                      'artifact': f'security-pnpm-audit-{app}',
+                      'workdir': workdir,
+                      'required_paths_json': required_paths(
+                          f'{workdir}/package.json',
+                          f'{workdir}/pnpm-lock.yaml',
+                      ),
+                  })
           if not include:
-              include.append({'tool': 'pip-audit', 'scope': 'backend', 'artifact': 'security-pip-audit', 'workdir': '.'})
+              include.append({
+                  'tool': 'pip-audit',
+                  'scope': 'backend',
+                  'artifact': 'security-pip-audit',
+                  'workdir': '.',
+                  'required_paths_json': required_paths('pyproject.toml'),
+              })
           print(json.dumps({'include': include}))
           ")"
           echo "matrix=${matrix_json}" >> "$GITHUB_OUTPUT"
         env:
           TOOLS: ${{ inputs.tools }}
           PNPM_APPS: ${{ inputs.pnpm_apps }}
+          PYTHON_APP_PATH: ${{ inputs.python_app_path }}
 
   collect-security:
     name: Quality gate sec (${{ matrix.tool }} ${{ matrix.scope }})
@@ -117,6 +154,7 @@ jobs:
         uses: optimizr-tech/optimizr-actions/.github/actions/checkout-integrity@v1
         with:
           expected_sha: ${{ github.sha }}
+          required_paths_json: ${{ matrix.required_paths_json }}
 
       - name: Install uv
         if: matrix.tool != 'pnpm-audit'
