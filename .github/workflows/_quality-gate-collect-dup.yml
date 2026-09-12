@@ -68,23 +68,34 @@ jobs:
       - id: build
         run: |
           set -euo pipefail
-          matrix_json="$(python3 -c "
+          matrix_json="$(
+          python3 - <<'PY'
           import json, os
           defaults = {
-              'backend': 'app/',
-              'frontend-storefront': 'frontend/apps/storefront/src/',
-              'frontend-admin': 'frontend/apps/admin/src/',
+              "backend": "app/",
+              "frontend-storefront": "frontend/apps/storefront/src/",
+              "frontend-admin": "frontend/apps/admin/src/",
           }
-          scopes = [s.strip() for s in os.environ.get('SCOPES', '').split(',') if s.strip()]
-          paths = [p.strip() for p in os.environ.get('PATHS', '').split(',') if p.strip()]
+          scopes = [s.strip() for s in os.environ.get("SCOPES", "").split(",") if s.strip()]
+          paths = [p.strip() for p in os.environ.get("PATHS", "").split(",") if p.strip()]
           include = []
           for i, scope in enumerate(scopes):
-              path = paths[i] if i < len(paths) else defaults.get(scope, '.')
-              include.append({'scope': scope, 'paths': path})
+              path = paths[i] if i < len(paths) else defaults.get(scope, ".")
+              required_path = path.rstrip("/") or "."
+              include.append({
+                  "scope": scope,
+                  "paths": path,
+                  "required_paths_json": json.dumps([required_path], separators=(",", ":")),
+              })
           if not include:
-              include.append({'scope': 'backend', 'paths': 'app/'})
-          print(json.dumps({'include': include}))
-          ")"
+              include.append({
+                  "scope": "backend",
+                  "paths": "app/",
+                  "required_paths_json": "[\"app\"]",
+              })
+          print(json.dumps({"include": include}))
+          PY
+          )"
           echo "matrix=${matrix_json}" >> "$GITHUB_OUTPUT"
         env:
           SCOPES: ${{ inputs.scopes }}
@@ -108,6 +119,7 @@ jobs:
         uses: optimizr-tech/optimizr-actions/.github/actions/checkout-integrity@v1
         with:
           expected_sha: ${{ github.sha }}
+          required_paths_json: ${{ matrix.required_paths_json }}
 
       - name: Install Node.js before pnpm bootstrap
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0

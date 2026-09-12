@@ -1455,7 +1455,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "37f93dfac34a787627da7ae0418a18e7a58ea3e48a944a5d4c6f013dbc286ef0",
+      "source_sha256": "774169535cffc5ab3f45ca6c0a0e1088c4cef30fae40683cf0c4156f7f345699",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1484,7 +1484,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "647aa015165c896a7f9127e3aa78103076dfb121ed1fb9c6831eb1e34dbcd68e",
+      "source_sha256": "b2b2cee779f1aa133d161f6ac6815d14921c51376042b6b071351d12fd44af29",
       "trust_boundary": "trusted-pr"
     },
     {
