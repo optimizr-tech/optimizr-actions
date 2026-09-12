@@ -148,13 +148,10 @@ def _workspace_failure(workspace: Path, reason: str) -> ValidationError:
     )
 
 
-def verify_workspace(
-    *,
-    workspace: Path,
+def _validate_workspace_inputs(
     expected_sha: str,
-    required_paths: Sequence[str] = (),
-) -> dict[str, Any]:
-    """Verify that checkout materialized the expected clean repository tree."""
+    required_paths: Sequence[str],
+) -> None:
     if not SHA_RE.fullmatch(expected_sha):
         raise ValidationError("expected_sha must be a lowercase 40-character commit SHA")
     if len(required_paths) > 64:
@@ -162,6 +159,8 @@ def verify_workspace(
     if any(not isinstance(path, str) or len(path) > 4096 for path in required_paths):
         raise ValidationError("required_paths entries must be bounded strings")
 
+
+def _workspace_context(workspace: Path, expected_sha: str) -> tuple[Path, str]:
     try:
         resolved_workspace = workspace.resolve(strict=True)
     except OSError as exc:
@@ -195,32 +194,56 @@ def verify_workspace(
     )
     if status:
         raise _workspace_failure(resolved_workspace, "checkout is not clean")
+    return resolved_workspace, actual_sha
 
+
+def _required_paths(
+    workspace: Path,
+    required_paths: Sequence[str],
+    *,
+    allow_missing: bool = False,
+) -> tuple[list[str], list[str]]:
     normalized_paths: list[str] = []
+    missing_paths: list[str] = []
     for path in required_paths:
         relative = Path(path)
         if (
             not path
             or relative.is_absolute()
             or ".." in relative.parts
-            or _contains_symlink(resolved_workspace, relative)
+            or _contains_symlink(workspace, relative)
         ):
             raise _workspace_failure(
-                resolved_workspace,
+                workspace,
                 f"required checkout path is unsafe: {path or '<empty>'}",
             )
-        candidate = (resolved_workspace / relative).resolve(strict=False)
-        if not candidate.is_relative_to(resolved_workspace):
+        candidate = (workspace / relative).resolve(strict=False)
+        if not candidate.is_relative_to(workspace):
             raise _workspace_failure(
-                resolved_workspace,
+                workspace,
                 f"required checkout path escapes workspace: {path}",
             )
         if not candidate.exists():
-            raise _workspace_failure(
-                resolved_workspace,
-                f"required checkout path is missing: {path}",
-            )
+            if not allow_missing:
+                raise _workspace_failure(
+                    workspace,
+                    f"required checkout path is missing: {path}",
+                )
+            missing_paths.append(path)
         normalized_paths.append(path)
+    return normalized_paths, missing_paths
+
+
+def verify_workspace(
+    *,
+    workspace: Path,
+    expected_sha: str,
+    required_paths: Sequence[str] = (),
+) -> dict[str, Any]:
+    """Verify that checkout materialized the expected clean repository tree."""
+    _validate_workspace_inputs(expected_sha, required_paths)
+    resolved_workspace, actual_sha = _workspace_context(workspace, expected_sha)
+    normalized_paths, _ = _required_paths(resolved_workspace, required_paths)
 
     return {
         "status": "passed",
@@ -230,6 +253,48 @@ def verify_workspace(
         "runner": os.environ.get("RUNNER_NAME", "unknown"),
         "required_paths": normalized_paths,
     }
+
+
+def repair_workspace(
+    *,
+    workspace: Path,
+    expected_sha: str,
+    required_paths: Sequence[str] = (),
+) -> dict[str, Any]:
+    """Materialize missing tracked files in an already trusted clean worktree."""
+    _validate_workspace_inputs(expected_sha, required_paths)
+    resolved_workspace, _ = _workspace_context(workspace, expected_sha)
+    _, missing_paths = _required_paths(
+        resolved_workspace,
+        required_paths,
+        allow_missing=True,
+    )
+    if not missing_paths:
+        raise _workspace_failure(
+            resolved_workspace,
+            "repair requires at least one missing required checkout path",
+        )
+
+    # These commands only materialize tracked files after the SHA, Git root and
+    # clean-worktree checks above have passed. They do not delete untracked data
+    # or change HEAD; a failed repair remains a closed validation failure.
+    _git_output(resolved_workspace, "sparse-checkout", "disable")
+    _git_output(
+        resolved_workspace,
+        "checkout",
+        "--force",
+        expected_sha,
+        "--",
+        ".",
+    )
+    result = verify_workspace(
+        workspace=resolved_workspace,
+        expected_sha=expected_sha,
+        required_paths=required_paths,
+    )
+    result["repair"] = "applied"
+    result["repaired_paths"] = missing_paths
+    return result
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -421,6 +486,11 @@ def _parser() -> argparse.ArgumentParser:
     check_workspace.add_argument("--expected-sha", required=True)
     check_workspace.add_argument("--required-path", action="append", default=[])
     check_workspace.add_argument("--required-paths-json", default="[]")
+    repair_workspace_parser = sub.add_parser("repair-workspace")
+    repair_workspace_parser.add_argument("--workspace", required=True)
+    repair_workspace_parser.add_argument("--expected-sha", required=True)
+    repair_workspace_parser.add_argument("--required-path", action="append", default=[])
+    repair_workspace_parser.add_argument("--required-paths-json", default="[]")
     return parser
 
 
@@ -439,6 +509,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(
                 json.dumps(
                     verify_workspace(
+                        workspace=Path(args.workspace),
+                        expected_sha=args.expected_sha,
+                        required_paths=[
+                            *args.required_path,
+                            *parse_args_json(args.required_paths_json),
+                        ],
+                    ),
+                    sort_keys=True,
+                )
+            )
+            return 0
+        if args.command == "repair-workspace":
+            print(
+                json.dumps(
+                    repair_workspace(
                         workspace=Path(args.workspace),
                         expected_sha=args.expected_sha,
                         required_paths=[

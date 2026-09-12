@@ -1,5 +1,5 @@
 name: Optimizr checkout integrity
-description: Verify that a checkout materialized the expected clean commit and required paths
+description: Verify and, when safe, repair missing tracked files in the expected clean commit
 inputs:
   expected_sha:
     description: Exact commit SHA expected in the current workspace
@@ -8,6 +8,10 @@ inputs:
     description: Optional JSON array of repository-relative paths that must exist
     required: false
     default: "[]"
+  repair_missing_paths:
+    description: Re-materialize tracked files when the SHA, Git root and worktree are already verified
+    required: false
+    default: "true"
 runs:
   using: composite
   steps:
@@ -17,13 +21,47 @@ runs:
         WORKSPACE: ${{ github.workspace }}
         EXPECTED_SHA: ${{ inputs.expected_sha }}
         REQUIRED_PATHS_JSON: ${{ inputs.required_paths_json }}
+        REPAIR_MISSING_PATHS: ${{ inputs.repair_missing_paths }}
       run: |
         set -euo pipefail
+        case "$REPAIR_MISSING_PATHS" in
+          true|false) ;;
+          *)
+            echo "repair_missing_paths must be true or false" >&2
+            exit 2
+            ;;
+        esac
+
+        set +e
         result="$(python3 "$GITHUB_ACTION_PATH/../../../scripts/repository_validation/runner.py" \
           check-workspace \
           --workspace "$WORKSPACE" \
           --expected-sha "$EXPECTED_SHA" \
-          --required-paths-json "$REQUIRED_PATHS_JSON")"
+          --required-paths-json "$REQUIRED_PATHS_JSON" 2>&1)"
+        check_status=$?
+        set -e
+
+        if [ "$check_status" -ne 0 ]; then
+          if [ "$REPAIR_MISSING_PATHS" != "true" ]; then
+            printf '%s\n' "$result" >&2
+            exit "$check_status"
+          fi
+
+          set +e
+          repair_result="$(python3 "$GITHUB_ACTION_PATH/../../../scripts/repository_validation/runner.py" \
+            repair-workspace \
+            --workspace "$WORKSPACE" \
+            --expected-sha "$EXPECTED_SHA" \
+            --required-paths-json "$REQUIRED_PATHS_JSON" 2>&1)"
+          repair_status=$?
+          set -e
+          if [ "$repair_status" -ne 0 ]; then
+            printf '%s\n' "$result" "$repair_result" >&2
+            exit "$repair_status"
+          fi
+          result="$repair_result"
+        fi
+
         printf '%s\n' "$result"
         if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
           {

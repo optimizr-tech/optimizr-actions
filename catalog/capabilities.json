@@ -8,6 +8,7 @@
       ],
       "inputs": {
         "expected_sha": "",
+        "repair_missing_paths": "",
         "required_paths_json": ""
       },
       "kind": "action",
@@ -22,7 +23,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "754a53fd67730cab6fe884290055178a90a85dbaf0f85607f8df596b976072e9",
+      "source_sha256": "b6988b62640964ebe77cdfae916e98e4da3d0fec6a1e7a6a386b4cc9da11cab3",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -360,7 +361,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "be66c73bfd910b732df439ac337184da629b0dd6bbe4f63c58c2d56f6d5918a9",
+      "source_sha256": "ce5e2588bee72e467fde9f044456020fb9638460e505e44a9e4b351a02c8ec38",
       "trust_boundary": "trusted-pr"
     },
     {

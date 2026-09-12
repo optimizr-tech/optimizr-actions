@@ -11,10 +11,13 @@ Optimizr-managed consumers should use the floating `v1` tag so compatible automa
 The self-hosted VPS deploy reusable captures status and logs from failed one-shot Compose services, including containers that have already stopped, so consumer runs retain the root-cause output instead of only Compose's exit code.
 
 Validation reusables perform an explicit post-checkout integrity check for the
-expected SHA, clean worktree and caller-declared required paths. A failed check
-identifies the runner and workspace in a sanitized summary and stops before
-consumer validation. Runner recovery, registration and host-wide serialization
-remain owned by `optimizr-infra-ops`.
+expected SHA, clean worktree and caller-declared required paths. If only tracked
+files are missing, `checkout-integrity` makes one bounded attempt to disable
+stale sparse-checkout state and materialize the expected SHA, then verifies the
+workspace again. Dirty, mismatched or unrecoverable workspaces identify the
+runner and workspace in a sanitized summary and stop before consumer
+validation. Runner recovery, registration and host-wide serialization remain
+owned by `optimizr-infra-ops`.
 
 The VPS deploy reusables delegate their per-job Docker and runner cleanup to
 [`docker-prune-safe`](.github/actions/docker-prune-safe/action.yml). The
