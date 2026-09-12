@@ -105,31 +105,47 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Setup uv
-      uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
-      with:
-        python-version: ${{ inputs.python_version }}
-        enable-cache: true
-
     - name: Validate working directory
+      id: checkout_paths
       shell: bash
       env:
         WORKING_DIRECTORY: ${{ inputs.working_directory }}
       run: |
         set -euo pipefail
-        if [ -z "$WORKING_DIRECTORY" ] || [[ "$WORKING_DIRECTORY" = /* ]] || [[ "$WORKING_DIRECTORY" == *..* ]]; then
-          echo "working_directory must be a non-empty repository-relative path without traversal" >&2
-          exit 1
-        fi
-        if [ ! -d "$WORKING_DIRECTORY" ]; then
-          echo "working_directory does not exist: $WORKING_DIRECTORY" >&2
-          exit 1
-        fi
+        python3 - <<'PY' >> "$GITHUB_OUTPUT"
+        import json
+        import os
+        from pathlib import PurePosixPath
+
+        working_directory = os.environ["WORKING_DIRECTORY"]
+        if (
+            not working_directory
+            or working_directory.startswith("/")
+            or "\\" in working_directory
+            or "\x00" in working_directory
+            or any(ord(char) < 32 for char in working_directory)
+        ):
+            raise SystemExit(
+                "working_directory must be a non-empty repository-relative POSIX path"
+            )
+        relative = PurePosixPath(working_directory)
+        if ".." in relative.parts:
+            raise SystemExit("working_directory must not contain traversal")
+        required_path = str(relative / "pyproject.toml")
+        print("required_paths_json=" + json.dumps([required_path], separators=(",", ":")))
+        PY
 
     - name: Verify checkout integrity
       uses: optimizr-tech/optimizr-actions/.github/actions/checkout-integrity@v1
       with:
         expected_sha: ${{ github.sha }}
+        required_paths_json: ${{ steps.checkout_paths.outputs.required_paths_json }}
+
+    - name: Setup uv
+      uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+      with:
+        python-version: ${{ inputs.python_version }}
+        enable-cache: true
 
     - name: Validate Python project materialization
       shell: bash

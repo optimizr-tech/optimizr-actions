@@ -40,10 +40,16 @@ After checkout, the reusable verifies that `git rev-parse HEAD` matches the
 requested candidate, that the Git root is the requested workspace, and that the
 worktree is clean. `required_paths_json` is optional and accepts a bounded JSON
 array of repository-relative files or directories that must be materialized
-before the consumer script starts. The check emits a sanitized step summary
-with the runner, workspace and exact SHA; a mismatch or missing path fails
-closed. Runner registration, workspace recovery and host-wide serialization
-remain responsibilities of `optimizr-infra-ops`.
+before the consumer script starts. When a required path is missing but the SHA,
+Git root and clean-worktree checks pass, `checkout-integrity` performs one
+bounded repair: it disables stale sparse-checkout state and checks out tracked
+files from the expected SHA. It then repeats the complete verification. The
+repair never deletes untracked data, changes `HEAD`, or runs when the worktree
+is dirty or points at another SHA; a failed repair remains fail-closed.
+
+The check emits a sanitized step summary with the runner, workspace and exact
+SHA. Runner registration, workspace recovery beyond this bounded Git repair,
+and host-wide serialization remain responsibilities of `optimizr-infra-ops`.
 
 ## Billing emergency
 

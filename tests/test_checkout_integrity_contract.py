@@ -5,6 +5,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 ACTION = ROOT / ".github/actions/checkout-integrity/action.yml"
+RUNNER = ROOT / "scripts/repository_validation/runner.py"
 
 
 class CheckoutIntegrityContractTests(unittest.TestCase):
@@ -14,7 +15,9 @@ class CheckoutIntegrityContractTests(unittest.TestCase):
         for needle in (
             "expected_sha:",
             "required_paths_json:",
+            "repair_missing_paths:",
             "check-workspace",
+            "repair-workspace",
             "--expected-sha",
             "--required-paths-json",
             "GITHUB_STEP_SUMMARY",
@@ -27,6 +30,18 @@ class CheckoutIntegrityContractTests(unittest.TestCase):
 
         self.assertNotRegex(text, r"uses:\s+[^@\s]+@v\d")
         self.assertNotIn("secrets: inherit", text)
+
+    def test_action_repairs_only_after_a_bounded_integrity_failure(self):
+        text = ACTION.read_text(encoding="utf-8")
+        runner_text = RUNNER.read_text(encoding="utf-8")
+
+        self.assertIn("repair_missing_paths", text)
+        self.assertIn("check-workspace", text)
+        self.assertIn("repair-workspace", text)
+        self.assertIn('"sparse-checkout", "disable"', runner_text)
+        self.assertIn('"checkout",\n        "--force"', runner_text)
+        self.assertIn('case "$REPAIR_MISSING_PATHS" in', text)
+        self.assertIn('if [ "$REPAIR_MISSING_PATHS" != "true" ]; then', text)
 
 
 if __name__ == "__main__":

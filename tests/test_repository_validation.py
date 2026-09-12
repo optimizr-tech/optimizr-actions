@@ -15,6 +15,7 @@ from repository_validation.runner import (  # noqa: E402
     ValidationError,
     parse_args_json,
     resolve_script,
+    repair_workspace,
     run_validation,
     verify_workspace,
     verify_trusted_candidate,
@@ -22,6 +23,77 @@ from repository_validation.runner import (  # noqa: E402
 
 
 class RepositoryValidationTests(unittest.TestCase):
+    def test_repair_workspace_materializes_missing_paths_and_rechecks_integrity(self):
+        with tempfile.TemporaryDirectory() as tmp, patch(
+            "repository_validation.runner.subprocess.run"
+        ) as run:
+            workspace = Path(tmp)
+            calls = []
+
+            def fake_run(argv, **kwargs):
+                calls.append(list(argv))
+                if argv[1:] == ["checkout", "--force", "a" * 40, "--", "."]:
+                    (workspace / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+                if argv[1:3] == ["rev-parse", "HEAD"]:
+                    return subprocess.CompletedProcess(argv, 0, stdout="a" * 40 + "\n")
+                if argv[1:3] == ["rev-parse", "--show-toplevel"]:
+                    return subprocess.CompletedProcess(
+                        argv, 0, stdout=str(workspace) + "\n"
+                    )
+                if argv[1:3] == ["status", "--porcelain"]:
+                    return subprocess.CompletedProcess(argv, 0, stdout="")
+                return subprocess.CompletedProcess(argv, 0, stdout="")
+
+            run.side_effect = fake_run
+
+            result = repair_workspace(
+                workspace=workspace,
+                expected_sha="a" * 40,
+                required_paths=["pyproject.toml"],
+            )
+
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["repair"], "applied")
+        self.assertIn(
+            ["git", "sparse-checkout", "disable"],
+            calls,
+        )
+        self.assertIn(
+            ["git", "checkout", "--force", "a" * 40, "--", "."],
+            calls,
+        )
+
+    def test_repair_workspace_never_overwrites_a_dirty_worktree(self):
+        with tempfile.TemporaryDirectory() as tmp, patch(
+            "repository_validation.runner.subprocess.run"
+        ) as run:
+            workspace = Path(tmp)
+            calls = []
+
+            def fake_run(argv, **kwargs):
+                calls.append(list(argv))
+                if argv[1:3] == ["rev-parse", "HEAD"]:
+                    return subprocess.CompletedProcess(argv, 0, stdout="a" * 40 + "\n")
+                if argv[1:3] == ["rev-parse", "--show-toplevel"]:
+                    return subprocess.CompletedProcess(
+                        argv, 0, stdout=str(workspace) + "\n"
+                    )
+                if argv[1:3] == ["status", "--porcelain"]:
+                    return subprocess.CompletedProcess(argv, 0, stdout=" M app.py\n")
+                return subprocess.CompletedProcess(argv, 0, stdout="")
+
+            run.side_effect = fake_run
+
+            with self.assertRaisesRegex(ValidationError, "checkout is not clean"):
+                repair_workspace(
+                    workspace=workspace,
+                    expected_sha="a" * 40,
+                    required_paths=["pyproject.toml"],
+                )
+
+        self.assertNotIn(["git", "sparse-checkout", "disable"], calls)
+        self.assertFalse(any(call[1:2] == ["checkout"] for call in calls))
+
     def test_verify_workspace_accepts_exact_clean_checkout_and_required_paths(self):
         with tempfile.TemporaryDirectory() as tmp, patch(
             "repository_validation.runner.subprocess.run"

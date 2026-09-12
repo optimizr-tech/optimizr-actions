@@ -17,6 +17,11 @@ class PythonUvTestStepsContractTests(unittest.TestCase):
 
         self.assertIn("checkout-integrity@v1", text)
         self.assertIn("Validate Python project materialization", text)
+        self.assertIn(
+            "required_paths_json: ${{ steps.checkout_paths.outputs.required_paths_json }}",
+            text,
+        )
+        self.assertLess(text.index("Verify checkout integrity"), text.index("Setup uv"))
         self.assertLess(
             text.index("Validate Python project materialization"),
             text.index("Install dependencies"),

@@ -36,10 +36,12 @@ class PythonUvCanaryContractTests(unittest.TestCase):
         )
         self.assertIn("working-directory: ${{ inputs.working_directory }}", self.action)
 
-    def test_working_directory_validation_rejects_traversal_and_missing_paths(self) -> None:
-        self.assertIn('[[ "$WORKING_DIRECTORY" = /* ]]', self.action)
-        self.assertIn('[[ "$WORKING_DIRECTORY" == *..* ]]', self.action)
-        self.assertIn('if [ ! -d "$WORKING_DIRECTORY" ]', self.action)
+    def test_working_directory_validation_rejects_unsafe_paths_before_checkout_repair(self) -> None:
+        self.assertIn("PurePosixPath", self.action)
+        self.assertIn('working_directory.startswith("/")', self.action)
+        self.assertIn('".." in relative.parts', self.action)
+        self.assertIn('"\\\\" in working_directory', self.action)
+        self.assertNotIn('if [ ! -d "$WORKING_DIRECTORY" ]', self.action)
 
     def test_manual_canary_exercises_legacy_sharded_and_fail_closed_paths(self) -> None:
         canary = CANARY.read_text(encoding="utf-8")
