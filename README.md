@@ -14,10 +14,13 @@ Validation reusables perform an explicit post-checkout integrity check for the
 expected SHA, clean worktree and caller-declared required paths. If only tracked
 files are missing, `checkout-integrity` makes one bounded attempt to disable
 stale sparse-checkout state and materialize the expected SHA, then verifies the
-workspace again. Dirty, mismatched or unrecoverable workspaces identify the
-runner and workspace in a sanitized summary and stop before consumer
-validation. Runner recovery, registration and host-wide serialization remain
-owned by `optimizr-infra-ops`.
+workspace again. The repair receives the workflow's short-lived
+`github.token` only through the subprocess environment, removes token
+variables from that environment, and never persists Git credentials. If the
+workflow has no token, repair fails before any fetch. Dirty, mismatched or
+unrecoverable workspaces identify the runner and workspace in a sanitized
+summary and stop before consumer validation. Runner recovery, registration and
+host-wide serialization remain owned by `optimizr-infra-ops`.
 
 The VPS deploy reusables delegate their per-job Docker and runner cleanup to
 [`docker-prune-safe`](.github/actions/docker-prune-safe/action.yml). The

@@ -24,9 +24,9 @@ from repository_validation.runner import (  # noqa: E402
 
 class RepositoryValidationTests(unittest.TestCase):
     def test_repair_workspace_materializes_missing_paths_and_rechecks_integrity(self):
-        with tempfile.TemporaryDirectory() as tmp, patch(
-            "repository_validation.runner.subprocess.run"
-        ) as run:
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(
+            os.environ, {"GIT_CONFIG_COUNT": "0"}, clear=False
+        ), patch("repository_validation.runner.subprocess.run") as run:
             workspace = Path(tmp)
             calls = []
 
@@ -50,6 +50,7 @@ class RepositoryValidationTests(unittest.TestCase):
                 workspace=workspace,
                 expected_sha="a" * 40,
                 required_paths=["pyproject.toml"],
+                github_token="private-token-value",
             )
 
         self.assertEqual(result["status"], "passed")
@@ -62,6 +63,53 @@ class RepositoryValidationTests(unittest.TestCase):
             ["git", "checkout", "--force", "a" * 40, "--", "."],
             calls,
         )
+        repair_calls = [
+            call for call in run.call_args_list
+            if call.args[0][1:] in (
+                ["sparse-checkout", "disable"],
+                ["checkout", "--force", "a" * 40, "--", "."],
+            )
+        ]
+        self.assertEqual(len(repair_calls), 2)
+        for call in repair_calls:
+            env = call.kwargs["env"]
+            self.assertNotIn("VALIDATION_GITHUB_TOKEN", env)
+            self.assertNotIn("GITHUB_TOKEN", env)
+            self.assertNotIn("private-token-value", str(env))
+            self.assertTrue(
+                str(env["GIT_CONFIG_VALUE_0"]).startswith("AUTHORIZATION: basic ")
+            )
+
+    def test_repair_workspace_requires_a_token_before_fetching_missing_objects(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(
+            os.environ, {"GIT_CONFIG_COUNT": "0"}, clear=False
+        ), patch("repository_validation.runner.subprocess.run") as run:
+            workspace = Path(tmp)
+            calls = []
+
+            def fake_run(argv, **kwargs):
+                calls.append(list(argv))
+                if argv[1:3] == ["rev-parse", "HEAD"]:
+                    return subprocess.CompletedProcess(argv, 0, stdout="a" * 40 + "\n")
+                if argv[1:3] == ["rev-parse", "--show-toplevel"]:
+                    return subprocess.CompletedProcess(
+                        argv, 0, stdout=str(workspace) + "\n"
+                    )
+                if argv[1:3] == ["status", "--porcelain"]:
+                    return subprocess.CompletedProcess(argv, 0, stdout="")
+                return subprocess.CompletedProcess(argv, 0, stdout="")
+
+            run.side_effect = fake_run
+
+            with self.assertRaisesRegex(ValidationError, "requires a GitHub token"):
+                repair_workspace(
+                    workspace=workspace,
+                    expected_sha="a" * 40,
+                    required_paths=["pyproject.toml"],
+                )
+
+        self.assertNotIn(["git", "sparse-checkout", "disable"], calls)
+        self.assertFalse(any(call[1:2] == ["checkout"] for call in calls))
 
     def test_repair_workspace_never_overwrites_a_dirty_worktree(self):
         with tempfile.TemporaryDirectory() as tmp, patch(
@@ -429,7 +477,7 @@ class RepositoryValidationTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp, patch.dict(
             os.environ,
-            {"VALIDATION_GITHUB_TOKEN": "private-token-value"},
+            {"VALIDATION_GITHUB_TOKEN": "private-token-value", "GIT_CONFIG_COUNT": "0"},
             clear=False,
         ), patch(
             "repository_validation.runner.subprocess.run", side_effect=fake_run

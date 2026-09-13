@@ -117,16 +117,22 @@ def collect_versions() -> dict[str, str]:
     return versions
 
 
-def _git_output(workspace: Path, *arguments: str) -> str:
+def _git_output(
+    workspace: Path,
+    *arguments: str,
+    env: dict[str, str] | None = None,
+) -> str:
+    run_kwargs: dict[str, Any] = {
+        "cwd": workspace,
+        "check": False,
+        "capture_output": True,
+        "text": True,
+        "timeout": 15,
+    }
+    if env is not None:
+        run_kwargs["env"] = env
     try:
-        completed = subprocess.run(
-            ["git", *arguments],
-            cwd=workspace,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
+        completed = subprocess.run(["git", *arguments], **run_kwargs)
     except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
         raise ValidationError(
             f"checkout integrity could not execute git {arguments[0]}"
@@ -260,6 +266,7 @@ def repair_workspace(
     workspace: Path,
     expected_sha: str,
     required_paths: Sequence[str] = (),
+    github_token: str = "",
 ) -> dict[str, Any]:
     """Materialize missing tracked files in an already trusted clean worktree."""
     _validate_workspace_inputs(expected_sha, required_paths)
@@ -274,11 +281,22 @@ def repair_workspace(
             resolved_workspace,
             "repair requires at least one missing required checkout path",
         )
+    if not github_token:
+        raise _workspace_failure(
+            resolved_workspace,
+            "repair requires a GitHub token before fetching missing objects",
+        )
+    git_env = _ephemeral_git_auth_env(github_token)
 
     # These commands only materialize tracked files after the SHA, Git root and
     # clean-worktree checks above have passed. They do not delete untracked data
     # or change HEAD; a failed repair remains a closed validation failure.
-    _git_output(resolved_workspace, "sparse-checkout", "disable")
+    _git_output(
+        resolved_workspace,
+        "sparse-checkout",
+        "disable",
+        env=git_env,
+    )
     _git_output(
         resolved_workspace,
         "checkout",
@@ -286,6 +304,7 @@ def repair_workspace(
         expected_sha,
         "--",
         ".",
+        env=git_env,
     )
     result = verify_workspace(
         workspace=resolved_workspace,
@@ -416,8 +435,18 @@ def run_validation(
 
 def _ephemeral_git_auth_env(github_token: str) -> dict[str, str]:
     """Return a subprocess-only Git config that authenticates without persistence."""
+    if (
+        not isinstance(github_token, str)
+        or not github_token.strip()
+        or len(github_token) > 4096
+        or any(character.isspace() or ord(character) < 32 for character in github_token)
+    ):
+        raise ValidationError(
+            "github_token must be a non-empty bounded value without whitespace or control characters"
+        )
     env = os.environ.copy()
     env.pop("VALIDATION_GITHUB_TOKEN", None)
+    env.pop("GITHUB_TOKEN", None)
     try:
         config_index = int(env.get("GIT_CONFIG_COUNT", "0"))
     except ValueError as exc:
@@ -530,6 +559,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                             *args.required_path,
                             *parse_args_json(args.required_paths_json),
                         ],
+                        github_token=os.environ.get("VALIDATION_GITHUB_TOKEN", ""),
                     ),
                     sort_keys=True,
                 )
