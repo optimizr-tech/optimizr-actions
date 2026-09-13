@@ -43,9 +43,13 @@ array of repository-relative files or directories that must be materialized
 before the consumer script starts. When a required path is missing but the SHA,
 Git root and clean-worktree checks pass, `checkout-integrity` performs one
 bounded repair: it disables stale sparse-checkout state and checks out tracked
-files from the expected SHA. It then repeats the complete verification. The
-repair never deletes untracked data, changes `HEAD`, or runs when the worktree
-is dirty or points at another SHA; a failed repair remains fail-closed.
+files from the expected SHA. It authenticates those Git subprocesses with the
+workflow's short-lived `github.token` through an ephemeral HTTP extra header;
+the token is not written to Git configuration, outputs, or evidence. If no
+token is available, the repair fails before any fetch. It then repeats the
+complete verification. The repair never deletes untracked data, changes
+`HEAD`, or runs when the worktree is dirty or points at another SHA; a failed
+repair remains fail-closed.
 
 The check emits a sanitized step summary with the runner, workspace and exact
 SHA. Runner registration, workspace recovery beyond this bounded Git repair,

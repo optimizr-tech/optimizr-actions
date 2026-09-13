@@ -22,6 +22,7 @@ runs:
         EXPECTED_SHA: ${{ inputs.expected_sha }}
         REQUIRED_PATHS_JSON: ${{ inputs.required_paths_json }}
         REPAIR_MISSING_PATHS: ${{ inputs.repair_missing_paths }}
+        VALIDATION_GITHUB_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
         case "$REPAIR_MISSING_PATHS" in
