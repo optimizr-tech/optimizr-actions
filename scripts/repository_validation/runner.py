@@ -20,6 +20,7 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 RETRYABLE_EXIT_CODE = 75
 MAX_RETRY_ATTEMPTS = 3
 MAX_RETRY_BACKOFF_SECONDS = 60
+MAX_REQUIRED_PATHS = 256
 
 
 class ValidationError(ValueError):
@@ -160,8 +161,10 @@ def _validate_workspace_inputs(
 ) -> None:
     if not SHA_RE.fullmatch(expected_sha):
         raise ValidationError("expected_sha must be a lowercase 40-character commit SHA")
-    if len(required_paths) > 64:
-        raise ValidationError("required_paths must contain at most 64 entries")
+    if len(required_paths) > MAX_REQUIRED_PATHS:
+        raise ValidationError(
+            f"required_paths must contain at most {MAX_REQUIRED_PATHS} entries"
+        )
     if any(not isinstance(path, str) or len(path) > 4096 for path in required_paths):
         raise ValidationError("required_paths entries must be bounded strings")
 

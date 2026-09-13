@@ -99,10 +99,51 @@ jobs:
           clean: true
           fetch-depth: 0
           persist-credentials: false
+      - name: Derive tracked lint paths
+        id: checkout_paths
+        shell: bash
+        env:
+          WORKSPACE: ${{ github.workspace }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import PurePosixPath
+
+          tracked = subprocess.check_output(
+              ["git", "ls-files", "-z"], cwd=os.environ["WORKSPACE"]
+          ).decode("utf-8").split("\0")
+          required = sorted(
+              path
+              for path in tracked
+              if path
+              and (
+                  PurePosixPath(path).suffix in {".sh", ".bash"}
+                  or (
+                      path.startswith(".github/workflows/")
+                      and PurePosixPath(path).suffix in {".yml", ".yaml"}
+                  )
+                  or (
+                      path.startswith(".github/actions/")
+                      and PurePosixPath(path).name in {"action.yml", "action.yaml"}
+                  )
+              )
+          )
+          if len(required) > 256:
+              raise SystemExit("static lint checkout path set exceeds the bounded limit of 256")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(
+                  "required_paths_json="
+                  + json.dumps(required, separators=(",", ":"))
+                  + "\n"
+              )
+          PY
       - name: Verify checkout integrity
         uses: optimizr-tech/optimizr-actions/.github/actions/checkout-integrity@v1
         with:
           expected_sha: ${{ github.sha }}
+          required_paths_json: ${{ steps.checkout_paths.outputs.required_paths_json }}
       - name: Run portable static lint
         uses: optimizr-tech/optimizr-actions/.github/actions/static-lint@v1
         with:

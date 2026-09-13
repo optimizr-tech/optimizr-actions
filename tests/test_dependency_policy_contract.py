@@ -97,6 +97,16 @@ class DependencyPolicyContractTests(unittest.TestCase):
         self.assertRegex(text, r"actions/checkout@[0-9a-f]{40}")
         self.assertRegex(text, r"actions/upload-artifact@[0-9a-f]{40}")
 
+    def test_workflow_derives_dependency_manifests_before_scanning(self):
+        text = (ROOT / ".github/workflows/_dependency-policy.yml").read_text()
+        self.assertIn("Derive tracked dependency paths", text)
+        self.assertIn('git", "ls-files", "-z"', text)
+        self.assertIn("manifest_names", text)
+        self.assertIn("required_paths_json=", text)
+        self.assertIn("required_paths_json: ${{ steps.checkout_paths.outputs.required_paths_json }}", text)
+        self.assertLess(text.index("Derive tracked dependency paths"), text.index("Verify checkout integrity"))
+        self.assertLess(text.index("Verify checkout integrity"), text.index("Enforce dependency policy"))
+
 
 if __name__ == "__main__":
     unittest.main()

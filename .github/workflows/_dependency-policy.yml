@@ -114,10 +114,71 @@ jobs:
           clean: true
           fetch-depth: 0
           persist-credentials: false
+      - name: Derive tracked dependency paths
+        id: checkout_paths
+        shell: bash
+        env:
+          WORKSPACE: ${{ github.workspace }}
+          WORKING_DIRECTORY: ${{ inputs.working_directory }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import PurePosixPath
+
+          working_directory = os.environ["WORKING_DIRECTORY"] or "."
+          root = PurePosixPath(working_directory)
+          if (
+              not working_directory
+              or "\\" in working_directory
+              or root.is_absolute()
+              or ".." in root.parts
+          ):
+              raise SystemExit("working_directory must be repository relative")
+
+          manifest_names = {
+              "package.json",
+              "package-lock.json",
+              "pnpm-lock.yaml",
+              "poetry.lock",
+              "pyproject.toml",
+              "uv.lock",
+              "yarn.lock",
+          }
+          tracked = subprocess.check_output(
+              ["git", "ls-files", "-z"], cwd=os.environ["WORKSPACE"]
+          ).decode("utf-8").split("\0")
+          required = sorted(
+              path
+              for path in tracked
+              if path
+              and PurePosixPath(path).parent == root
+              and PurePosixPath(path).name in manifest_names
+          )
+          if not any(
+              PurePosixPath(path).name in {"package.json", "pyproject.toml"}
+              for path in required
+          ):
+              raise SystemExit(
+                  "working_directory has no tracked supported dependency manifest"
+              )
+          if len(required) > 256:
+              raise SystemExit(
+                  "dependency checkout path set exceeds the bounded limit of 256"
+              )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(
+                  "required_paths_json="
+                  + json.dumps(required, separators=(",", ":"))
+                  + "\n"
+              )
+          PY
       - name: Verify checkout integrity
         uses: optimizr-tech/optimizr-actions/.github/actions/checkout-integrity@v1
         with:
           expected_sha: ${{ github.sha }}
+          required_paths_json: ${{ steps.checkout_paths.outputs.required_paths_json }}
       - name: Enforce dependency policy
         uses: optimizr-tech/optimizr-actions/.github/actions/dependency-policy@v1
         with:
