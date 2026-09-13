@@ -39,8 +39,10 @@ The default trust boundary requires the candidate to be reachable from `refs/hea
 After checkout, the reusable verifies that `git rev-parse HEAD` matches the
 requested candidate, that the Git root is the requested workspace, and that the
 worktree is clean. `required_paths_json` is optional and accepts a bounded JSON
-array of repository-relative files or directories that must be materialized
-before the consumer script starts. When a required path is missing but the SHA,
+array of up to 256 repository-relative files or directories that must be
+materialized before the consumer script starts. Generic scanner workflows
+derive their tracked input paths from the Git index and pass them to this
+guard before scanning. When a required path is missing but the SHA,
 Git root and clean-worktree checks pass, `checkout-integrity` performs one
 bounded repair: it disables stale sparse-checkout state and checks out tracked
 files from the expected SHA. It then repeats the complete verification. The

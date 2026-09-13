@@ -19,6 +19,11 @@ runner and workspace in a sanitized summary and stop before consumer
 validation. Runner recovery, registration and host-wide serialization remain
 owned by `optimizr-infra-ops`.
 
+The generic static-lint and dependency-policy workflows derive the tracked
+files they consume from the checkout index and validate those paths before
+running their scanners. This prevents a partial persistent checkout from
+being reported as a clean scan; the derived path set is bounded to 256 entries.
+
 The VPS deploy reusables delegate their per-job Docker and runner cleanup to
 [`docker-prune-safe`](.github/actions/docker-prune-safe/action.yml). The
 `run_prune` and `image_age_threshold` inputs remain backward-compatible. The

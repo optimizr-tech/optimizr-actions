@@ -56,6 +56,11 @@ class RepositoryValidationContractTests(unittest.TestCase):
             text.index("Run repository contract"),
         )
 
+    def test_required_checkout_paths_remain_bounded_for_generic_consumers(self):
+        text = (ROOT / "scripts/repository_validation/runner.py").read_text()
+        self.assertIn("MAX_REQUIRED_PATHS = 256", text)
+        self.assertIn("required_paths must contain at most {MAX_REQUIRED_PATHS} entries", text)
+
     def test_validation_gate_forwards_retry_outputs_without_changing_default(self):
         text = (ROOT / ".github/workflows/_validation-gate.yml").read_text()
         self.assertIn("retry_attempts:", text)
