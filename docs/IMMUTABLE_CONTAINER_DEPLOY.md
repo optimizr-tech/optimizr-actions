@@ -63,8 +63,12 @@ Actions repository remains the source of truth for its executable gates.
 `_vps-monorepo-deploy.yml` and `_vps-self-hosted-deploy.yml` keep
 `deployment_mode: build` as their compatible default. Their
 `deployment_mode: prebuilt-images` mode requires a non-empty
-`prebuilt_images_json` array. Private registries additionally receive a
-read-only registry credential; public images are pulled anonymously. It then:
+`release_manifest_json` value from `_container-build-publish.yml` (preferred)
+or, for backwards compatibility, a non-empty `prebuilt_images_json` array.
+Private registries additionally receive a read-only registry credential; public
+images are pulled anonymously. When the release manifest is supplied, the
+deploy validates that it is published and uses its digest-pinned `images`
+entries directly; callers must not provide both inputs. It then:
 
 1. validates every service and full image digest;
 2. logs in without printing the token;
@@ -80,6 +84,41 @@ pull-only deploy contract supports rollback by rerunning it with the previous
 successful manifest's service/image pairs; the VPS does not rebuild the
 application images. Database rollback is not implicit: migrations must remain
 expand/contract compatible before this mode is enabled.
+
+A caller can connect the build and deploy jobs without reconstructing the
+image list manually:
+
+```yaml
+jobs:
+  images:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_container-build-publish.yml@v1
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    with:
+      candidate_sha: ${{ github.sha }}
+      image_namespace: ${{ github.repository_owner }}/my-service
+      services_json: '[{"name":"api","context":".","dockerfile":"Dockerfile"}]'
+      push: true
+
+  deploy:
+    needs: images
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_vps-self-hosted-deploy.yml@v1
+    permissions:
+      contents: read
+      packages: read
+    with:
+      deployment_mode: prebuilt-images
+      release_manifest_json: ${{ needs.images.outputs.manifest_json }}
+      registry_auth_mode: github-token
+      # ...the remaining deployment inputs...
+```
+
+This is the intended “build once in GHCR, pull by immutable digest on the
+VPS” path. The old `prebuilt_images_json` input remains for existing callers
+and rollback tooling that already stores only the service/image pairs.
 
 ### Registry authentication modes
 
