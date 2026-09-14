@@ -4,6 +4,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "_docker-compose-validate.yml"
+PROFILE_DOC = ROOT / "docs" / "CONSUMER_PROFILES.md"
 
 
 class DockerComposeValidateContractTests(unittest.TestCase):
@@ -47,6 +48,18 @@ class DockerComposeValidateContractTests(unittest.TestCase):
     def test_buildx_requires_direct_docker_access(self) -> None:
         self.assertIn("BUILD_IMAGE: ${{ inputs.build_image }}", self.text)
         self.assertIn("build_image requires direct Docker access", self.text)
+
+    def test_caller_permission_contract_is_explicit(self) -> None:
+        self.assertIn("Caller permission contract", self.text)
+        self.assertIn("permission ceiling", self.text)
+        self.assertIn("contents: read", self.text)
+        self.assertIn("actions: write", self.text)
+
+    def test_compose_profile_documents_caller_permissions(self) -> None:
+        profile = PROFILE_DOC.read_text(encoding="utf-8")
+        self.assertIn("Compose caller permissions", profile)
+        self.assertIn("actions: write", profile)
+        self.assertIn("job containing `uses:`", profile)
 
 
 if __name__ == "__main__":

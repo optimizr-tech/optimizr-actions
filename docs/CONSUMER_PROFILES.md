@@ -49,6 +49,25 @@ managed through `optimizr-infra-ops`-style runbooks.
 | Post-deploy verification | `_post-deploy-verification.yml` + `wait-for-healthcheck` | Healthcheck and post-deploy evidence after deploy |
 | Deploy env validation | `.github/actions/validate-deploy-env/action.yml` | Pre-deploy environment validation |
 
+### Compose caller permissions
+
+The job containing `uses:` for `_docker-compose-validate.yml@v1` must declare
+the permission ceiling required by the reusable workflow:
+
+```yaml
+jobs:
+  compose:
+    permissions:
+      contents: read
+      actions: write
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_docker-compose-validate.yml@v1
+```
+
+These are job-level permissions for the reusable caller, not broad permissions
+for every job in the workflow. GitHub validates this ceiling before creating
+the called job, so omitting a required scope can result in `startup_failure`
+without a job or step log.
+
 ## Python service
 
 For single-service repositories that run Python with uv.
