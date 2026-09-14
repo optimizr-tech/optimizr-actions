@@ -129,7 +129,6 @@ on:
         value: ${{ jobs.attest.outputs.attempt_count }}
 permissions:
   contents: read
-  packages: read
 jobs:
   preflight:
     if: inputs.validation_path != 'reviewed-emergency'
@@ -200,6 +199,9 @@ jobs:
   repository-validation:
     needs: [preflight, emergency-preflight]
     if: always() && (needs.preflight.result == 'success' || needs.emergency-preflight.result == 'success')
+    permissions:
+      contents: read
+      packages: read
     uses: optimizr-tech/optimizr-actions/.github/workflows/_repository-validation.yml@v1
     with:
       runner_json: ${{ inputs.runner_json }}

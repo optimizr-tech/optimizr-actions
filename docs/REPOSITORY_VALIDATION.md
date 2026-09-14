@@ -36,6 +36,21 @@ duplicating setup steps.
 
 The default trust boundary requires the candidate to be reachable from `refs/heads/main`. A persistent self-hosted runner cannot disable that requirement. Hosted pull-request callers may deliberately set `require_trusted_ref: false`, but must not reuse that caller on a persistent production runner.
 
+For a trusted main self-hosted Docker validation that needs to pull from GHCR,
+callers may set `registry_auth: true`. This opt-in is accepted only for a
+self-hosted Linux runner during `push` or `workflow_dispatch` on
+`refs/heads/main`; it is rejected for hosted and `ephemeral-pr` validation.
+The workflow grants `packages: read` only to the repository-validation job,
+logs in with the short-lived `github.token`, and uses the fixed temporary
+Docker config under `$RUNNER_TEMP/optimizr-registry-docker-config`. The config
+is removed in an `always()` cleanup step, including when login or validation
+fails. Because the consumer command runs with that config available for its
+Docker pulls, never enable this option for untrusted repository code.
+
+Existing callers remain unchanged because `registry_auth` defaults to `false`.
+Callers that opt in must also grant `packages: read` in the caller workflow;
+the reusable workflow cannot elevate a caller's token permissions.
+
 After checkout, the reusable verifies that `git rev-parse HEAD` matches the
 requested candidate, that the Git root is the requested workspace, and that the
 worktree is clean. `required_paths_json` is optional and accepts a bounded JSON

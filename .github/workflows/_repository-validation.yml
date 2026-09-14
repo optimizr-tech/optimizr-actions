@@ -189,8 +189,34 @@ jobs:
         with:
           expected_sha: ${{ inputs.candidate_sha || github.sha }}
           required_paths_json: ${{ inputs.required_paths_json }}
+      - name: Validate registry authentication trust boundary
+        if: inputs.registry_auth
+        shell: bash
+        env:
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          REQUIRE_TRUSTED: ${{ inputs.require_trusted_ref }}
+          ALLOW_EPHEMERAL_PR: ${{ inputs.allow_ephemeral_pr }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if "self-hosted" not in labels or "Linux" not in labels:
+              raise SystemExit("registry authentication requires a self-hosted Linux runner")
+          if os.environ["REQUIRE_TRUSTED"] != "true" or os.environ["ALLOW_EPHEMERAL_PR"] == "true":
+              raise SystemExit("registry authentication requires trusted non-ephemeral validation")
+          if (
+              os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"}
+              or os.environ["EVENT_REF"] != "refs/heads/main"
+          ):
+              raise SystemExit("registry authentication requires push or workflow_dispatch on main")
+          PY
       - name: Prepare temporary registry authentication
-        if: inputs.registry_auth && contains(inputs.runner_json, 'self-hosted')
+        if: inputs.registry_auth
         shell: bash
         env:
           REGISTRY_TOKEN: ${{ github.token }}
@@ -200,10 +226,10 @@ jobs:
           registry_config="$RUNNER_TEMP/optimizr-registry-docker-config"
           rm -rf -- "$registry_config"
           mkdir -p "$registry_config"
+          printf 'DOCKER_CONFIG=%s\n' "$registry_config" >> "$GITHUB_ENV"
           printf '%s' "$REGISTRY_TOKEN" \
             | DOCKER_CONFIG="$registry_config" docker login ghcr.io \
                 --username "$REGISTRY_USERNAME" --password-stdin >/dev/null
-          printf 'DOCKER_CONFIG=%s\n' "$registry_config" >> "$GITHUB_ENV"
       - name: Validate requested Node toolchain
         if: inputs.node_version != '' || inputs.npm_version != '' || inputs.pnpm_version != ''
         shell: bash
@@ -266,11 +292,10 @@ jobs:
           if-no-files-found: error
           retention-days: ${{ inputs.retention_days }}
       - name: Clean temporary registry authentication
-        if: always() && inputs.registry_auth && contains(inputs.runner_json, 'self-hosted')
+        if: always() && inputs.registry_auth
         shell: bash
         run: |
           set -euo pipefail
-          registry_config="${DOCKER_CONFIG:-}"
-          if [[ -n "$registry_config" && "$registry_config" == "$RUNNER_TEMP/"* ]]; then
-            rm -rf -- "$registry_config"
+          if [[ -n "${RUNNER_TEMP:-}" ]]; then
+            rm -rf -- "$RUNNER_TEMP/optimizr-registry-docker-config"
           fi

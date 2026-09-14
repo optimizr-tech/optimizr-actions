@@ -79,9 +79,24 @@ class RepositoryValidationContractTests(unittest.TestCase):
         self.assertIn("REGISTRY_TOKEN: ${{ github.token }}", text)
         self.assertIn("docker login ghcr.io", text)
         self.assertIn("Clean temporary registry authentication", text)
+        self.assertIn("Validate registry authentication trust boundary", text)
+        self.assertIn("ALLOW_EPHEMERAL_PR", text)
+        self.assertIn('"refs/heads/main"', text)
+        self.assertIn("push or workflow_dispatch on main", text)
+        self.assertIn("printf 'DOCKER_CONFIG=%s\\n' \"$registry_config\" >> \"$GITHUB_ENV\"", text)
+        self.assertLess(text.index("GITHUB_ENV"), text.index("docker login ghcr.io"))
+        self.assertIn('rm -rf -- "$RUNNER_TEMP/optimizr-registry-docker-config"', text)
+        self.assertNotIn('registry_config="${DOCKER_CONFIG:-}"', text)
+        self.assertNotIn("contains(inputs.runner_json, 'self-hosted')", text)
         self.assertIn("registry_auth:", gate)
-        self.assertIn("packages: read", gate)
         self.assertIn("registry_auth: ${{ inputs.registry_auth }}", gate)
+        top_level_permissions = gate.split("jobs:", 1)[0]
+        self.assertNotIn("packages: read", top_level_permissions)
+        repository_job = gate.split("  repository-validation:", 1)[1].split(
+            "  security-suite:", 1
+        )[0]
+        self.assertIn("permissions:", repository_job)
+        self.assertIn("packages: read", repository_job)
 
     def test_validation_gate_forwards_required_checkout_paths(self):
         text = (ROOT / ".github/workflows/_validation-gate.yml").read_text()

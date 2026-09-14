@@ -1659,7 +1659,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "9eda6fd2c65731de841891c70bca85153cba17587c532fad4e996c7ebaae5468",
+      "source_sha256": "d387eac9bd312b221bed2d23b2ea917470b3bbc5721259119b295f4b0fcedbfe",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -2046,15 +2046,14 @@
       },
       "path": ".github/workflows/_validation-gate.yml",
       "permissions": {
-        "contents": "read",
-        "packages": "read"
+        "contents": "read"
       },
       "runner": [
         "hosted",
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "21e9848ce79f49af6bb49ea69f6af2654daf15a5f048f66b945261b2f8d0f121",
+      "source_sha256": "bb6c52e589f869cfa951cf921a50c931d8c47fbaa20fa5cb11740b0b66c3cfc7",
       "trust_boundary": "trusted-pr"
     },
     {
