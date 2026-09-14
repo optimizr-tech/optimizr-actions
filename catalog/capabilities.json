@@ -1627,6 +1627,7 @@
         "node_version": "",
         "npm_version": "",
         "pnpm_version": "",
+        "registry_auth": "",
         "require_trusted_ref": "",
         "required_paths_json": "",
         "retention_days": "",
@@ -1650,14 +1651,15 @@
       },
       "path": ".github/workflows/_repository-validation.yml",
       "permissions": {
-        "contents": "read"
+        "contents": "read",
+        "packages": "read"
       },
       "runner": [
         "hosted",
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "c22e937296700c21216574f164360ab5d8d62a4e687f385c263d0e27128836dc",
+      "source_sha256": "9eda6fd2c65731de841891c70bca85153cba17587c532fad4e996c7ebaae5468",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -2017,6 +2019,7 @@
         "node_version": "",
         "npm_version": "",
         "pnpm_version": "",
+        "registry_auth": "",
         "required_paths_json": "",
         "retention_days": "",
         "retry_attempts": "",
@@ -2043,14 +2046,15 @@
       },
       "path": ".github/workflows/_validation-gate.yml",
       "permissions": {
-        "contents": "read"
+        "contents": "read",
+        "packages": "read"
       },
       "runner": [
         "hosted",
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "7a4d4a90f50c365fca8996abf958a87c5e0182c0f2903e16f3629e06154fc36e",
+      "source_sha256": "21e9848ce79f49af6bb49ea69f6af2654daf15a5f048f66b945261b2f8d0f121",
       "trust_boundary": "trusted-pr"
     },
     {
