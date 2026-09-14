@@ -505,7 +505,7 @@ jobs:
             --exclude=.github
             --exclude=.env
             --exclude='*.tar.gz'
-            --exclude=backup/
+            --exclude=/backup/
           )
           if [ "$DEPLOYMENT_MODE" = prebuilt-images ]; then
             rsync_args+=(--exclude="$PREBUILT_COMPOSE_FILE")

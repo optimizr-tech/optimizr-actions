@@ -157,7 +157,7 @@ def _rsync_command(
         "--exclude=*.p12",
         "--exclude=*.pfx",
         "--exclude=*.tar.gz",
-        "--exclude=backup/",
+        "--exclude=/backup/",
     ]
     if compose_exclude is not None:
         command.append(f"--exclude={compose_exclude}")

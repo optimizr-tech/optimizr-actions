@@ -168,6 +168,15 @@ class DeliverySnapshotSyncTests(unittest.TestCase):
         ):
             self.assertIn(pattern, command)
 
+    def test_backup_exclude_is_anchored_without_hiding_tracked_build_contexts(self) -> None:
+        runner = FakeRsync(self._completed())
+
+        sync_deployment(self._spec(), run=runner)
+
+        command = runner.calls[0]
+        self.assertIn("--exclude=/backup/", command)
+        self.assertNotIn("--exclude=backup/", command)
+
     def test_deployignore_outside_source_is_rejected(self) -> None:
         outside = self.root / ".deployignore"
         outside.write_text("tmp/\n", encoding="utf-8")
