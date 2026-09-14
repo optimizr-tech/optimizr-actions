@@ -1169,6 +1169,8 @@
         "compose_files": "",
         "compose_stacks": "",
         "docker_mode": "",
+        "registry": "",
+        "registry_auth_mode": "",
         "runner_json": "",
         "script_globs": "",
         "self_hosted_mode": "",
@@ -1186,7 +1188,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "455162c004a578d36c54dc5aeaf831140c80d640f959ff3fa71bfb4c71ff42f9",
+      "source_sha256": "f34441ba0a212d16eac72231638948c70056817f966606efb177f03337a0f438",
       "trust_boundary": "trusted-pr"
     },
     {

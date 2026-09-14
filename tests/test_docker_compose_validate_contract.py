@@ -49,6 +49,30 @@ class DockerComposeValidateContractTests(unittest.TestCase):
         self.assertIn("BUILD_IMAGE: ${{ inputs.build_image }}", self.text)
         self.assertIn("build_image requires direct Docker access", self.text)
 
+    def test_buildx_registry_auth_is_explicit_and_docker_config_is_isolated(self) -> None:
+        for needle in (
+            "registry_auth_mode:",
+            "default: anonymous",
+            "registry:",
+            "registry_username:",
+            "registry_password:",
+            "Prepare isolated Docker registry authentication",
+            "DOCKER_CONFIG_DIR",
+            "GITHUB_ENV",
+            "docker login \"$REGISTRY\"",
+            "registry authentication requires trusted-main",
+            "Clean temporary Docker registry authentication",
+        ):
+            self.assertIn(needle, self.text)
+        self.assertIn("secrets:", self.text)
+        self.assertIn("registry_username:", self.text)
+        self.assertIn("registry_password:", self.text)
+        self.assertIn("REGISTRY_AUTH_MODE", self.text)
+        self.assertIn("explicit)", self.text)
+        self.assertLess(self.text.index("GITHUB_ENV"), self.text.index("docker login \"$REGISTRY\""))
+        self.assertIn("optimizr-compose-docker-config", self.text)
+        self.assertNotIn('DOCKER_CONFIG="${DOCKER_CONFIG:-}"', self.text)
+
     def test_caller_permission_contract_is_explicit(self) -> None:
         self.assertIn("Caller permission contract", self.text)
         self.assertIn("permission ceiling", self.text)
@@ -60,6 +84,8 @@ class DockerComposeValidateContractTests(unittest.TestCase):
         self.assertIn("Compose caller permissions", profile)
         self.assertIn("actions: write", profile)
         self.assertIn("job containing `uses:`", profile)
+        self.assertIn("registry_auth_mode", profile)
+        self.assertIn("Private base", profile)
 
 
 if __name__ == "__main__":
