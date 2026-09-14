@@ -51,6 +51,11 @@ on:
         type: string
         required: false
         default: "[]"
+      registry_auth:
+        description: Authenticate temporarily to GHCR for trusted self-hosted Docker validation
+        type: boolean
+        required: false
+        default: false
       timeout_seconds:
         description: Command timeout
         type: number
@@ -109,6 +114,7 @@ on:
         value: ${{ jobs.validation.outputs.attempt_count }}
 permissions:
   contents: read
+  packages: read
 jobs:
   validation:
     name: Repository validation
@@ -183,6 +189,21 @@ jobs:
         with:
           expected_sha: ${{ inputs.candidate_sha || github.sha }}
           required_paths_json: ${{ inputs.required_paths_json }}
+      - name: Prepare temporary registry authentication
+        if: inputs.registry_auth && contains(inputs.runner_json, 'self-hosted')
+        shell: bash
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USERNAME: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          registry_config="$RUNNER_TEMP/optimizr-registry-docker-config"
+          rm -rf -- "$registry_config"
+          mkdir -p "$registry_config"
+          printf '%s' "$REGISTRY_TOKEN" \
+            | DOCKER_CONFIG="$registry_config" docker login ghcr.io \
+                --username "$REGISTRY_USERNAME" --password-stdin >/dev/null
+          printf 'DOCKER_CONFIG=%s\n' "$registry_config" >> "$GITHUB_ENV"
       - name: Validate requested Node toolchain
         if: inputs.node_version != '' || inputs.npm_version != '' || inputs.pnpm_version != ''
         shell: bash
@@ -244,3 +265,12 @@ jobs:
           path: artifacts/repository-validation
           if-no-files-found: error
           retention-days: ${{ inputs.retention_days }}
+      - name: Clean temporary registry authentication
+        if: always() && inputs.registry_auth && contains(inputs.runner_json, 'self-hosted')
+        shell: bash
+        run: |
+          set -euo pipefail
+          registry_config="${DOCKER_CONFIG:-}"
+          if [[ -n "$registry_config" && "$registry_config" == "$RUNNER_TEMP/"* ]]; then
+            rm -rf -- "$registry_config"
+          fi

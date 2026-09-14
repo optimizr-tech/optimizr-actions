@@ -1,5 +1,5 @@
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -69,6 +69,19 @@ class RepositoryValidationContractTests(unittest.TestCase):
         self.assertIn("failure_kind:", text)
         self.assertIn("attempt_count:", text)
         self.assertIn("needs.repository-validation.outputs.failure_kind", text)
+
+    def test_repository_validation_can_use_temporary_ghcr_auth_for_trusted_docker_checks(self):
+        text = (ROOT / ".github/workflows/_repository-validation.yml").read_text()
+        gate = (ROOT / ".github/workflows/_validation-gate.yml").read_text()
+
+        self.assertIn("registry_auth:", text)
+        self.assertIn("packages: read", text)
+        self.assertIn("REGISTRY_TOKEN: ${{ github.token }}", text)
+        self.assertIn("docker login ghcr.io", text)
+        self.assertIn("Clean temporary registry authentication", text)
+        self.assertIn("registry_auth:", gate)
+        self.assertIn("packages: read", gate)
+        self.assertIn("registry_auth: ${{ inputs.registry_auth }}", gate)
 
     def test_validation_gate_forwards_required_checkout_paths(self):
         text = (ROOT / ".github/workflows/_validation-gate.yml").read_text()
