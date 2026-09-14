@@ -68,6 +68,50 @@ for every job in the workflow. GitHub validates this ceiling before creating
 the called job, so omitting a required scope can result in `startup_failure`
 without a job or step log.
 
+### Buildx base-image authentication
+
+When `build_image: true`, `_docker-compose-validate.yml@v1` starts with an
+isolated empty Docker configuration under the runner temporary directory. This
+prevents stale credentials on a persistent `local-docker` runner from changing
+anonymous pulls of public base images. The default is:
+
+```yaml
+with:
+  build_image: true
+  registry_auth_mode: anonymous
+```
+
+Private base images require an explicit protected credential. Callers must use
+`registry_auth_mode: explicit`, set the registry hostname, pass read-only
+`registry_username`/`registry_password` secrets, and run only on a trusted
+self-hosted Linux `trusted-main` path (`push` or `workflow_dispatch` on
+`refs/heads/main`). Do not pass those secrets to pull-request validation or
+reuse the production deploy runner:
+
+```yaml
+jobs:
+  compose:
+    permissions:
+      contents: read
+      actions: write
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_docker-compose-validate.yml@v1
+    with:
+      runner_json: '["self-hosted","Linux","local-docker"]'
+      self_hosted_mode: trusted-main
+      build_image: true
+      registry: ghcr.io
+      registry_auth_mode: explicit
+    secrets:
+      registry_username: ${{ secrets.GHCR_READ_USERNAME }}
+      registry_password: ${{ secrets.GHCR_READ_TOKEN }}
+```
+
+The reusable rejects explicit registry authentication outside the trusted
+boundary, logs in only to the isolated Docker config, and removes that config
+with an `always()` cleanup step. A public-base failure caused by a persistent
+runner's inherited Docker credential is therefore fixed by the anonymous
+default; it must not be “solved” by moving validation to a production runner.
+
 ## Python service
 
 For single-service repositories that run Python with uv.

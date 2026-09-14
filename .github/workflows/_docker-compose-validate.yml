@@ -3,7 +3,8 @@
 # Caller permission contract: the job containing `uses:` must declare
 # `contents: read` and `actions: write`. GitHub validates the caller's
 # permission ceiling before creating this job; the called workflow cannot
-# elevate a scope that the caller did not grant.
+# elevate a scope that the caller did not grant. Registry credentials are
+# opt-in, isolated under RUNNER_TEMP, and accepted only on trusted main runs.
 
 name: _docker-compose-validate
 
@@ -50,11 +51,28 @@ on:
         required: false
         type: boolean
         default: false
+      registry:
+        description: OCI registry hostname used by explicit private-base authentication
+        required: false
+        type: string
+        default: ghcr.io
+      registry_auth_mode:
+        description: anonymous or explicit; explicit is restricted to trusted-main
+        required: false
+        type: string
+        default: anonymous
       skip:
         description: Explicit optional caller skip; never derive this from a billing marker
         required: false
         type: boolean
         default: false
+    secrets:
+      registry_username:
+        description: Read-only registry username for explicit private-base authentication
+        required: false
+      registry_password:
+        description: Read-only registry token for explicit private-base authentication
+        required: false
 
 jobs:
   validate:
@@ -97,6 +115,62 @@ jobs:
           else:
               raise SystemExit("self-hosted validation requires mode trusted-main or ephemeral-pr")
           PY
+
+      - name: Prepare isolated Docker registry authentication
+        if: inputs.build_image
+        shell: bash
+        env:
+          REGISTRY: ${{ inputs.registry }}
+          REGISTRY_AUTH_MODE: ${{ inputs.registry_auth_mode }}
+          REGISTRY_USERNAME: ${{ secrets.registry_username }}
+          REGISTRY_PASSWORD: ${{ secrets.registry_password }}
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          SELF_HOSTED_MODE: ${{ inputs.self_hosted_mode }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+          DOCKER_CONFIG_DIR: ${{ runner.temp }}/optimizr-compose-docker-config
+        run: |
+          set -euo pipefail
+          case "$REGISTRY_AUTH_MODE" in
+            anonymous) ;;
+            explicit)
+              python3 - <<'PY'
+          import json
+          import os
+          import re
+
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if "self-hosted" not in labels or "Linux" not in labels:
+              raise SystemExit("registry authentication requires a self-hosted Linux runner")
+          if os.environ["SELF_HOSTED_MODE"] != "trusted-main":
+              raise SystemExit("registry authentication requires trusted-main")
+          if (
+              os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"}
+              or os.environ["EVENT_REF"] != "refs/heads/main"
+          ):
+              raise SystemExit("registry authentication requires push or workflow_dispatch on main")
+          if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]*(?::[0-9]{1,5})?", os.environ["REGISTRY"]):
+              raise SystemExit("registry must be a hostname with an optional port")
+          if not os.environ["REGISTRY_USERNAME"] or not os.environ["REGISTRY_PASSWORD"]:
+              raise SystemExit("explicit registry authentication requires both credentials")
+          PY
+              ;;
+            *)
+              echo "::error::registry_auth_mode must be anonymous or explicit" >&2
+              exit 2
+              ;;
+          esac
+
+          rm -rf -- "$DOCKER_CONFIG_DIR"
+          install -d -m 700 -- "$DOCKER_CONFIG_DIR"
+          printf 'DOCKER_CONFIG=%s\n' "$DOCKER_CONFIG_DIR" >> "$GITHUB_ENV"
+          if [ "$REGISTRY_AUTH_MODE" = explicit ]; then
+            printf '%s' "$REGISTRY_PASSWORD" \
+              | DOCKER_CONFIG="$DOCKER_CONFIG_DIR" docker login "$REGISTRY" \
+                  --username "$REGISTRY_USERNAME" --password-stdin >/dev/null
+          else
+            echo "Using isolated anonymous Docker registry configuration"
+          fi
 
       - name: Resolve Docker access mode
         id: docker
@@ -257,3 +331,12 @@ jobs:
           tags: ci-build-test:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Clean temporary Docker registry authentication
+        if: always() && inputs.build_image
+        shell: bash
+        env:
+          DOCKER_CONFIG_DIR: ${{ runner.temp }}/optimizr-compose-docker-config
+        run: |
+          set -euo pipefail
+          rm -rf -- "$DOCKER_CONFIG_DIR"
