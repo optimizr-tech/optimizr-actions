@@ -1,5 +1,9 @@
 # Reusable: valida sintaxe de docker-compose + bash de scripts.
 # Consome via: uses: optimizr-tech/optimizr-actions/.github/workflows/_docker-compose-validate.yml@<ref>
+# Caller permission contract: the job containing `uses:` must declare
+# `contents: read` and `actions: write`. GitHub validates the caller's
+# permission ceiling before creating this job; the called workflow cannot
+# elevate a scope that the caller did not grant.
 
 name: _docker-compose-validate
 

@@ -1186,7 +1186,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "35c73f86d465a5a11758926c0d61c55da870fd291ef97ab3fb4d1e4cc99bf662",
+      "source_sha256": "455162c004a578d36c54dc5aeaf831140c80d640f959ff3fa71bfb4c71ff42f9",
       "trust_boundary": "trusted-pr"
     },
     {
