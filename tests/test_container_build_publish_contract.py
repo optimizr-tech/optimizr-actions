@@ -229,6 +229,19 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
         self.assertNotIn('docker_cmd compose -f "$COMPOSE_FILE"', content)
         self.assertIn('--exclude="$PREBUILT_COMPOSE_FILE"', content)
 
+    def test_prebuilt_deploy_accepts_the_build_manifest_directly(self) -> None:
+        documentation = BUILD_DOC.read_text(encoding="utf-8")
+        for workflow in (DEPLOY_WORKFLOW, SELF_HOSTED_DEPLOY_WORKFLOW):
+            content = workflow.read_text(encoding="utf-8")
+            with self.subTest(workflow=workflow.name):
+                self.assertIn("release_manifest_json:", content)
+                self.assertIn("RELEASE_MANIFEST_JSON", content)
+                self.assertIn('"schema_version"', content)
+                self.assertIn('"published"', content)
+                self.assertIn("release manifest is required", content)
+        self.assertIn("release_manifest_json: ${{ needs.images.outputs.manifest_json }}", documentation)
+        self.assertIn("prebuilt_images_json", documentation)
+
     def test_prebuilt_deploy_auth_modes_are_explicit_and_least_privilege(self) -> None:
         monorepo = DEPLOY_WORKFLOW.read_text(encoding="utf-8")
         self_hosted = SELF_HOSTED_DEPLOY_WORKFLOW.read_text(encoding="utf-8")

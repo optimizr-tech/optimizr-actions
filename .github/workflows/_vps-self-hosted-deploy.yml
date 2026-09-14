@@ -50,6 +50,11 @@ on:
         required: false
         type: string
         default: ""
+      release_manifest_json:
+        description: Published release manifest emitted by _container-build-publish.yml; preferred prebuilt-images input
+        required: false
+        type: string
+        default: ""
       prebuilt_compose_file:
         description: Generated Compose override filename used for immutable image references
         required: false
@@ -330,6 +335,7 @@ jobs:
         shell: bash
         env:
           PREBUILT_IMAGES_JSON: ${{ inputs.prebuilt_images_json }}
+          RELEASE_MANIFEST_JSON: ${{ inputs.release_manifest_json }}
           PREBUILT_TSV: ${{ runner.temp }}/optimizr-prebuilt-images.tsv
           DOCKER_CONFIG_DIR: ${{ runner.temp }}/optimizr-ghcr-docker-config
           REGISTRY_USERNAME: ${{ secrets.registry_username }}
@@ -338,8 +344,8 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
         run: |
           set -euo pipefail
-          [ -n "$PREBUILT_IMAGES_JSON" ] || {
-            echo "::error::prebuilt-images mode requires prebuilt_images_json" >&2
+          [ -n "$PREBUILT_IMAGES_JSON" ] || [ -n "$RELEASE_MANIFEST_JSON" ] || {
+            echo "::error::prebuilt-images mode requires release_manifest_json or prebuilt_images_json" >&2
             exit 2
           }
           case "$REGISTRY_AUTH_MODE" in
@@ -387,9 +393,27 @@ jobs:
           if deploy_path not in override.parents:
               raise SystemExit("prebuilt_compose_file escaped the deployment directory")
 
-          items = json.loads(os.environ["PREBUILT_IMAGES_JSON"])
+          manifest_raw = os.environ["RELEASE_MANIFEST_JSON"].strip()
+          legacy_raw = os.environ["PREBUILT_IMAGES_JSON"].strip()
+          if manifest_raw and legacy_raw:
+              raise SystemExit(
+                  "provide release_manifest_json or prebuilt_images_json, not both"
+              )
+          if manifest_raw:
+              manifest = json.loads(manifest_raw)
+              if not isinstance(manifest, dict) or manifest.get("schema_version") != "1.0":
+                  raise SystemExit("release manifest must use schema_version 1.0")
+              if manifest.get("registry") != os.environ["REGISTRY"]:
+                  raise SystemExit("release manifest registry does not match deployment registry")
+              if manifest.get("published") is not True:
+                  raise SystemExit("published release manifest is required for prebuilt-images")
+              items = manifest.get("images")
+              if not isinstance(items, list) or not items:
+                  raise SystemExit("release manifest is required to contain published images")
+          else:
+              items = json.loads(legacy_raw)
           if not isinstance(items, list) or not items:
-              raise SystemExit("prebuilt_images_json must be a non-empty JSON array")
+              raise SystemExit("prebuilt image input must be a non-empty JSON array")
           services = []
           names = set()
           for item in items:
@@ -401,6 +425,8 @@ jobs:
                   raise SystemExit("prebuilt image service is invalid")
               if service in names:
                   raise SystemExit(f"duplicate prebuilt image service: {service}")
+              if manifest_raw and item.get("published") is not True:
+                  raise SystemExit(f"release manifest image is not published: {service}")
               if not isinstance(image, str) or not re.fullmatch(r"[A-Za-z0-9./:_-]+@sha256:[0-9a-f]{64}", image):
                   raise SystemExit("Refusing to deploy an image without an immutable digest")
               names.add(service)

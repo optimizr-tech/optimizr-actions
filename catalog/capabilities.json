@@ -1627,6 +1627,7 @@
         "node_version": "",
         "npm_version": "",
         "pnpm_version": "",
+        "registry_auth": "",
         "require_trusted_ref": "",
         "required_paths_json": "",
         "retention_days": "",
@@ -1650,14 +1651,15 @@
       },
       "path": ".github/workflows/_repository-validation.yml",
       "permissions": {
-        "contents": "read"
+        "contents": "read",
+        "packages": "read"
       },
       "runner": [
         "hosted",
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "c22e937296700c21216574f164360ab5d8d62a4e687f385c263d0e27128836dc",
+      "source_sha256": "d387eac9bd312b221bed2d23b2ea917470b3bbc5721259119b295f4b0fcedbfe",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -2017,6 +2019,7 @@
         "node_version": "",
         "npm_version": "",
         "pnpm_version": "",
+        "registry_auth": "",
         "required_paths_json": "",
         "retention_days": "",
         "retry_attempts": "",
@@ -2050,7 +2053,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "7a4d4a90f50c365fca8996abf958a87c5e0182c0f2903e16f3629e06154fc36e",
+      "source_sha256": "bb6c52e589f869cfa951cf921a50c931d8c47fbaa20fa5cb11740b0b66c3cfc7",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -2084,6 +2087,7 @@
         "prebuilt_images_json": "",
         "registry": "",
         "registry_auth_mode": "",
+        "release_manifest_json": "",
         "run_prune": "",
         "runner_label": "",
         "security_db_max_age_hours": "",
@@ -2115,7 +2119,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "9981198fd4a6ec19f6c5c891f3d5fb213812c63376328f1f7e3615ba41f88ce5",
+      "source_sha256": "8923f9695e1196a7fddd5cd47a711dbef1c61a5b0bb1963010f32ba70f20f677",
       "trust_boundary": "trusted-push"
     },
     {
@@ -2151,6 +2155,7 @@
         "recreate_services": "",
         "registry": "",
         "registry_auth_mode": "",
+        "release_manifest_json": "",
         "run_prune": "",
         "runner_label": "",
         "security_baseline_file": "",
@@ -2179,7 +2184,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "d0115943942a2f84a6ab49499f22cc8cb44bfebfb483f61c011452eb76cf3457",
+      "source_sha256": "fa5b20dbe8eadaf271384cb6b52745810f4c6cea2efc0cbe5a162762e98a6f8d",
       "trust_boundary": "trusted-push"
     },
     {

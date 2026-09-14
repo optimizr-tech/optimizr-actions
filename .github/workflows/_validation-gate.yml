@@ -80,6 +80,11 @@ on:
         type: string
         required: false
         default: ""
+      registry_auth:
+        description: Authenticate temporarily to GHCR for trusted self-hosted repository validation
+        type: boolean
+        required: false
+        default: false
       retention_days:
         description: Attestation retention
         type: number
@@ -194,6 +199,9 @@ jobs:
   repository-validation:
     needs: [preflight, emergency-preflight]
     if: always() && (needs.preflight.result == 'success' || needs.emergency-preflight.result == 'success')
+    permissions:
+      contents: read
+      packages: read
     uses: optimizr-tech/optimizr-actions/.github/workflows/_repository-validation.yml@v1
     with:
       runner_json: ${{ inputs.runner_json }}
@@ -211,6 +219,7 @@ jobs:
       timeout_seconds: ${{ inputs.timeout_seconds }}
       retry_attempts: ${{ inputs.retry_attempts }}
       retry_backoff_seconds: ${{ inputs.retry_backoff_seconds }}
+      registry_auth: ${{ inputs.registry_auth }}
 
   security-suite:
     needs: [preflight, emergency-preflight]
