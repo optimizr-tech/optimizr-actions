@@ -29,6 +29,13 @@ class DeploySnapshotHardeningTests(unittest.TestCase):
                 self.assertIn("chmod 600", content)
                 self.assertIn("Secret-free", content)
 
+    def test_deploy_sync_preserves_nested_build_backup_contexts(self) -> None:
+        for workflow in WORKFLOWS:
+            content = workflow.read_text(encoding="utf-8")
+            with self.subTest(workflow=workflow.name):
+                self.assertIn("--exclude=/backup/", content)
+                self.assertNotIn("--exclude=backup/", content)
+
 
 if __name__ == "__main__":
     unittest.main()
