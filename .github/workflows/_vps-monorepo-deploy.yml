@@ -1,7 +1,7 @@
 name: _vps-monorepo-deploy
 
 concurrency:
-  group: deploy-${{ inputs.service_name }}-${{ github.ref }}
+  group: deploy-${{ inputs.service_name }}
   cancel-in-progress: false
 
 on:
@@ -536,7 +536,7 @@ jobs:
           fi
 
           rsync_args=(
-            -a --delete
+            -a --delete --checksum
             --exclude=.git
             --exclude=.github
             --exclude=.env
@@ -588,6 +588,27 @@ jobs:
           rm -f "$dry_run_output"
 
           rsync "${rsync_args[@]}" "$GITHUB_WORKSPACE/" "$DEPLOY_PATH/"
+
+          # Post-sync content parity verification.  Reuse the exact exclusion
+          # set and checksum mode so quick-check metadata cannot hide drift.
+          parity_output="$(mktemp)"
+          trap 'rm -f -- "$parity_output"' EXIT
+          parity_args=(
+            "${rsync_args[@]}"
+            --no-perms --no-owner --no-group --no-times
+          )
+          if ! rsync "${parity_args[@]}" --dry-run --itemize-changes --out-format='%i' \
+            "$GITHUB_WORKSPACE/" "$DEPLOY_PATH/" >"$parity_output"; then
+            echo "::error::Post-sync deployment parity check failed to execute" >&2
+            exit 1
+          fi
+          if [ -s "$parity_output" ]; then
+            parity_changes="$(wc -l <"$parity_output")"
+            echo "::error::Post-sync deployment parity check found $parity_changes differing entries" >&2
+            exit 1
+          fi
+          echo "Post-sync deployment content parity verified"
+
           find "$DEPLOY_PATH" -name '*.sh' -exec chmod +x {} \;
           echo "snapshot_created=$snapshot_created" >> "$GITHUB_OUTPUT"
 
