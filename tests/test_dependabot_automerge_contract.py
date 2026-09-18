@@ -15,7 +15,7 @@ class DependabotAutomergeContractTests(unittest.TestCase):
 
         self.assertIn("github.event.pull_request.user.login == 'dependabot[bot]'", content)
         self.assertIn(
-            "dependabot/fetch-metadata@d7267f607e9d3fb96fc2fbe83e0af444713e90b7",
+            "dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98",
             content,
         )
         self.assertIn("version-update:semver-patch", content)
