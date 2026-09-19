@@ -106,3 +106,31 @@ boundary:
 The organization audit flags reusables that support self-hosted runners but
 are only ever called from hosted jobs in repositories that already run
 self-hosted jobs (`HOSTED_ONLY_REUSABLE`).
+
+## Action runtime policy (Node 24)
+
+GitHub removes the Node 20 action runtime from hosted runners on
+2026-09-23. Every pinned third-party action in this repository therefore runs
+on Node 24:
+
+| Action | Node 20 pin (retired) | Node 24 pin |
+| --- | --- | --- |
+| `dependabot/fetch-metadata` | `d7267f60` (v2.3.0) | `25dd0e34` (v3.1.0) |
+| `docker/setup-buildx-action` | `8d2750c6` (v3.12.0) | `f87e5991` (v4.4.1) |
+| `docker/login-action` | `c94ce9fb` (v3.7.0) | `dbcb8138` (v4.6.0) |
+| `docker/build-push-action` | `10e90e36` (v6.19.2) | `c3c9e263` (v7.4.0) |
+
+`tests/test_action_runtime_policy.py` enforces this contract offline: it
+fails when a retired Node 20 SHA reappears, when a runtime-sensitive action is
+pinned away from its verified Node 24 release, when a local composite action
+declares `using: node20`, or when
+`ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION` is committed.
+
+Node 24 requires Actions Runner v2.327.1 or later; the pinned self-hosted
+runner (v2.337.0) satisfies it. Consumers on `@v1` inherit the pins without
+any change because the reusables are the only owners of these references.
+
+To bump a pin, verify `runs.using` in the upstream `action.yml` at the target
+commit, update the pin, and update `NODE24_APPROVED_PINS` in the same commit.
+Rollback is the previous commit of this repository; the Node 20 opt-out flag
+is not a supported fallback after 2026-09-23.
