@@ -75,6 +75,15 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
         self.assertIn("load: ${{ !inputs.push }}", content)
         self.assertIn("candidate-", content)
 
+    def test_matrix_build_job_has_bounded_timeout_and_service_evidence(self) -> None:
+        content = BUILD_WORKFLOW.read_text(encoding="utf-8")
+        build_job = content[content.index("  build:") : content.index("  aggregate:")]
+
+        self.assertIn("timeout-minutes: 150", build_job)
+        self.assertIn("name: Build ${{ matrix.service.name }}", build_job)
+        self.assertIn("SERVICE_NAME: ${{ matrix.service.name }}", build_job)
+        self.assertIn("- name: Build image", build_job)
+
     def test_build_workflow_checks_out_exact_reusable_sources_for_portable_gates(self) -> None:
         content = BUILD_WORKFLOW.read_text(encoding="utf-8")
 

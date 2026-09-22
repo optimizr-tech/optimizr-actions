@@ -53,6 +53,12 @@ and artifact-download support. Do not point these jobs at a production service
 runner by default: the image matrix can contend for CPU, memory, disk, and
 Docker cache.
 
+Each matrix image build has a 150-minute job timeout. The bound leaves room for
+long native builds while ensuring that one stalled service cannot hold the
+delivery lane indefinitely. The matrix job name and `SERVICE_NAME` environment
+value retain the service identity in failure evidence, and the existing
+Buildx/action cleanup hooks remain enabled.
+
 The build job checks out the exact reusable revision selected by GitHub through
 `job.workflow_repository` and `job.workflow_sha` into
 `.optimizr-actions-source`. Portable verification scripts and the composite

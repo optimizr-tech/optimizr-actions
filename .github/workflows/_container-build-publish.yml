@@ -178,6 +178,7 @@ jobs:
     name: Build ${{ matrix.service.name }}
     needs: validate
     runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: 150
     permissions:
       contents: read
       packages: write
