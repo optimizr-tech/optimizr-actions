@@ -24,7 +24,7 @@ on:
         description: "Versão Python"
         required: false
         type: string
-        default: "3.12"
+        default: "3.14"
       working_directory:
         description: "Diretório relativo do projeto Python dentro do workspace"
         required: false

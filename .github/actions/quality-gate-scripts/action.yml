@@ -13,7 +13,7 @@ inputs:
   python_version:
     description: Python version for setup-python
     required: false
-    default: "3.12"
+    default: "3.14"
 
 outputs:
   scripts_path:

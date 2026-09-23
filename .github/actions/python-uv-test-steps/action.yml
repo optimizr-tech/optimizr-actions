@@ -8,7 +8,7 @@ inputs:
   python_version:
     description: Python version for setup-uv
     required: false
-    default: "3.12"
+    default: "3.14"
   working_directory:
     description: Relative repository path containing the Python project
     required: false
