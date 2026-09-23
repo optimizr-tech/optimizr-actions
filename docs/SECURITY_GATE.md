@@ -55,6 +55,10 @@ jobs:
 
 The deployment job must depend on the applicable hosted or self-hosted job and must never accept both paths as skipped.
 
+The `security-gate` composite provisions Python 3.14 before running its
+controlled Trivy and evidence helpers. This removes reliance on the runner's
+system `python3`; consumers do not need to add a separate Python setup step.
+
 ### Trivy cache lifecycle
 
 All Trivy-based composites use the repository-scoped cache helper at

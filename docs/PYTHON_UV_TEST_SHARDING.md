@@ -15,6 +15,10 @@ with:
 
 ## Contract
 
+- The reusable workflow and its shared `python-uv-test-steps` composite now
+  default to Python 3.14. Existing callers that pass `python_version` remain
+  supported; callers relying on the default should verify that their project
+  declares Python 3.14 compatibility before upgrading to this contract.
 - `shard_count: 1` uses the legacy `test` or `test-integration` job. Existing
   caller inputs, permissions, coverage threshold and artifact behavior remain
   unchanged.
