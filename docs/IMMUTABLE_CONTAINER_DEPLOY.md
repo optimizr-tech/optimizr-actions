@@ -3,8 +3,8 @@
 `_container-build-publish.yml` is the generic Optimizr Actions contract for
 building service images once and publishing them to an OCI registry. A caller
 supplies a JSON service matrix and a full source SHA. The workflow builds the
-matrix in parallel, uses isolated BuildKit GHA cache scopes, emits BuildKit
-SBOM/provenance metadata, and uploads a `release-manifest.json` containing
+matrix with bounded concurrency, uses a selectable BuildKit cache backend,
+emits BuildKit SBOM/provenance metadata, and uploads a `release-manifest.json` containing
 digest-pinned image references.
 
 Publishing is opt-in through `push: true`. The registry write credential is
@@ -53,11 +53,28 @@ and artifact-download support. Do not point these jobs at a production service
 runner by default: the image matrix can contend for CPU, memory, disk, and
 Docker cache.
 
-Each matrix image build has a 150-minute job timeout. The bound leaves room for
-long native builds while ensuring that one stalled service cannot hold the
-delivery lane indefinitely. The matrix job name and `SERVICE_NAME` environment
-value retain the service identity in failure evidence, and the existing
-Buildx/action cleanup hooks remain enabled.
+Each matrix image build defaults to a 150-minute timeout. Callers may set
+`timeout_minutes` from 1 through 360 for unusually long native builds; the
+matrix job name and `SERVICE_NAME` environment value retain the service
+identity in failure evidence, and the existing Buildx/action cleanup hooks
+remain enabled.
+
+The default `cache_type: gha` preserves isolated GitHub Actions cache scopes
+(`cache_scope_prefix` plus service name). Set `cache_type: none` to omit
+external cache import/export. For a persistent self-hosted cache, set
+`cache_type: local` and provide `local_cache_path` as an absolute runner-local
+cache root. The reusable creates one subdirectory per service, so parallel
+services in a single call do not write the same cache directory. The path must
+be runner-owned, outside `GITHUB_WORKSPACE` and every build context, and must
+not contain secrets. The reusable does not impose a disk budget or prune local
+cache files: runner operations must bound and clean the directory while no
+build is using it. Callers must serialize separate workflow runs that share a
+local cache root for the same service, or give those runs isolated roots.
+
+Keep `max_parallel: 1` on shared or capacity-constrained runners. Raise it only
+when `runner_json` selects a pool with enough simultaneously available builders
+and CPU, memory, disk, and BuildKit capacity; local cache paths remain isolated
+per service, but parallelism still increases host resource pressure.
 
 The build job checks out the exact reusable revision selected by GitHub through
 `job.workflow_repository` and `job.workflow_sha` into
@@ -107,6 +124,14 @@ jobs:
       candidate_sha: ${{ github.sha }}
       image_namespace: ${{ github.repository_owner }}/my-service
       services_json: '[{"name":"api","context":".","dockerfile":"Dockerfile"}]'
+      # Optional: the default is 150; accepted values are 1 through 360.
+      # timeout_minutes: 300
+      # For a trusted persistent runner, use local plus an absolute path
+      # outside the workspace; the runner owner manages cache budget/cleanup.
+      # cache_type: local
+      # local_cache_path: /runner-owned/buildkit-cache
+      # Raise only when the selected runner pool has capacity.
+      max_parallel: 1
       push: true
 
   deploy:

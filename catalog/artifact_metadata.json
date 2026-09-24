@@ -181,7 +181,7 @@
       "trust_boundary": "trusted-push",
       "evidence": "Matrix BuildKit images, immutable digest manifest, cache evidence and optional registry provenance",
       "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_container-build-publish.yml@v1"],
-      "known_limitations": "Private GitHub artifact attestations require Enterprise Cloud; BuildKit provenance and SBOM remain enabled by default"
+      "known_limitations": "Private GitHub artifact attestations require Enterprise Cloud; BuildKit provenance and SBOM remain enabled by default; persistent local BuildKit cache disk budget, cleanup, and same-service serialization are caller-managed"
     },
     ".github/workflows/_dependabot-security-automerge.yml": {
       "runner": ["hosted"],

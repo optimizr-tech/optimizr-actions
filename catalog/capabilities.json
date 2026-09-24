@@ -1066,10 +1066,12 @@
       "inputs": {
         "artifact_retention_days": "",
         "cache_scope_prefix": "",
+        "cache_type": "",
         "candidate_sha": "",
         "control_runner_json": "",
         "github_attestation": "",
         "image_namespace": "",
+        "local_cache_path": "",
         "max_parallel": "",
         "provenance": "",
         "push": "",
@@ -1080,10 +1082,11 @@
         "security_ignore_unfixed": "",
         "security_severity": "",
         "security_trivy_version": "",
-        "services_json": ""
+        "services_json": "",
+        "timeout_minutes": ""
       },
       "kind": "workflow",
-      "known_limitations": "Private GitHub artifact attestations require Enterprise Cloud; BuildKit provenance and SBOM remain enabled by default",
+      "known_limitations": "Private GitHub artifact attestations require Enterprise Cloud; BuildKit provenance and SBOM remain enabled by default; persistent local BuildKit cache disk budget, cleanup, and same-service serialization are caller-managed",
       "maturity": "stable-v1",
       "metadata_status": "classified",
       "outputs": {
@@ -1098,7 +1101,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "0834d8b831f859775a503723697e2f59a4abad1b58b7adaceab27e339355926d",
+      "source_sha256": "62bd2a702d308c94c71c63e0cd63729f946d3960f6244dccf72aedef7b77d60e",
       "trust_boundary": "trusted-push"
     },
     {
