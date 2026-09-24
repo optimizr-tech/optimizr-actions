@@ -109,7 +109,16 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
         self.assertIn("format('type=gha,mode=max,scope={0}-{1}'", build_job)
         self.assertIn("format('type=local,src={0}/{1}'", build_job)
         self.assertIn("format('type=local,dest={0}/{1},mode=max'", build_job)
-        self.assertEqual(2, build_job.count("|| '' }}"))
+        cache_lines = [
+            line
+            for line in build_job.splitlines()
+            if line.strip().startswith(("cache-from:", "cache-to:"))
+        ]
+        self.assertEqual(
+            ["cache-from", "cache-to"],
+            [line.strip().split(":", 1)[0] for line in cache_lines],
+        )
+        self.assertTrue(all(line.endswith("|| '' }}") for line in cache_lines))
 
         documentation = BUILD_DOC.read_text(encoding="utf-8")
         self.assertIn("local_cache_path", documentation)
