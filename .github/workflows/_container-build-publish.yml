@@ -40,6 +40,21 @@ on:
         required: false
         type: string
         default: optimizr-container
+      cache_type:
+        description: BuildKit cache backend (gha, local, or none)
+        required: false
+        type: string
+        default: gha
+      local_cache_path:
+        description: Runner-owned persistent cache root; required only when cache_type is local
+        required: false
+        type: string
+        default: ''
+      timeout_minutes:
+        description: Maximum duration for each matrix image build (1-360 minutes)
+        required: false
+        type: number
+        default: 150
       provenance:
         description: Emit BuildKit provenance metadata
         required: false
@@ -121,9 +136,12 @@ jobs:
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
           REGISTRY: ${{ inputs.registry }}
           CACHE_SCOPE_PREFIX: ${{ inputs.cache_scope_prefix }}
+          CACHE_TYPE: ${{ inputs.cache_type }}
+          LOCAL_CACHE_PATH: ${{ inputs.local_cache_path }}
           PROVENANCE: ${{ inputs.provenance }}
           SBOM: ${{ inputs.sbom }}
           MAX_PARALLEL: ${{ inputs.max_parallel }}
+          TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -142,6 +160,26 @@ jobs:
               raise SystemExit("max_parallel must be an integer between 1 and 8") from exc
           if not 1 <= max_parallel <= 8:
               raise SystemExit("max_parallel must be between 1 and 8")
+
+          timeout_minutes = os.environ["TIMEOUT_MINUTES"]
+          if not re.fullmatch(r"[1-9][0-9]*", timeout_minutes) or not 1 <= int(timeout_minutes) <= 360:
+              raise SystemExit("timeout_minutes must be an integer between 1 and 360")
+
+          cache_type = os.environ["CACHE_TYPE"]
+          if cache_type not in {"gha", "local", "none"}:
+              raise SystemExit("cache_type must be one of: gha, local, none")
+          local_cache_path = os.environ["LOCAL_CACHE_PATH"]
+          if cache_type == "local":
+              if not local_cache_path:
+                  raise SystemExit("local_cache_path is required when cache_type is local")
+              if (
+                  len(local_cache_path) > 1024
+                  or not re.fullmatch(r"[A-Za-z0-9_./\\:-]+", local_cache_path)
+                  or not (local_cache_path.startswith("/") or re.match(r"^[A-Za-z]:[\\/]", local_cache_path))
+              ):
+                  raise SystemExit("local_cache_path must be an absolute path using supported path characters")
+          elif local_cache_path:
+              raise SystemExit("local_cache_path may only be set when cache_type is local")
 
           for key in ("REGISTRY", "IMAGE_NAMESPACE", "CACHE_SCOPE_PREFIX"):
               value = os.environ[key]
@@ -178,7 +216,7 @@ jobs:
     name: Build ${{ matrix.service.name }}
     needs: validate
     runs-on: ${{ fromJSON(inputs.runner_json) }}
-    timeout-minutes: 150
+    timeout-minutes: ${{ inputs.timeout_minutes }}
     permissions:
       contents: read
       packages: write
@@ -211,6 +249,22 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
+      - name: Prepare local BuildKit cache (POSIX)
+        if: inputs.cache_type == 'local' && runner.os != 'Windows'
+        shell: bash
+        env:
+          LOCAL_CACHE_PATH: ${{ inputs.local_cache_path }}
+          SERVICE_NAME: ${{ env.SERVICE_NAME }}
+        run: mkdir -p -- "$LOCAL_CACHE_PATH/$SERVICE_NAME"
+
+      - name: Prepare local BuildKit cache (Windows)
+        if: inputs.cache_type == 'local' && runner.os == 'Windows'
+        shell: pwsh
+        env:
+          LOCAL_CACHE_PATH: ${{ inputs.local_cache_path }}
+          SERVICE_NAME: ${{ env.SERVICE_NAME }}
+        run: New-Item -ItemType Directory -Force -LiteralPath (Join-Path $env:LOCAL_CACHE_PATH $env:SERVICE_NAME) | Out-Null
+
       - name: Log in to GHCR for publish
         if: inputs.push
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
@@ -240,8 +294,8 @@ jobs:
           push: ${{ inputs.push }}
           load: ${{ !inputs.push }}
           tags: ${{ env.CANDIDATE_IMAGE }}
-          cache-from: type=gha,scope=${{ inputs.cache_scope_prefix }}-${{ matrix.service.name }}
-          cache-to: type=gha,mode=max,scope=${{ inputs.cache_scope_prefix }}-${{ matrix.service.name }}
+          cache-from: ${{ inputs.cache_type == 'gha' && format('type=gha,scope={0}-{1}', inputs.cache_scope_prefix, matrix.service.name) || inputs.cache_type == 'local' && format('type=local,src={0}/{1}', inputs.local_cache_path, matrix.service.name) || '' }}
+          cache-to: ${{ inputs.cache_type == 'gha' && format('type=gha,mode=max,scope={0}-{1}', inputs.cache_scope_prefix, matrix.service.name) || inputs.cache_type == 'local' && format('type=local,dest={0}/{1},mode=max', inputs.local_cache_path, matrix.service.name) || '' }}
           provenance: ${{ inputs.provenance }}
           sbom: ${{ inputs.sbom }}
 

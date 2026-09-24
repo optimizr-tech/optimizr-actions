@@ -29,8 +29,8 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
             "strategy:",
             "matrix:",
             "fromJSON(needs.validate.outputs.services_json)",
-            "cache-from: type=gha",
-            "cache-to: type=gha,mode=max",
+            "format('type=gha,scope={0}-{1}'",
+            "format('type=gha,mode=max,scope={0}-{1}'",
             "steps.build.outputs.digest",
             "release-manifest.json",
             "prebuilt_images_json:",
@@ -79,10 +79,51 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
         content = BUILD_WORKFLOW.read_text(encoding="utf-8")
         build_job = content[content.index("  build:") : content.index("  aggregate:")]
 
-        self.assertIn("timeout-minutes: 150", build_job)
+        self.assertIn("timeout-minutes: ${{ inputs.timeout_minutes }}", build_job)
         self.assertIn("name: Build ${{ matrix.service.name }}", build_job)
         self.assertIn("SERVICE_NAME: ${{ matrix.service.name }}", build_job)
         self.assertIn("- name: Build image", build_job)
+
+    def test_build_timeout_is_configurable_and_bounded(self) -> None:
+        content = BUILD_WORKFLOW.read_text(encoding="utf-8")
+
+        timeout_start = content.index("      timeout_minutes:")
+        timeout_input = content[timeout_start:].split("      provenance:", 1)[0]
+        self.assertIn("type: number", timeout_input)
+        self.assertIn("default: 150", timeout_input)
+        self.assertIn('TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}', content)
+        self.assertIn("timeout_minutes must be an integer between 1 and 360", content)
+
+    def test_build_cache_backend_is_selectable_and_local_path_is_required(self) -> None:
+        content = BUILD_WORKFLOW.read_text(encoding="utf-8")
+        build_job = content[content.index("  build:") : content.index("  aggregate:")]
+
+        self.assertIn("cache_type:", content)
+        self.assertIn("default: gha", content)
+        self.assertIn('CACHE_TYPE: ${{ inputs.cache_type }}', content)
+        self.assertIn('LOCAL_CACHE_PATH: ${{ inputs.local_cache_path }}', content)
+        self.assertIn('cache_type must be one of: gha, local, none', content)
+        self.assertIn("local_cache_path is required when cache_type is local", content)
+        self.assertIn("local_cache_path must be an absolute path", content)
+        self.assertIn("format('type=gha,scope={0}-{1}'", build_job)
+        self.assertIn("format('type=gha,mode=max,scope={0}-{1}'", build_job)
+        self.assertIn("format('type=local,src={0}/{1}'", build_job)
+        self.assertIn("format('type=local,dest={0}/{1},mode=max'", build_job)
+        cache_lines = [
+            line
+            for line in build_job.splitlines()
+            if line.strip().startswith(("cache-from:", "cache-to:"))
+        ]
+        self.assertEqual(
+            ["cache-from", "cache-to"],
+            [line.strip().split(":", 1)[0] for line in cache_lines],
+        )
+        self.assertTrue(all(line.endswith("|| '' }}") for line in cache_lines))
+
+        documentation = BUILD_DOC.read_text(encoding="utf-8")
+        self.assertIn("local_cache_path", documentation)
+        self.assertIn("outside `GITHUB_WORKSPACE`", documentation)
+        self.assertIn("serialize separate workflow runs", documentation)
 
     def test_build_workflow_checks_out_exact_reusable_sources_for_portable_gates(self) -> None:
         content = BUILD_WORKFLOW.read_text(encoding="utf-8")
