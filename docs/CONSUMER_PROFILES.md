@@ -68,6 +68,28 @@ for every job in the workflow. GitHub validates this ceiling before creating
 the called job, so omitting a required scope can result in `startup_failure`
 without a job or step log.
 
+### Compose interpolation placeholders
+
+`_docker-compose-validate.yml@v1` accepts optional `compose_env` lines for
+non-secret values needed by `${VAR:?}` or other Compose interpolation during
+standalone-file and merged-stack validation:
+
+```yaml
+with:
+  compose_files: docker-compose.yml docker-compose.secure.yml
+  compose_env: |
+    MINIO_TLS_CERTS_PATH=/ci/placeholder/minio-tls
+```
+
+Use uppercase `KEY=VALUE` lines only. Blank lines and comments are ignored;
+duplicate keys and runner/Docker control variables are rejected. The reusable
+passes values through a private temporary env file, never evaluates them as
+shell code, and removes that file at job end. The caller-provided values
+override matching values from the Compose project's `.env`, which is loaded
+first when present. Do not pass secrets, credentials, or
+multiline values: these are validation placeholders, not runtime environment
+configuration. The input is limited to 8192 UTF-8 bytes.
+
 ### Buildx base-image authentication
 
 When `build_image: true`, `_docker-compose-validate.yml@v1` starts with an

@@ -196,7 +196,8 @@
     },
     ".github/workflows/_docker-compose-validate.yml": {
       "trust_boundary": "trusted-pr",
-      "evidence": "Docker Compose syntax and script bash validation results",
+      "evidence": "Docker Compose syntax, interpolation, and script bash validation results",
+      "known_limitations": "compose_env accepts only non-secret single-line placeholders; runner/Docker control variables are reserved",
       "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_docker-compose-validate.yml@v1"]
     },
     ".github/workflows/_negative-probes.yml": {

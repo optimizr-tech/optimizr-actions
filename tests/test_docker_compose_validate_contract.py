@@ -32,11 +32,11 @@ class DockerComposeValidateContractTests(unittest.TestCase):
         )
         self.assertGreaterEqual(self.text.count("docker_compose()"), 2)
         self.assertGreaterEqual(
-            self.text.count('\n              sudo -n docker compose "$@"'),
+            self.text.count('\n              sudo -n docker compose "${env_args[@]}" "$@"'),
             2,
         )
         self.assertGreaterEqual(
-            self.text.count('\n              docker compose "$@"'),
+            self.text.count('\n              docker compose "${env_args[@]}" "$@"'),
             2,
         )
         self.assertNotIn('docker compose -f "$f" config --quiet', self.text)
@@ -44,6 +44,27 @@ class DockerComposeValidateContractTests(unittest.TestCase):
             'docker compose "${args[@]}" config --quiet',
             self.text,
         )
+
+    def test_compose_env_is_validated_and_applied_only_to_compose_validation(self) -> None:
+        input_start = self.text.index("      compose_env:")
+        compose_env_input = self.text[input_start:].split("      script_globs:", 1)[0]
+        self.assertIn("required: false", compose_env_input)
+        self.assertIn("type: string", compose_env_input)
+        self.assertIn("default: ''", compose_env_input)
+        self.assertIn('COMPOSE_ENV_INPUT: ${{ inputs.compose_env }}', self.text)
+        self.assertIn("tempfile.mkstemp", self.text)
+        self.assertIn("compose_env entries must use KEY=VALUE", self.text)
+        self.assertIn('re.fullmatch(r"[A-Z_][A-Z0-9_]*", key)', self.text)
+        self.assertIn("reserved for runner and Docker control", self.text)
+        self.assertIn('steps.compose-env.outputs.path', self.text)
+        self.assertEqual(2, self.text.count('--env-file "$COMPOSE_ENV_FILE"'))
+        self.assertEqual(2, self.text.count('env_args+=(--env-file "$project_dir/.env")'))
+        self.assertEqual(2, self.text.count('unset "${assignment%%=*}"'))
+        self.assertIn("Clean temporary Compose interpolation environment", self.text)
+        self.assertNotIn("eval ", self.text)
+        self.assertNotIn('. "$COMPOSE_ENV_FILE"', self.text)
+        build_step = self.text[self.text.index("      - name: Build Docker image (sanity check)") :]
+        self.assertNotIn("COMPOSE_ENV_FILE", build_step)
 
     def test_buildx_requires_direct_docker_access(self) -> None:
         self.assertIn("BUILD_IMAGE: ${{ inputs.build_image }}", self.text)
@@ -86,6 +107,13 @@ class DockerComposeValidateContractTests(unittest.TestCase):
         self.assertIn("job containing `uses:`", profile)
         self.assertIn("registry_auth_mode", profile)
         self.assertIn("Private base", profile)
+
+    def test_compose_profile_documents_non_secret_interpolation_values(self) -> None:
+        profile = PROFILE_DOC.read_text(encoding="utf-8")
+        self.assertIn("Compose interpolation placeholders", profile)
+        self.assertIn("compose_env:", profile)
+        self.assertIn("Do not pass secrets", profile)
+        self.assertIn("project `.env`", profile)
 
 
 if __name__ == "__main__":
