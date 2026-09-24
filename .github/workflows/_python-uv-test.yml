@@ -423,6 +423,7 @@ jobs:
           --health-cmd "rabbitmq-diagnostics -q check_running"
           --health-interval 10s
           --health-timeout 5s
+          --health-start-period 120s
           --health-retries 5
     steps:
       - name: Validate runner trust contract
@@ -538,6 +539,7 @@ jobs:
           --health-cmd "rabbitmq-diagnostics -q check_running"
           --health-interval 10s
           --health-timeout 5s
+          --health-start-period 120s
           --health-retries 5
     steps:
       - name: Validate runner trust contract
