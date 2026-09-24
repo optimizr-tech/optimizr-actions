@@ -63,7 +63,10 @@ class DockerComposeValidateContractTests(unittest.TestCase):
         self.assertIn("Clean temporary Compose interpolation environment", self.text)
         self.assertNotIn("eval ", self.text)
         self.assertNotIn('. "$COMPOSE_ENV_FILE"', self.text)
-        build_step = self.text[self.text.index("      - name: Build Docker image (sanity check)") :]
+        build_step = self.text[
+            self.text.index("      - name: Build Docker image (sanity check)") :
+            self.text.index("      - name: Clean temporary Docker registry authentication")
+        ]
         self.assertNotIn("COMPOSE_ENV_FILE", build_step)
 
     def test_buildx_requires_direct_docker_access(self) -> None:
@@ -113,7 +116,7 @@ class DockerComposeValidateContractTests(unittest.TestCase):
         self.assertIn("Compose interpolation placeholders", profile)
         self.assertIn("compose_env:", profile)
         self.assertIn("Do not pass secrets", profile)
-        self.assertIn("project `.env`", profile)
+        self.assertIn("Compose project's `.env`", profile)
 
 
 if __name__ == "__main__":
