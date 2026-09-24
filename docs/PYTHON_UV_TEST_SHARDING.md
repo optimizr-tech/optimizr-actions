@@ -50,6 +50,8 @@ matrix job. GitHub's job-scoped service namespace gives every shard its own
 containers, database and `localhost` ports. This does not mean that one
 self-hosted runner can execute two jobs at once; `max_parallel` still must be
 chosen against the actual runner fleet and container memory.
+RabbitMQ has a 120-second healthcheck start period to tolerate slow cold boots
+on shared runners; the readiness command must still succeed before tests begin.
 
 There are no automatic test retries or retry loop. A failed shard remains failed, all other
 shards are allowed to finish, and the aggregate job fails. A rerun must rerun

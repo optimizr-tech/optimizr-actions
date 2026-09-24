@@ -72,6 +72,21 @@ class PythonUvShardingContractTests(unittest.TestCase):
             with self.subTest(image=image):
                 self.assertIn(image, sharded_section)
 
+    def test_rabbitmq_healthcheck_grace_covers_slow_startup(self) -> None:
+        for job_name in ("test-integration:", "test-integration-sharded:"):
+            with self.subTest(job_name=job_name):
+                match = re.search(
+                    rf"(?ms)^  {re.escape(job_name)}\n(?P<job>.*?)(?=^  [\w-]+:\n|\Z)",
+                    self.workflow,
+                )
+                self.assertIsNotNone(match)
+                rabbitmq = re.search(
+                    r"(?ms)^      rabbitmq:\n(?P<service>.*?)(?=^    steps:)",
+                    match.group("job"),
+                )
+                self.assertIsNotNone(rabbitmq)
+                self.assertIn("--health-start-period 120s", rabbitmq.group("service"))
+
     def test_aggregate_gate_requires_all_shards_and_preserves_threshold(self) -> None:
         self.assertIn("aggregate-coverage:", self.workflow)
         aggregate_section = self.workflow.split("aggregate-coverage:", 1)[1]
