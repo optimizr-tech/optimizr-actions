@@ -1163,12 +1163,13 @@
     },
     {
       "category": "test",
-      "evidence": "Docker Compose syntax and script bash validation results",
+      "evidence": "Docker Compose syntax, interpolation, and script bash validation results",
       "examples": [
         "uses: optimizr-tech/optimizr-actions/.github/workflows/_docker-compose-validate.yml@v1"
       ],
       "inputs": {
         "build_image": "",
+        "compose_env": "",
         "compose_files": "",
         "compose_stacks": "",
         "docker_mode": "",
@@ -1180,7 +1181,7 @@
         "skip": ""
       },
       "kind": "workflow",
-      "known_limitations": "",
+      "known_limitations": "compose_env accepts only non-secret single-line placeholders; runner/Docker control variables are reserved",
       "maturity": "stable-v1",
       "metadata_status": "classified",
       "outputs": {},
@@ -1191,7 +1192,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "9c90ab051f091878c51b7462b4ffd9b65f82df29ef69a2f5ecaac78cdb6085ae",
+      "source_sha256": "459f678354709f52ac57b9cf85b988555c698553c6eea63865cda8ca758efb34",
       "trust_boundary": "trusted-pr"
     },
     {

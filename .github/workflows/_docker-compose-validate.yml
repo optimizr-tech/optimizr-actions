@@ -41,6 +41,11 @@ on:
         required: false
         type: string
         default: ""
+      compose_env:
+        description: Non-secret KEY=VALUE lines for Compose interpolation during config validation
+        required: false
+        type: string
+        default: ''
       script_globs:
         description: "Globs de scripts shell pra checar sintaxe (espaço-separado)"
         required: false
@@ -239,6 +244,66 @@ jobs:
         with:
           expected_sha: ${{ github.sha }}
 
+      - name: Prepare Compose interpolation environment
+        id: compose-env
+        if: inputs.compose_env != ''
+        shell: bash
+        env:
+          COMPOSE_ENV_INPUT: ${{ inputs.compose_env }}
+          RUNNER_TEMP: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import re
+          import tempfile
+
+          raw = os.environ["COMPOSE_ENV_INPUT"]
+          if len(raw.encode("utf-8")) > 8192:
+              raise SystemExit("compose_env must be at most 8192 UTF-8 bytes")
+
+          entries = []
+          seen = set()
+          reserved = {
+              "BASHPID", "BASHOPTS", "BASH_ENV", "CDPATH", "COPROC", "DIRSTACK",
+              "EUID", "ENV", "FUNCNAME", "GROUPS", "HOME", "HOSTNAME", "HOSTTYPE",
+              "IFS", "LINENO", "MACHTYPE", "OLDPWD", "OSTYPE", "PATH", "PPID",
+              "PWD", "RANDOM", "SECONDS", "SHLVL", "SHELL", "SHELLOPTS",
+              "SUDO_COMMAND", "SUDO_GID", "SUDO_UID", "SUDO_USER", "TERM", "TMPDIR",
+              "UID", "_",
+          }
+          for line_number, line in enumerate(raw.splitlines(), start=1):
+              if not line.strip() or line.lstrip().startswith("#"):
+                  continue
+              key, separator, value = line.partition("=")
+              if not separator or not re.fullmatch(r"[A-Z_][A-Z0-9_]*", key):
+                  raise SystemExit(f"compose_env entries must use KEY=VALUE (line {line_number})")
+              if (
+                  key in reserved
+                  or key.startswith(("ACTIONS_", "BASH_", "COMPOSE_", "DOCKER_", "GITHUB_", "RUNNER_", "SUDO_"))
+              ):
+                  raise SystemExit(f"compose_env key is reserved for runner and Docker control (line {line_number})")
+              if key in seen:
+                  raise SystemExit(f"compose_env contains a duplicate key: {key}")
+              if "\x00" in value:
+                  raise SystemExit(f"compose_env value contains a NUL byte (line {line_number})")
+              seen.add(key)
+              entries.append((key, value))
+
+          descriptor, path = tempfile.mkstemp(
+              prefix="optimizr-compose-env-",
+              suffix=".env",
+              dir=os.environ["RUNNER_TEMP"],
+              text=True,
+          )
+          with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as environment_file:
+              for key, value in entries:
+                  environment_file.write(f"{key}='{value.replace(chr(39), chr(92) + chr(39))}'\n")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"path={path}\n")
+          PY
+
       - name: Set up Docker Buildx
         if: inputs.build_image
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
@@ -246,14 +311,46 @@ jobs:
       - name: Validate docker-compose files
         env:
           DOCKER_MODE: ${{ steps.docker.outputs.mode }}
+          COMPOSE_ENV_FILE: ${{ steps.compose-env.outputs.path }}
         run: |
           set -euo pipefail
 
           docker_compose() {
+            local env_args=()
+            if [ -n "${COMPOSE_ENV_FILE:-}" ]; then
+              local compose_file=""
+              local expect_file=0
+              local argument
+              for argument in "$@"; do
+                if [ "$expect_file" -eq 1 ]; then
+                  compose_file="$argument"
+                  break
+                fi
+                if [ "$argument" = "-f" ] || [ "$argument" = "--file" ]; then
+                  expect_file=1
+                fi
+              done
+
+              local project_dir="$PWD"
+              if [ -n "$compose_file" ]; then
+                project_dir="$(dirname -- "$compose_file")"
+                if [[ "$project_dir" != /* ]]; then
+                  project_dir="$PWD/$project_dir"
+                fi
+              fi
+              while IFS= read -r assignment; do
+                [ -n "$assignment" ] || continue
+                unset "${assignment%%=*}"
+              done < "$COMPOSE_ENV_FILE"
+              if [ -f "$project_dir/.env" ]; then
+                env_args+=(--env-file "$project_dir/.env")
+              fi
+              env_args+=(--env-file "$COMPOSE_ENV_FILE")
+            fi
             if [ "$DOCKER_MODE" = sudo ]; then
-              sudo -n docker compose "$@"
+              sudo -n docker compose "${env_args[@]}" "$@"
             else
-              docker compose "$@"
+              docker compose "${env_args[@]}" "$@"
             fi
           }
 
@@ -271,14 +368,46 @@ jobs:
         if: inputs.compose_stacks != ''
         env:
           DOCKER_MODE: ${{ steps.docker.outputs.mode }}
+          COMPOSE_ENV_FILE: ${{ steps.compose-env.outputs.path }}
         run: |
           set -euo pipefail
 
           docker_compose() {
+            local env_args=()
+            if [ -n "${COMPOSE_ENV_FILE:-}" ]; then
+              local compose_file=""
+              local expect_file=0
+              local argument
+              for argument in "$@"; do
+                if [ "$expect_file" -eq 1 ]; then
+                  compose_file="$argument"
+                  break
+                fi
+                if [ "$argument" = "-f" ] || [ "$argument" = "--file" ]; then
+                  expect_file=1
+                fi
+              done
+
+              local project_dir="$PWD"
+              if [ -n "$compose_file" ]; then
+                project_dir="$(dirname -- "$compose_file")"
+                if [[ "$project_dir" != /* ]]; then
+                  project_dir="$PWD/$project_dir"
+                fi
+              fi
+              while IFS= read -r assignment; do
+                [ -n "$assignment" ] || continue
+                unset "${assignment%%=*}"
+              done < "$COMPOSE_ENV_FILE"
+              if [ -f "$project_dir/.env" ]; then
+                env_args+=(--env-file "$project_dir/.env")
+              fi
+              env_args+=(--env-file "$COMPOSE_ENV_FILE")
+            fi
             if [ "$DOCKER_MODE" = sudo ]; then
-              sudo -n docker compose "$@"
+              sudo -n docker compose "${env_args[@]}" "$@"
             else
-              docker compose "$@"
+              docker compose "${env_args[@]}" "$@"
             fi
           }
 
@@ -340,3 +469,10 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf -- "$DOCKER_CONFIG_DIR"
+
+      - name: Clean temporary Compose interpolation environment
+        if: always() && steps.compose-env.outputs.path != ''
+        shell: bash
+        env:
+          COMPOSE_ENV_FILE: ${{ steps.compose-env.outputs.path }}
+        run: rm -f -- "$COMPOSE_ENV_FILE"
