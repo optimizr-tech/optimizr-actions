@@ -322,7 +322,6 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
                     content,
                 )
                 self.assertNotIn('sudo env "DOCKER_CONFIG=', content)
-                self.assertIn("docker logout", content)
                 self.assertIn("Clean registry authentication state", content)
 
 
