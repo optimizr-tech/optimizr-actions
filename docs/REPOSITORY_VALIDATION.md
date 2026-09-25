@@ -36,6 +36,12 @@ duplicating setup steps.
 
 The default trust boundary requires the candidate to be reachable from `refs/heads/main`. A persistent self-hosted runner cannot disable that requirement. Hosted pull-request callers may deliberately set `require_trusted_ref: false`, but must not reuse that caller on a persistent production runner.
 
+`timeout_seconds` bounds the consumer command (default 900, maximum 7200).
+`job_timeout_minutes` bounds the reusable workflow job (default 65, maximum
+360); `_validation-gate.yml@v1` forwards it. Keep the command timeout lower
+than the job timeout so the workflow can upload evidence and clean up after a
+timeout or command completion. Existing callers retain both defaults.
+
 For a trusted main self-hosted Docker validation that needs to pull from GHCR,
 callers may set `registry_auth: true`. This opt-in is accepted only for a
 self-hosted Linux runner during `push` or `workflow_dispatch` on
