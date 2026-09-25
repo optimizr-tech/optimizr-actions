@@ -55,6 +55,10 @@ class VpsDockerModeContractTests(unittest.TestCase):
             with self.subTest(workflow=workflow.name):
                 self.assertIn('env "DOCKER_CONFIG=$DOCKER_CONFIG" docker "$@"', content)
                 self.assertIn(
+                    'sudo docker --config "$DOCKER_CONFIG" "$@"',
+                    content,
+                )
+                self.assertNotIn(
                     'sudo env "DOCKER_CONFIG=$DOCKER_CONFIG" docker "$@"',
                     content,
                 )

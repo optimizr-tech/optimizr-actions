@@ -170,6 +170,12 @@ granted to the caller repository, use a dedicated read-only `read:packages`
 credential through a protected GitHub Environment secret; never write it to a
 repository file or a permanent Docker config on the host.
 
+With `docker_mode: sudo` or `auto`, the reusable invokes the Docker CLI
+directly under `sudo` and selects the temporary credential directory with
+`docker --config`; the runner's sudoers policy therefore does not need to
+authorize `env`. The deployment identity must already be allowed to invoke
+Docker non-interactively. This reusable does not modify host sudoers.
+
 For private repositories, GitHub artifact attestations require Enterprise
 Cloud. Therefore `github_attestation` defaults to false. The registry-backed
 BuildKit SBOM and provenance check is mandatory for every published image; the
