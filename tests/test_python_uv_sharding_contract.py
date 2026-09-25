@@ -86,6 +86,7 @@ class PythonUvShardingContractTests(unittest.TestCase):
                 )
                 self.assertIsNotNone(rabbitmq)
                 self.assertIn("--health-start-period 120s", rabbitmq.group("service"))
+                self.assertIn("--health-start-interval 10s", rabbitmq.group("service"))
 
     def test_aggregate_gate_requires_all_shards_and_preserves_threshold(self) -> None:
         self.assertIn("aggregate-coverage:", self.workflow)

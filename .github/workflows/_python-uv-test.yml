@@ -416,6 +416,7 @@ jobs:
         image: rabbitmq:4.2.9-management-alpine@sha256:a51ed990cb4392ce136380fb01fdb8aab1203565953f5ea9711bf839b1b709db
         ports:
           - 5672:5672
+        # Avoid probing during the entrypoint's Erlang cookie ownership handoff.
         options: >-
           --memory 1g
           --cpus 0.50
@@ -424,6 +425,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-start-period 120s
+          --health-start-interval 10s
           --health-retries 5
     steps:
       - name: Validate runner trust contract
@@ -532,6 +534,7 @@ jobs:
         image: rabbitmq:4.2.9-management-alpine@sha256:a51ed990cb4392ce136380fb01fdb8aab1203565953f5ea9711bf839b1b709db
         ports:
           - 5672:5672
+        # Avoid probing during the entrypoint's Erlang cookie ownership handoff.
         options: >-
           --memory 1g
           --cpus 0.50
@@ -540,6 +543,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-start-period 120s
+          --health-start-interval 10s
           --health-retries 5
     steps:
       - name: Validate runner trust contract
