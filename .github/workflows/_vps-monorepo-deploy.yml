@@ -299,7 +299,7 @@ jobs:
                 ;;
               sudo|auto)
                 if [ -n "${DOCKER_CONFIG:-}" ]; then
-                  sudo env "DOCKER_CONFIG=$DOCKER_CONFIG" docker "$@"
+                  sudo docker --config "$DOCKER_CONFIG" "$@"
                 else
                   command sudo docker "$@"
                 fi
@@ -970,11 +970,10 @@ jobs:
           DOCKER_CONFIG_DIR: ${{ runner.temp }}/optimizr-ghcr-docker-config
         run: |
           set +e
+          DOCKER_CONFIG="$DOCKER_CONFIG_DIR" docker_cmd logout "$REGISTRY" >/dev/null 2>&1 || true
           if [ "$DOCKER_MODE" = direct ]; then
-            DOCKER_CONFIG="$DOCKER_CONFIG_DIR" docker logout "$REGISTRY" >/dev/null 2>&1 || true
             rm -rf -- "$DOCKER_CONFIG_DIR"
           else
-            sudo env "DOCKER_CONFIG=$DOCKER_CONFIG_DIR" docker logout "$REGISTRY" >/dev/null 2>&1 || true
             sudo rm -rf -- "$DOCKER_CONFIG_DIR"
             rm -rf -- "$DOCKER_CONFIG_DIR" || true
           fi

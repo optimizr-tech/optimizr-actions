@@ -317,8 +317,11 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
             with self.subTest(workflow=workflow.name):
                 self.assertIn("DOCKER_CONFIG_DIR", content)
                 self.assertIn("DOCKER_CONFIG=$DOCKER_CONFIG_DIR", content)
-                self.assertIn('sudo env "DOCKER_CONFIG=', content)
-                self.assertIn("docker logout", content)
+                self.assertIn(
+                    'DOCKER_CONFIG="$DOCKER_CONFIG_DIR" docker_cmd logout "$REGISTRY"',
+                    content,
+                )
+                self.assertNotIn('sudo env "DOCKER_CONFIG=', content)
                 self.assertIn("Clean registry authentication state", content)
 
 

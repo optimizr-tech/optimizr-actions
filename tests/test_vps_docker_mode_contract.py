@@ -28,9 +28,18 @@ class VpsDockerModeContractTests(unittest.TestCase):
         for workflow in WORKFLOWS:
             content = workflow.read_text(encoding="utf-8")
             self.assertEqual(content.count("docker_cmd() {"), 1)
-            self.assertNotRegex(
+            docker_cmd_match = re.search(
+                r"(?ms)^[ \t]*docker_cmd\(\) \{.*?^[ \t]*\}",
                 content,
-                r"(?m)^\s*(?:sudo\s+)?docker(?:\s+compose)?\s+",
+            )
+            self.assertIsNotNone(docker_cmd_match)
+            content_without_docker_cmd = (
+                content[: docker_cmd_match.start()]
+                + content[docker_cmd_match.end() :]
+            )
+            self.assertNotRegex(
+                content_without_docker_cmd,
+                r"(?m)^[ \t]*(?:(?:command|sudo)[ \t]+)*docker(?:[ \t]+compose)?[ \t]+",
             )
             self.assertIn("DOCKER_MODE: ${{ inputs.docker_mode }}", content)
 
@@ -55,6 +64,10 @@ class VpsDockerModeContractTests(unittest.TestCase):
             with self.subTest(workflow=workflow.name):
                 self.assertIn('env "DOCKER_CONFIG=$DOCKER_CONFIG" docker "$@"', content)
                 self.assertIn(
+                    'sudo docker --config "$DOCKER_CONFIG" "$@"',
+                    content,
+                )
+                self.assertNotIn(
                     'sudo env "DOCKER_CONFIG=$DOCKER_CONFIG" docker "$@"',
                     content,
                 )
