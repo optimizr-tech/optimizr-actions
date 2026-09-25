@@ -318,7 +318,7 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
                 self.assertIn("DOCKER_CONFIG_DIR", content)
                 self.assertIn("DOCKER_CONFIG=$DOCKER_CONFIG_DIR", content)
                 self.assertIn(
-                    'sudo docker --config "$DOCKER_CONFIG_DIR" logout',
+                    'DOCKER_CONFIG="$DOCKER_CONFIG_DIR" docker_cmd logout "$REGISTRY"',
                     content,
                 )
                 self.assertNotIn('sudo env "DOCKER_CONFIG=', content)
