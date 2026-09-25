@@ -416,12 +416,12 @@ jobs:
         image: rabbitmq:4.2.9-management-alpine@sha256:a51ed990cb4392ce136380fb01fdb8aab1203565953f5ea9711bf839b1b709db
         ports:
           - 5672:5672
-        # Avoid probing during the entrypoint's Erlang cookie ownership handoff.
+        # Early probes must use the server user to avoid a root-owned Erlang cookie.
         options: >-
           --memory 1g
           --cpus 0.50
           --pids-limit 128
-          --health-cmd "rabbitmq-diagnostics -q check_running"
+          --health-cmd "su-exec rabbitmq rabbitmq-diagnostics -q check_running"
           --health-interval 10s
           --health-timeout 5s
           --health-start-period 120s
@@ -534,12 +534,12 @@ jobs:
         image: rabbitmq:4.2.9-management-alpine@sha256:a51ed990cb4392ce136380fb01fdb8aab1203565953f5ea9711bf839b1b709db
         ports:
           - 5672:5672
-        # Avoid probing during the entrypoint's Erlang cookie ownership handoff.
+        # Early probes must use the server user to avoid a root-owned Erlang cookie.
         options: >-
           --memory 1g
           --cpus 0.50
           --pids-limit 128
-          --health-cmd "rabbitmq-diagnostics -q check_running"
+          --health-cmd "su-exec rabbitmq rabbitmq-diagnostics -q check_running"
           --health-interval 10s
           --health-timeout 5s
           --health-start-period 120s
