@@ -29,6 +29,14 @@ class RepositoryValidationContractTests(unittest.TestCase):
         self.assertIn("steps.contract.outputs.result", text)
         self.assertIn("inputs.candidate_sha || github.sha", text)
 
+    def test_reusable_job_timeout_is_configurable_with_compatible_default(self):
+        text = (ROOT / ".github/workflows/_repository-validation.yml").read_text()
+        inputs = text.split("    inputs:", 1)[1].split("    outputs:", 1)[0]
+
+        self.assertIn("job_timeout_minutes:", inputs)
+        self.assertIn("default: 65", inputs)
+        self.assertIn("timeout-minutes: ${{ inputs.job_timeout_minutes }}", text)
+
     def test_reusable_exposes_bounded_opt_in_retry_contract(self):
         text = (ROOT / ".github/workflows/_repository-validation.yml").read_text()
         action = (ROOT / ".github/actions/repository-validation/action.yml").read_text()

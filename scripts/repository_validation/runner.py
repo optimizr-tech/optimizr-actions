@@ -21,6 +21,7 @@ RETRYABLE_EXIT_CODE = 75
 MAX_RETRY_ATTEMPTS = 3
 MAX_RETRY_BACKOFF_SECONDS = 60
 MAX_REQUIRED_PATHS = 256
+MAX_TIMEOUT_SECONDS = 7200
 
 
 class ValidationError(ValueError):
@@ -354,8 +355,10 @@ def run_validation(
         raise ValidationError("head_sha must be a lowercase 40-character commit SHA")
     if base_sha and not SHA_RE.fullmatch(base_sha):
         raise ValidationError("base_sha must be empty or a lowercase 40-character commit SHA")
-    if timeout_seconds < 1 or timeout_seconds > 3600:
-        raise ValidationError("timeout_seconds must be between 1 and 3600")
+    if timeout_seconds < 1 or timeout_seconds > MAX_TIMEOUT_SECONDS:
+        raise ValidationError(
+            f"timeout_seconds must be between 1 and {MAX_TIMEOUT_SECONDS}"
+        )
     if retry_attempts < 1 or retry_attempts > MAX_RETRY_ATTEMPTS:
         raise ValidationError(
             f"retry_attempts must be between 1 and {MAX_RETRY_ATTEMPTS}"

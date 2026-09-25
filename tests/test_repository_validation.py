@@ -287,6 +287,49 @@ class RepositoryValidationTests(unittest.TestCase):
             self.assertNotIn("environment", payload)
             self.assertNotIn("secret-value", evidence.read_text())
 
+    def test_run_validation_accepts_two_hour_command_budget(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            script = workspace / "validate.sh"
+            script.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            script.chmod(0o700)
+
+            with patch(
+                "repository_validation.runner.subprocess.run",
+                return_value=subprocess.CompletedProcess(["validate.sh"], 0),
+            ) as run_process, patch(
+                "repository_validation.runner.collect_versions", return_value={}
+            ):
+                status = run_validation(
+                    workspace=workspace,
+                    script_path="validate.sh",
+                    args=[],
+                    evidence_path=workspace / "evidence.json",
+                    repository="optimizr/example",
+                    head_sha="a" * 40,
+                    base_sha="",
+                    timeout_seconds=7200,
+                )
+
+            self.assertEqual(status, 0)
+            self.assertEqual(run_process.call_args.kwargs["timeout"], 7200)
+
+    def test_run_validation_rejects_command_budget_above_two_hours(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+
+            with self.assertRaisesRegex(ValidationError, "1 and 7200"):
+                run_validation(
+                    workspace=workspace,
+                    script_path="validate.sh",
+                    args=[],
+                    evidence_path=workspace / "evidence.json",
+                    repository="optimizr/example",
+                    head_sha="a" * 40,
+                    base_sha="",
+                    timeout_seconds=7201,
+                )
+
     def test_retry_is_opt_in_and_only_retries_the_reserved_transient_code(self):
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Path(tmp)

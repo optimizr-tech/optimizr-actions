@@ -61,6 +61,11 @@ on:
         type: number
         required: false
         default: 900
+      job_timeout_minutes:
+        description: Job timeout in minutes (1-360)
+        type: number
+        required: false
+        default: 65
       retry_attempts:
         description: Maximum attempts for an explicitly declared transient dependency failure (1-3)
         type: number
@@ -119,7 +124,7 @@ jobs:
   validation:
     name: Repository validation
     runs-on: ${{ fromJSON(inputs.runner_json) }}
-    timeout-minutes: 65
+    timeout-minutes: ${{ inputs.job_timeout_minutes }}
     outputs:
       result: ${{ steps.contract.outputs.result }}
       validated_sha: ${{ inputs.candidate_sha || github.sha }}

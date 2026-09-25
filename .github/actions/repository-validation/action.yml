@@ -29,7 +29,7 @@ inputs:
     required: false
     default: "[]"
   timeout_seconds:
-    description: Validation timeout from 1 to 3600 seconds
+    description: Validation timeout from 1 to 7200 seconds
     required: false
     default: "900"
   retry_attempts:

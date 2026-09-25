@@ -60,6 +60,16 @@ class ValidationGateContractTests(unittest.TestCase):
         for input_name in ("node_version", "npm_version", "pnpm_version"):
             self.assertIn(f"{input_name}: ${{{{ inputs.{input_name} }}}}", repository_validation)
 
+    def test_gate_propagates_job_timeout_to_repository_validation(self):
+        text = (ROOT / ".github/workflows/_validation-gate.yml").read_text()
+        inputs = text.split("    inputs:", 1)[1].split("    outputs:", 1)[0]
+        repository_validation = text.split("  repository-validation:", 1)[1].split(
+            "  security-suite:", 1
+        )[0]
+
+        self.assertIn("job_timeout_minutes:", inputs)
+        self.assertIn("job_timeout_minutes: ${{ inputs.job_timeout_minutes }}", repository_validation)
+
     def test_gate_exposes_and_forwards_security_exceptions_file(self):
         text = (ROOT / ".github/workflows/_validation-gate.yml").read_text()
         declared_inputs = text.split("    outputs:", 1)[0]

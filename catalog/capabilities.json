@@ -495,7 +495,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "d8329be55a6198f58812fbf72017c1af9012f783a6f042c9d38e777d6cb0de93",
+      "source_sha256": "cb90e816df0c3ac2fb3c8eb7b1260a4fbd28ad19508f1e343cea97e55008527f",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1630,6 +1630,7 @@
         "base_sha": "",
         "candidate_sha": "",
         "image_refs_json": "",
+        "job_timeout_minutes": "",
         "node_version": "",
         "npm_version": "",
         "pnpm_version": "",
@@ -1665,7 +1666,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "d387eac9bd312b221bed2d23b2ea917470b3bbc5721259119b295f4b0fcedbfe",
+      "source_sha256": "77419386a0596418eff0638b117f84e4caedcb3046ce413dc6d506f351262315",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -2022,6 +2023,7 @@
         "environment_name": "",
         "exceptions_file": "",
         "image_refs": "",
+        "job_timeout_minutes": "",
         "node_version": "",
         "npm_version": "",
         "pnpm_version": "",
@@ -2059,7 +2061,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "bb6c52e589f869cfa951cf921a50c931d8c47fbaa20fa5cb11740b0b66c3cfc7",
+      "source_sha256": "0e44586aa8e2844e2c24a3900e692233bef3dd389860bff70a94d9666c0de8b9",
       "trust_boundary": "trusted-pr"
     },
     {
