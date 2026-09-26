@@ -176,6 +176,23 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
             documentation,
         )
 
+    def test_build_workflow_exposes_scan_timeout_to_both_gates(self) -> None:
+        content = BUILD_WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "security_scan_timeout:\n"
+            "        description: Trivy --timeout per scan invocation; "
+            "raise for very large runtime images\n"
+            "        required: false\n"
+            "        type: string\n"
+            "        default: \"10m\"",
+            content,
+        )
+        self.assertEqual(
+            2,
+            content.count("scan_timeout: ${{ inputs.security_scan_timeout }}"),
+        )
+
     def test_control_jobs_can_run_on_self_hosted_without_changing_build_runner(self) -> None:
         content = BUILD_WORKFLOW.read_text(encoding="utf-8")
         documentation = BUILD_DOC.read_text(encoding="utf-8")

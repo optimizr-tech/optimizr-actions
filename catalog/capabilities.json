@@ -573,6 +573,7 @@
         "remediation_window_policy_file": "",
         "remediation_window_service_scope": "",
         "scan_ref": "",
+        "scan_timeout": "",
         "scan_type": "",
         "severity": "",
         "trivy_version": ""
@@ -615,7 +616,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "30955b630d52a01343b51afdb34eca3301c6bb33437aa2d5b29b9f5d3e177b3f",
+      "source_sha256": "821e08b99243e7f4e40a551b0359570584810b681f1603414baa57c18b211300",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1080,6 +1081,7 @@
         "sbom": "",
         "security_db_max_age_hours": "",
         "security_ignore_unfixed": "",
+        "security_scan_timeout": "",
         "security_severity": "",
         "security_trivy_version": "",
         "services_json": "",
@@ -1101,7 +1103,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "62bd2a702d308c94c71c63e0cd63729f946d3960f6244dccf72aedef7b77d60e",
+      "source_sha256": "318528db13395a051c85e719779902f0c25d23ec7cf8cec6101bacf1169f55f6",
       "trust_boundary": "trusted-push"
     },
     {
