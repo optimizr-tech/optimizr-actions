@@ -23,6 +23,10 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
         )[0]
         self.assertIn("default: v0.74.0", input_block)
         self.assertNotIn("default: v0.70.0", input_block)
+        self.assertEqual(
+            2,
+            content.count("trivy_version: ${{ inputs.security_trivy_version }}"),
+        )
 
         pins = ACTION_PINS_DOC.read_text(encoding="utf-8")
         self.assertIn("v0.74.0", pins)
