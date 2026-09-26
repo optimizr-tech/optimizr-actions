@@ -10,11 +10,29 @@ BUILD_WORKFLOW = ROOT / ".github/workflows/_container-build-publish.yml"
 ACTIONLINT_CONFIG = ROOT / ".github/actionlint.yaml"
 BUILD_DOC = ROOT / "docs/IMMUTABLE_CONTAINER_DEPLOY.md"
 GHCR_BUILD_DOC = ROOT / "docs/GHCR_IMAGE_BUILD_CONTRACT.md"
+ACTION_PINS_DOC = ROOT / "docs/ACTION_PINS.md"
 DEPLOY_WORKFLOW = ROOT / ".github/workflows/_vps-monorepo-deploy.yml"
 SELF_HOSTED_DEPLOY_WORKFLOW = ROOT / ".github/workflows/_vps-self-hosted-deploy.yml"
 
 
 class ContainerBuildPublishContractTests(unittest.TestCase):
+    def test_publisher_trivy_default_tracks_the_controlled_binary_release(self) -> None:
+        content = BUILD_WORKFLOW.read_text(encoding="utf-8")
+        input_block = content.split("      security_trivy_version:", 1)[1].split(
+            "      security_db_max_age_hours:", 1
+        )[0]
+        self.assertIn("default: v0.74.0", input_block)
+        self.assertNotIn("default: v0.70.0", input_block)
+        self.assertEqual(
+            2,
+            content.count("trivy_version: ${{ inputs.security_trivy_version }}"),
+        )
+
+        pins = ACTION_PINS_DOC.read_text(encoding="utf-8")
+        self.assertIn("v0.74.0", pins)
+        self.assertIn("vars.TRIVY_VERSION", pins)
+        self.assertIn("security_trivy_version", pins)
+
     def test_build_workflow_publishes_matrix_images_by_digest(self) -> None:
         self.assertTrue(BUILD_WORKFLOW.exists())
         content = BUILD_WORKFLOW.read_text(encoding="utf-8")

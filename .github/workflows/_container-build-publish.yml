@@ -89,7 +89,7 @@ on:
         description: Controlled Trivy release used before promotion
         required: false
         type: string
-        default: v0.70.0
+        default: v0.74.0
       security_db_max_age_hours:
         description: Maximum accepted age of the Trivy vulnerability database
         required: false
