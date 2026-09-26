@@ -183,6 +183,14 @@
       "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_container-build-publish.yml@v1"],
       "known_limitations": "Private GitHub artifact attestations require Enterprise Cloud; BuildKit provenance and SBOM remain enabled by default; persistent local BuildKit cache disk budget, cleanup, and same-service serialization are caller-managed"
     },
+    ".github/workflows/_container-candidate-promote.yml": {
+      "category": "security",
+      "runner": ["hosted", "self-hosted-persistent", "self-hosted-ephemeral"],
+      "trust_boundary": "trusted-push",
+      "evidence": "Revalidated quarantine digest, source-bound BuildKit provenance, exact-digest Trivy report, and immutable release manifest",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_container-candidate-promote.yml@v1"],
+      "known_limitations": "Caller must invoke from a protected push or workflow_dispatch and grant access to the target GHCR package; candidate provenance must expose the exact source repository and commit"
+    },
     ".github/workflows/_dependabot-security-automerge.yml": {
       "runner": ["hosted"],
       "trust_boundary": "trusted-push",

@@ -119,6 +119,10 @@ The controlled Trivy binary default and caller override are documented in
 [`ACTION_PINS.md`](ACTION_PINS.md); changing that version requires a consumer
 publish/security-gate run before its findings are treated as validated.
 
+For an already-built quarantine image, use the opt-in
+[`GHCR_CANDIDATE_REVALIDATION.md`](GHCR_CANDIDATE_REVALIDATION.md) contract to
+revalidate and promote its immutable digest without rebuilding it.
+
 ## Registry authentication
 
 The publish job uses the caller's short-lived `GITHUB_TOKEN` with

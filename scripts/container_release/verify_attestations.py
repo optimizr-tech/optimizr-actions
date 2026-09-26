@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 
 class AttestationError(ValueError):
@@ -58,6 +60,8 @@ def verify_attestation_bundle(
     provenance_payload: Any,
     *,
     required_count: int = 1,
+    expected_source_repository: str = "",
+    expected_source_sha: str = "",
 ) -> dict[str, int]:
     """Verify the index and the two required predicates for one exact digest."""
     counts = verify_attestation_index(index_payload, required_count=required_count)
@@ -69,13 +73,112 @@ def verify_attestation_bundle(
 
     if not isinstance(provenance_payload, dict) or not provenance_payload:
         raise AttestationError("provenance evidence is missing or invalid")
+    predicate = provenance_payload.get("predicate")
+    predicate = predicate if isinstance(predicate, dict) else provenance_payload
     if not (
-        isinstance(provenance_payload.get("buildType"), str)
-        or isinstance(provenance_payload.get("buildDefinition"), dict)
+        isinstance(predicate.get("buildType"), str)
+        or isinstance(predicate.get("buildDefinition"), dict)
     ):
         raise AttestationError("provenance evidence is missing SLSA metadata")
 
+    if bool(expected_source_repository) != bool(expected_source_sha):
+        raise AttestationError("expected source repository and SHA must be provided together")
+    if expected_source_repository:
+        verify_provenance_source(
+            provenance_payload,
+            expected_repository=expected_source_repository,
+            expected_sha=expected_source_sha,
+        )
+
     return {**counts, "sbom": 1, "provenance": 1}
+
+
+def _normalized_repository_uri(value: Any) -> tuple[str, str]:
+    if not isinstance(value, str) or not value.strip():
+        return "", ""
+    uri = value.strip()
+    if uri.startswith("git+"):
+        uri = uri[4:]
+    if "://" not in uri:
+        return "", ""
+    parsed = urlsplit(uri)
+    if parsed.scheme.lower() != "https":
+        return "", ""
+    path = parsed.path.rstrip("/")
+    revision = ""
+    match = re.search(r"(?:@|#)([0-9a-fA-F]{40,64})$", path)
+    if match:
+        revision = match.group(1).lower()
+        path = path[: match.start()]
+    if not revision and parsed.fragment:
+        match = re.fullmatch(r"([0-9a-fA-F]{40,64})", parsed.fragment)
+        if match:
+            revision = match.group(1).lower()
+    if path.lower().endswith(".git"):
+        path = path[:-4]
+    repository = f"https://{parsed.netloc.lower()}{path.lower()}".rstrip("/")
+    return repository, revision
+
+
+def _source_digest_values(value: Any) -> set[str]:
+    if not isinstance(value, dict):
+        return set()
+    return {
+        item.lower()
+        for item in value.values()
+        if isinstance(item, str) and re.fullmatch(r"[0-9a-fA-F]{40,64}", item)
+    }
+
+
+def verify_provenance_source(
+    provenance: dict[str, Any], *, expected_repository: str, expected_sha: str
+) -> None:
+    """Require an embedded BuildKit/SLSA source binding for one repo commit."""
+    if not re.fullmatch(r"[0-9a-fA-F]{40,64}", expected_sha):
+        raise AttestationError("expected source SHA must be a full hexadecimal commit")
+    expected_repo, _ = _normalized_repository_uri(expected_repository)
+    if not expected_repo:
+        raise AttestationError("expected source repository is invalid")
+    statement = provenance.get("predicate")
+    statement = statement if isinstance(statement, dict) else provenance
+    config_sources: list[dict[str, Any]] = []
+    candidates: list[dict[str, Any]] = []
+    definition = statement.get("buildDefinition")
+    if isinstance(definition, dict):
+        external = definition.get("externalParameters")
+        if isinstance(external, dict) and isinstance(external.get("configSource"), dict):
+            config_sources.append(external["configSource"])
+        dependencies = definition.get("resolvedDependencies")
+        if isinstance(dependencies, list):
+            candidates.extend(item for item in dependencies if isinstance(item, dict))
+    materials = statement.get("materials")
+    if isinstance(materials, list):
+        candidates.extend(item for item in materials if isinstance(item, dict))
+
+    expected_sha = expected_sha.lower()
+
+    def matches(candidate: dict[str, Any]) -> bool:
+        repository, uri_revision = _normalized_repository_uri(candidate.get("uri"))
+        if repository != expected_repo:
+            return False
+        digests = _source_digest_values(candidate.get("digest"))
+        if uri_revision and uri_revision != expected_sha:
+            return False
+        return expected_sha in digests or uri_revision == expected_sha
+
+    matching_config_sources = [
+        source
+        for source in config_sources
+        if _normalized_repository_uri(source.get("uri"))[0] == expected_repo
+    ]
+    if matching_config_sources:
+        if any(matches(source) for source in matching_config_sources):
+            return
+        raise AttestationError("provenance source does not match the expected repository and commit")
+    for candidate in candidates:
+        if matches(candidate):
+            return
+    raise AttestationError("provenance source does not match the expected repository and commit")
 
 
 def _read_json(path: Path, *, label: str) -> Any:
@@ -91,6 +194,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--sbom-input", type=Path, required=True)
     parser.add_argument("--provenance-input", type=Path, required=True)
     parser.add_argument("--required-count", type=int, default=1)
+    parser.add_argument("--expected-source-repository", default="")
+    parser.add_argument("--expected-source-sha", default="")
     return parser
 
 
@@ -101,6 +206,8 @@ def main() -> int:
         _read_json(args.sbom_input, label="SBOM"),
         _read_json(args.provenance_input, label="provenance"),
         required_count=args.required_count,
+        expected_source_repository=args.expected_source_repository,
+        expected_source_sha=args.expected_source_sha,
     )
     print(json.dumps(counts, sort_keys=True))
     return 0

@@ -7,6 +7,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD_WORKFLOW = ROOT / ".github/workflows/_container-build-publish.yml"
+REVALIDATE_WORKFLOW = ROOT / ".github/workflows/_container-candidate-promote.yml"
+REVALIDATE_DOC = ROOT / "docs/GHCR_CANDIDATE_REVALIDATION.md"
 ACTIONLINT_CONFIG = ROOT / ".github/actionlint.yaml"
 BUILD_DOC = ROOT / "docs/IMMUTABLE_CONTAINER_DEPLOY.md"
 GHCR_BUILD_DOC = ROOT / "docs/GHCR_IMAGE_BUILD_CONTRACT.md"
@@ -32,6 +34,53 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
         self.assertIn("v0.74.0", pins)
         self.assertIn("vars.TRIVY_VERSION", pins)
         self.assertIn("security_trivy_version", pins)
+
+    def test_candidate_revalidation_is_opt_in_and_gates_digest_promotion(self) -> None:
+        content = REVALIDATE_WORKFLOW.read_text(encoding="utf-8")
+        for needle in (
+            "workflow_call:",
+            "candidate_digest:",
+            "candidate_sha:",
+            "security_exceptions_file:",
+            "default: v0.74.0",
+            "Validate candidate exception scopes",
+            "validate_candidate_exceptions.py",
+            "steps.exceptions.outcome == 'success'",
+            "--tag \"$RELEASE_TAG\"",
+            "--tag \"$SOURCE_TAG\"",
+            "packages: write",
+            "REF_PROTECTED: ${{ github.ref_protected }}",
+            "runner_json must be a non-empty JSON string array",
+            "candidate promotion requires a Linux self-hosted runner",
+            "candidate_digest must be a full immutable sha256 digest",
+            "image_repository must include an owner namespace and image name",
+            'CANDIDATE_IMAGE: ${{ steps.validate.outputs.candidate_image }}',
+            "--expected-source-repository",
+            "--expected-source-sha",
+            "exceptions_file: ${{ inputs.security_exceptions_file",
+            "steps.attestations.outcome == 'success'",
+            "steps.security.outputs.result == 'passed'",
+            "steps.promote.outcome == 'success'",
+            "Create verified immutable release manifest",
+            '"attestation_verified": True',
+            '"published": True',
+            "Upload candidate scan evidence",
+        ):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, content)
+        self.assertNotIn("default: true", content)
+        self.assertNotIn("ignore_unfixed:", content)
+        self.assertNotIn("--tag latest", content)
+        documentation = REVALIDATE_DOC.read_text(encoding="utf-8")
+        self.assertIn("protected branch", documentation)
+        self.assertIn("candidate_digest", documentation)
+        self.assertIn("security_exceptions_file", documentation)
+        self.assertIn("Linux self-hosted runner", documentation)
+        self.assertIn("vars.TRIVY_VERSION", documentation)
+
+    def test_candidate_revalidation_pins_third_party_actions(self) -> None:
+        content = REVALIDATE_WORKFLOW.read_text(encoding="utf-8")
+        self.assertNotRegex(content, r"uses:\s+(?:actions|docker)/[^@\s]+@v\d")
 
     def test_build_workflow_publishes_matrix_images_by_digest(self) -> None:
         self.assertTrue(BUILD_WORKFLOW.exists())
@@ -162,14 +211,21 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
 
     def test_actionlint_exception_is_scoped_to_exact_reusable_identity(self) -> None:
         content = ACTIONLINT_CONFIG.read_text(encoding="utf-8")
-
-        workflow_start = content.index("  .github/workflows/_container-build-publish.yml:")
-        workflow_block = content[workflow_start:].split("\n  .github/workflows/", 1)[0]
-
-        self.assertIn(
-            'property "workflow_(repository|sha)" is not defined in object type .+',
-            workflow_block,
-        )
+        for workflow_name in (
+            "_container-build-publish.yml",
+            "_container-candidate-promote.yml",
+        ):
+            with self.subTest(workflow_name=workflow_name):
+                workflow_start = content.index(
+                    f"  .github/workflows/{workflow_name}:"
+                )
+                workflow_block = content[workflow_start:].split(
+                    "\n  .github/workflows/", 1
+                )[0]
+                self.assertIn(
+                    'property "workflow_(repository|sha)" is not defined in object type .+',
+                    workflow_block,
+                )
 
     def test_build_workflow_exposes_unfixed_security_policy_to_both_gates(self) -> None:
         content = BUILD_WORKFLOW.read_text(encoding="utf-8")

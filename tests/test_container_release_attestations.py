@@ -67,6 +67,121 @@ class VerifyAttestationsTests(unittest.TestCase):
         with self.assertRaisesRegex(AttestationError, "not an OCI index"):
             verify_attestation_index({"config": {}})
 
+    def test_requires_expected_source_repository_and_commit_when_requested(self) -> None:
+        source_sha = "a" * 40
+        provenance = {
+            "_type": "https://in-toto.io/Statement/v1",
+            "predicateType": "https://slsa.dev/provenance/v1",
+            "predicate": {
+                "buildDefinition": {
+                    "externalParameters": {
+                        "configSource": {
+                            "uri": "git+https://github.com/acme/service.git@" + source_sha,
+                            "digest": {"gitCommit": source_sha},
+                        }
+                    }
+                }
+            },
+        }
+
+        result = verify_attestation_bundle(
+            {"manifests": [_manifest(), _manifest(attestation=True)]},
+            {"spdxVersion": "SPDX-2.3", "packages": []},
+            provenance,
+            expected_source_repository="https://github.com/acme/service",
+            expected_source_sha=source_sha,
+        )
+
+        self.assertEqual(1, result["provenance"])
+
+    def test_rejects_provenance_for_a_different_source_commit(self) -> None:
+        source_sha = "a" * 40
+        provenance = {
+            "predicate": {
+                "buildDefinition": {
+                    "externalParameters": {
+                        "configSource": {
+                            "uri": "https://github.com/acme/service",
+                            "digest": {"gitCommit": "b" * 40},
+                        }
+                    }
+                }
+            }
+        }
+
+        with self.assertRaisesRegex(AttestationError, "source does not match"):
+            verify_attestation_bundle(
+                {"manifests": [_manifest(), _manifest(attestation=True)]},
+                {"spdxVersion": "SPDX-2.3", "packages": []},
+                provenance,
+                expected_source_repository="https://github.com/acme/service",
+                expected_source_sha=source_sha,
+            )
+
+    def test_rejects_non_https_source_uri_even_when_commit_matches(self) -> None:
+        source_sha = "a" * 40
+        provenance = {
+            "predicate": {
+                "buildDefinition": {
+                    "externalParameters": {
+                        "configSource": {
+                            "uri": "http://github.com/acme/service",
+                            "digest": {"gitCommit": source_sha},
+                        }
+                    }
+                }
+            }
+        }
+
+        with self.assertRaisesRegex(AttestationError, "source does not match"):
+            verify_attestation_bundle(
+                {"manifests": [_manifest(), _manifest(attestation=True)]},
+                {"spdxVersion": "SPDX-2.3", "packages": []},
+                provenance,
+                expected_source_repository="https://github.com/acme/service",
+                expected_source_sha=source_sha,
+            )
+
+    def test_rejects_provenance_without_a_source_binding(self) -> None:
+        with self.assertRaisesRegex(AttestationError, "source does not match"):
+            verify_attestation_bundle(
+                {"manifests": [_manifest(), _manifest(attestation=True)]},
+                {"spdxVersion": "SPDX-2.3", "packages": []},
+                {"buildType": "https://mobyproject.org/buildkit@v1"},
+                expected_source_repository="https://github.com/acme/service",
+                expected_source_sha="a" * 40,
+            )
+
+    def test_rejects_matching_material_when_primary_source_commit_differs(self) -> None:
+        source_sha = "a" * 40
+        provenance = {
+            "predicate": {
+                "buildDefinition": {
+                    "externalParameters": {
+                        "configSource": {
+                            "uri": "https://github.com/acme/service",
+                            "digest": {"gitCommit": "b" * 40},
+                        }
+                    },
+                    "resolvedDependencies": [
+                        {
+                            "uri": "https://github.com/acme/service",
+                            "digest": {"gitCommit": source_sha},
+                        }
+                    ],
+                }
+            }
+        }
+
+        with self.assertRaisesRegex(AttestationError, "source does not match"):
+            verify_attestation_bundle(
+                {"manifests": [_manifest(), _manifest(attestation=True)]},
+                {"spdxVersion": "SPDX-2.3", "packages": []},
+                provenance,
+                expected_source_repository="https://github.com/acme/service",
+                expected_source_sha=source_sha,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
