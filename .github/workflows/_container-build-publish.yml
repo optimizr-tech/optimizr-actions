@@ -95,6 +95,11 @@ on:
         required: false
         type: string
         default: "30"
+      security_scan_timeout:
+        description: Trivy --timeout per scan invocation; raise for very large runtime images
+        required: false
+        type: string
+        default: "10m"
       security_ignore_unfixed:
         description: Explicitly allow vendor-will-not-fix findings to pass the pre-publication gates
         required: false
@@ -336,6 +341,7 @@ jobs:
           ignore_unfixed: ${{ inputs.security_ignore_unfixed }}
           trivy_version: ${{ inputs.security_trivy_version }}
           db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
+          scan_timeout: ${{ inputs.security_scan_timeout }}
           evidence_dir: artifacts/security-gate/prepublish/${{ env.SERVICE_NAME }}
 
       - name: Pull exact quarantine digest for local scan
@@ -361,6 +367,7 @@ jobs:
           ignore_unfixed: ${{ inputs.security_ignore_unfixed }}
           trivy_version: ${{ inputs.security_trivy_version }}
           db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
+          scan_timeout: ${{ inputs.security_scan_timeout }}
           evidence_dir: artifacts/security-gate/prepromotion/${{ env.SERVICE_NAME }}
 
       - name: Promote verified image by digest

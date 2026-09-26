@@ -42,6 +42,10 @@ inputs:
     description: "Maximum accepted age of the downloaded vulnerability database"
     required: false
     default: "30"
+  scan_timeout:
+    description: "Trivy --timeout for every scan invocation (Go duration such as 5m or 10m); raise for very large images"
+    required: false
+    default: "10m"
   evidence_dir:
     description: "Directory for reports and sanitized evidence"
     required: false
@@ -169,6 +173,7 @@ runs:
         INPUT_EXCEPTIONS_FILE: ${{ inputs.exceptions_file }}
         INPUT_BASELINE_FILE: ${{ inputs.baseline_file }}
         INPUT_DB_MAX_AGE_HOURS: ${{ inputs.db_max_age_hours }}
+        INPUT_SCAN_TIMEOUT: ${{ inputs.scan_timeout }}
         INPUT_EVIDENCE_DIR: ${{ inputs.evidence_dir }}
         INPUT_REMEDIATION_WINDOW_ENABLED: ${{ inputs.remediation_window_enabled }}
         INPUT_REMEDIATION_WINDOW_POLICY_FILE: ${{ inputs.remediation_window_policy_file }}
@@ -432,6 +437,7 @@ runs:
             --severity "$INPUT_SEVERITY"
             --show-suppressed
             --scanners "$scanners"
+            --timeout "$INPUT_SCAN_TIMEOUT"
           )
           blocking_args=("${report_args[@]}" --ignore-unfixed)
 
