@@ -1108,6 +1108,42 @@
     },
     {
       "category": "security",
+      "evidence": "Revalidated quarantine digest, source-bound BuildKit provenance, exact-digest Trivy report, and immutable release manifest",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_container-candidate-promote.yml@v1"
+      ],
+      "inputs": {
+        "artifact_retention_days": "",
+        "candidate_digest": "",
+        "candidate_sha": "",
+        "image_repository": "",
+        "runner_json": "",
+        "security_db_max_age_hours": "",
+        "security_exceptions_file": "",
+        "security_severity": "",
+        "security_trivy_version": ""
+      },
+      "kind": "workflow",
+      "known_limitations": "Caller must invoke from a protected push or workflow_dispatch and grant access to the target GHCR package; candidate provenance must expose the exact source repository and commit",
+      "maturity": "stable-v1",
+      "metadata_status": "classified",
+      "outputs": {
+        "image_ref": "",
+        "manifest_artifact": "",
+        "manifest_json": ""
+      },
+      "path": ".github/workflows/_container-candidate-promote.yml",
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "7894bbd898afaef4a613db6878ce4ac31c015b897e8b987375608a24c6dd2f31",
+      "trust_boundary": "trusted-push"
+    },
+    {
+      "category": "security",
       "evidence": "Dependabot security automerge decisions bounded by minor/patch policy",
       "examples": [],
       "inputs": {
