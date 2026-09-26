@@ -115,6 +115,9 @@ vendor-will-not-fix or deferred findings as signal-only. The input defaults to
 `false` and is passed to both the local pre-publication and exact-digest
 pre-promotion gates. It never permits fixed vulnerabilities, misconfigurations,
 secrets, malformed evidence, transport failures, or scanner errors to pass.
+The controlled Trivy binary default and caller override are documented in
+[`ACTION_PINS.md`](ACTION_PINS.md); changing that version requires a consumer
+publish/security-gate run before its findings are treated as validated.
 
 ## Registry authentication
 
