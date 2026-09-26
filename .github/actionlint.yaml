@@ -24,6 +24,9 @@ paths:
   .github/workflows/_container-build-publish.yml:
     ignore:
       - 'property "workflow_(repository|sha)" is not defined in object type .+'
+  .github/workflows/_container-candidate-promote.yml:
+    ignore:
+      - 'property "workflow_(repository|sha)" is not defined in object type .+'
   .github/workflows/_testsprite.yml:
     ignore:
       - 'property "workflow_(repository|sha)" is not defined in object type .+'

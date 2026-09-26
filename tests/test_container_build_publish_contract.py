@@ -211,14 +211,21 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
 
     def test_actionlint_exception_is_scoped_to_exact_reusable_identity(self) -> None:
         content = ACTIONLINT_CONFIG.read_text(encoding="utf-8")
-
-        workflow_start = content.index("  .github/workflows/_container-build-publish.yml:")
-        workflow_block = content[workflow_start:].split("\n  .github/workflows/", 1)[0]
-
-        self.assertIn(
-            'property "workflow_(repository|sha)" is not defined in object type .+',
-            workflow_block,
-        )
+        for workflow_name in (
+            "_container-build-publish.yml",
+            "_container-candidate-promote.yml",
+        ):
+            with self.subTest(workflow_name=workflow_name):
+                workflow_start = content.index(
+                    f"  .github/workflows/{workflow_name}:"
+                )
+                workflow_block = content[workflow_start:].split(
+                    "\n  .github/workflows/", 1
+                )[0]
+                self.assertIn(
+                    'property "workflow_(repository|sha)" is not defined in object type .+',
+                    workflow_block,
+                )
 
     def test_build_workflow_exposes_unfixed_security_policy_to_both_gates(self) -> None:
         content = BUILD_WORKFLOW.read_text(encoding="utf-8")
