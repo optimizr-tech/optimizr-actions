@@ -81,7 +81,7 @@ scanner to avoid maintaining a second database cache.
 | `security_severity` | `HIGH,CRITICAL` | Severities that block deployment. |
 | `security_ignore_unfixed` | `false` | Deprecated compatibility input; only the retry action's narrow `compatibility_allowed=true` result can use it. |
 | `security_exceptions_file` | empty | Optional Optimizr exception-policy JSON path. |
-| `security_trivy_version` | `v0.70.0` | Controlled Trivy version. |
+| `security_trivy_version` | `v0.74.0` | Controlled Trivy version. |
 | `security_db_max_age_hours` | `30` | Maximum accepted database download age. |
 | `security_rebuild_retry_enabled` | `true` | Permit one deterministic pull, rebuild and rescan for actionable image findings. |
 | `security_rebuild_retry_no_cache` | `true` | Disable the build cache during the bounded remediation retry. |

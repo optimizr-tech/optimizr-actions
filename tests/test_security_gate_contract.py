@@ -60,7 +60,7 @@ class SecurityGateContractTests(unittest.TestCase):
             "aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567",
             content,
         )
-        self.assertIn('default: "v0.70.0"', content)
+        self.assertIn('default: "v0.74.0"', content)
         self.assertIn('default: "true"', content)
         self.assertIn("--download-db-only", content)
         self.assertIn("scripts/security_gate/cache.py", content)

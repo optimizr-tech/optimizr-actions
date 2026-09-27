@@ -12,7 +12,7 @@ inputs:
   trivy_version:
     description: Controlled Trivy version
     required: false
-    default: v0.70.0
+    default: v0.74.0
   node_version:
     description: Controlled Node.js version used for Node lock validation
     required: false
