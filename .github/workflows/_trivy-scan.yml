@@ -93,7 +93,7 @@ jobs:
           scan_ref: ${{ inputs.scan_ref }}
           severity: ${{ inputs.severity }}
           exit_code: ${{ inputs.exit_code }}
-          trivy_version: v0.70.0
+          trivy_version: v0.74.0
       - name: Upload Trivy scan results as artifact
         if: always() && inputs.upload_artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

@@ -94,7 +94,7 @@ def main() -> int:
     for name in ("root", "path"):
         subparser = subparsers.add_parser(name)
         subparser.add_argument("--repository", required=True)
-        subparser.add_argument("--trivy-version", default="v0.70.0")
+        subparser.add_argument("--trivy-version", default="v0.74.0")
 
     prepare_parser = subparsers.add_parser("prepare")
     prepare_parser.add_argument("--repository", required=True)

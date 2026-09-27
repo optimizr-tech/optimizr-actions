@@ -21,7 +21,7 @@ inputs:
   trivy_version:
     description: Controlled Trivy release
     required: false
-    default: v0.70.0
+    default: v0.74.0
 
 runs:
   using: composite
