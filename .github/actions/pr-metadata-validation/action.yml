@@ -22,6 +22,10 @@ inputs:
   head_sha:
     description: Expected pull request head SHA
     required: true
+  scan_changed_files:
+    description: When true, added lines of changed source files are checked for mojibake sequences
+    required: false
+    default: "false"
 outputs:
   result:
     description: passed when all metadata checks succeed
@@ -43,4 +47,5 @@ runs:
         INPUT_PR_BODY: ${{ inputs.pr_body }}
         INPUT_BASE_SHA: ${{ inputs.base_sha }}
         INPUT_HEAD_SHA: ${{ inputs.head_sha }}
+        INPUT_SCAN_CHANGED_FILES: ${{ inputs.scan_changed_files }}
       run: python3 "$GITHUB_ACTION_PATH/validate.py"

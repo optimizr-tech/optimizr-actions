@@ -121,6 +121,47 @@ class PRMetadataValidationTests(unittest.TestCase):
         self.assertTrue(any("not open" in item.message for item in closed))
         self.assertTrue(any("already merged" in item.message for item in merged))
 
+    def test_changed_files_rejects_added_mojibake(self):
+        corrupted = "per\u00c3\u00ado"
+        files = [{"filename": "ui/app.tsx", "patch": f"@@ -1 +1 @@\n-ok\n+{corrupted}"}]
+        failures = module.validate_changed_files(files)
+        self.assertTrue(any("ui/app.tsx" in item.message for item in failures))
+        self.assertTrue(any("mojibake" in item.message for item in failures))
+
+    def test_changed_files_allow_removed_corruption_and_markdown(self):
+        corrupted = "per\u00c3\u00ado"
+        files = [
+            {"filename": "ui/app.tsx", "patch": f"@@ -1 +1 @@\n-{corrupted}\n+per\u00edodo"},
+            {"filename": "docs/CONTRIBUTING.md", "patch": f"@@ -1 +1 @@\n+{corrupted}"},
+        ]
+        self.assertEqual([], module.validate_changed_files(files))
+
+    def test_changed_files_skips_lockfiles_binaries_and_clean_patches(self):
+        corrupted = "per\u00c3\u00ado"
+        files = [
+            {"filename": "package-lock.json", "patch": f"@@ -1 +1 @@\n+{corrupted}"},
+            {"filename": "assets/logo.png"},
+            {"filename": "src/clean.ts", "patch": "@@ -1 +1 @@\n+const x = 1"},
+        ]
+        self.assertEqual([], module.validate_changed_files(files))
+
+    def test_fetch_pr_files_is_bounded_and_paginates(self):
+        calls = []
+        original = module._request_json
+        try:
+            def fake(url, token):
+                calls.append(url)
+                query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+                if query.get("page") == ["1"]:
+                    return [{"filename": f"f{i}.ts"} for i in range(100)]
+                return [{"filename": "last.ts"}]
+            module._request_json = fake
+            files = module.fetch_pr_files("https://api.github.test", "owner/repo", 7, "token")
+        finally:
+            module._request_json = original
+        self.assertEqual(101, len(files))
+        self.assertEqual(2, len(calls))
+
 
 if __name__ == "__main__":
     unittest.main()

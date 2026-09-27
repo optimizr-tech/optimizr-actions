@@ -28,6 +28,11 @@ on:
       head_sha:
         required: true
         type: string
+      scan_changed_files:
+        description: When true, added lines of changed source files are checked for mojibake sequences
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -78,3 +83,4 @@ jobs:
           pr_body: ${{ inputs.pr_body }}
           base_sha: ${{ inputs.base_sha }}
           head_sha: ${{ inputs.head_sha }}
+          scan_changed_files: ${{ inputs.scan_changed_files }}

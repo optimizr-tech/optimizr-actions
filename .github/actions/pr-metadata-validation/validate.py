@@ -43,6 +43,15 @@ SHORTCODE_RE = re.compile(r"^:([a-z0-9_+\-]+):\s+(.+)$")
 PORTUGUESE_DIACRITICS_RE = re.compile(r"[àáâãäåèéêëìíîïòóôõöùúûüçñÀÁÂÃÉÍÓÔÕÚÇ]")
 MOJIBAKE_RE = re.compile(r"ðŸ|Ã[\x80-\xBF]|â€|Â[\x80-\xBF]")
 CORRUPT_PATH_RE = re.compile(r"\\(origin/|assets/|release\.yml|\.releaserc|main\\|dev\\)")
+# Source extensions scanned in added PR lines (docs/markdown excluded on
+# purpose: repair guides intentionally quote corrupted sequences).
+SCAN_FILE_EXTENSIONS = frozenset({
+    ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".rb", ".go", ".rs",
+    ".sh", ".bash", ".ps1", ".css", ".scss", ".html", ".vue", ".svelte",
+    ".yml", ".yaml", ".json", ".toml", ".sql", ".graphql",
+})
+# Lockfiles ship generated third-party text; never scan them.
+SCAN_EXCLUDED_SUFFIXES = ("lock.yaml", "lock.json", "lock.yml")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 SKIPPED_COMMIT_PREFIXES = ("Merge ", "Revert ", "fixup!", "squash!")
 AI_COAUTHOR_RE = re.compile(
@@ -127,6 +136,53 @@ def validate_commit_message(message: str, label: str) -> list[ValidationFailure]
     return []
 
 
+def _is_scanned_source_path(path: str) -> bool:
+    name = path.rsplit("/", 1)[-1]
+    if name.endswith(SCAN_EXCLUDED_SUFFIXES):
+        return False
+    return os.path.splitext(name)[1].lower() in SCAN_FILE_EXTENSIONS
+
+
+def validate_changed_files(files: list) -> list[ValidationFailure]:
+    """Reject double-encoded UTF-8 on added source lines (no checkout needed).
+
+    Only ``+`` lines are checked so encoding-repair PRs that *remove*
+    corrupted sequences still pass.
+    """
+    failures: list[ValidationFailure] = []
+    for item in files:
+        if not isinstance(item, dict):
+            continue
+        path = str(item.get("filename") or "")
+        if not path or not _is_scanned_source_path(path):
+            continue
+        patch = item.get("patch")
+        if not isinstance(patch, str) or not patch:
+            continue
+        added = "\n".join(
+            line[1:]
+            for line in patch.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        if not added:
+            continue
+        if MOJIBAKE_RE.search(added):
+            failures.append(
+                ValidationFailure(
+                    "changed files",
+                    f"{path}: added lines contain mojibake sequences",
+                )
+            )
+        elif CORRUPT_PATH_RE.search(added):
+            failures.append(
+                ValidationFailure(
+                    "changed files",
+                    f"{path}: added lines contain corrupted PowerShell paths",
+                )
+            )
+    return failures
+
+
 def _request_json(url: str, token: str) -> object:
     request = urllib.request.Request(
         url,
@@ -161,6 +217,19 @@ def fetch_pr_metadata(api_url: str, repository: str, pr_number: int, token: str)
         if len(payload) < 100:
             return pr, commits
     raise RuntimeError("PR has more than 1000 commits; metadata validation is bounded")
+
+
+def fetch_pr_files(api_url: str, repository: str, pr_number: int, token: str) -> list[dict]:
+    root = f"{_repository_api_root(api_url, repository)}/pulls/{pr_number}/files"
+    files: list[dict] = []
+    for page in range(1, 11):
+        payload = _request_json(f"{root}?per_page=100&page={page}", token)
+        if not isinstance(payload, list):
+            raise RuntimeError("GitHub PR files response is not a list")
+        files.extend(item for item in payload if isinstance(item, dict))
+        if len(payload) < 100:
+            return files
+    raise RuntimeError("PR changes more than 1000 files; metadata validation is bounded")
 
 
 def fetch_branch_history(
@@ -341,6 +410,31 @@ def main() -> int:
         if not subject or subject.startswith(SKIPPED_COMMIT_PREFIXES):
             continue
         failures.extend(validate_subject(subject, f"commit {index}"))
+
+    scan_changed = os.environ.get("INPUT_SCAN_CHANGED_FILES", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if scan_changed:
+        try:
+            changed_files = fetch_pr_files(api_url, repository, pr_number, token)
+        except (
+            urllib.error.URLError,
+            urllib.error.HTTPError,
+            TimeoutError,
+            RuntimeError,
+            json.JSONDecodeError,
+        ) as exc:
+            failures.append(
+                ValidationFailure(
+                    "changed files",
+                    f"unable to fetch PR files: {type(exc).__name__}",
+                )
+            )
+        else:
+            failures.extend(validate_changed_files(changed_files))
 
     if failures:
         for failure in failures:
