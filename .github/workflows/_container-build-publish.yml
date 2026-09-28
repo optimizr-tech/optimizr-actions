@@ -209,6 +209,14 @@ jobs:
               for field, value in (("context", context), ("dockerfile", dockerfile)):
                   if not isinstance(value, str) or not value or value.startswith("/") or ".." in value.split("/"):
                       raise SystemExit(f"service {name} has an unsafe {field}")
+              policy = service.get("security_exceptions_file", "")
+              if (
+                  not isinstance(policy, str)
+                  or len(policy) > 1024
+                  or (policy and not re.fullmatch(r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*", policy))
+                  or any(part in {".", ".."} for part in policy.split("/"))
+              ):
+                  raise SystemExit(f"service {name} has an unsafe security_exceptions_file")
               target = service.get("target", "")
               if not isinstance(target, str) or "\n" in target:
                   raise SystemExit(f"service {name} has an invalid target")
@@ -339,6 +347,7 @@ jobs:
           docker_mode: direct
           severity: ${{ inputs.security_severity }}
           ignore_unfixed: ${{ inputs.security_ignore_unfixed }}
+          exceptions_file: ${{ matrix.service.security_exceptions_file || '' }}
           trivy_version: ${{ inputs.security_trivy_version }}
           db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
           scan_timeout: ${{ inputs.security_scan_timeout }}
@@ -365,6 +374,7 @@ jobs:
           docker_mode: direct
           severity: ${{ inputs.security_severity }}
           ignore_unfixed: ${{ inputs.security_ignore_unfixed }}
+          exceptions_file: ${{ matrix.service.security_exceptions_file || '' }}
           trivy_version: ${{ inputs.security_trivy_version }}
           db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
           scan_timeout: ${{ inputs.security_scan_timeout }}

@@ -142,6 +142,19 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
         self.assertIn("load: ${{ !inputs.push }}", content)
         self.assertIn("candidate-", content)
 
+    def test_matrix_security_gates_use_each_services_reviewed_exception_policy(self) -> None:
+        content = BUILD_WORKFLOW.read_text(encoding="utf-8")
+        build_job = content[content.index("  build:") : content.index("  aggregate:")]
+
+        self.assertIn('policy = service.get("security_exceptions_file", "")', content)
+        self.assertIn("has an unsafe security_exceptions_file", content)
+        self.assertEqual(
+            2,
+            build_job.count(
+                "exceptions_file: ${{ matrix.service.security_exceptions_file || '' }}"
+            ),
+        )
+
     def test_matrix_build_job_has_bounded_timeout_and_service_evidence(self) -> None:
         content = BUILD_WORKFLOW.read_text(encoding="utf-8")
         build_job = content[content.index("  build:") : content.index("  aggregate:")]
