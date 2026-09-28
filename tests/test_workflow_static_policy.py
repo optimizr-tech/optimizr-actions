@@ -99,7 +99,8 @@ class WorkflowStaticPolicyTests(unittest.TestCase):
                     content.index("Install Node.js"),
                     content.index("Install pnpm"),
                 )
-                self.assertIn("node-version: 20", content)
+                self.assertIn("node-version: 24", content)
+                self.assertNotIn("node-version: 20", content)
                 self.assertNotIn("standalone: true", content)
 
     def test_release_gate_pins_validation_images_by_digest(self) -> None:
