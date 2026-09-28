@@ -13,6 +13,11 @@ on:
         required: false
         type: string
         default: none
+      trivy_cache_scope:
+        description: repository keeps isolated caches; shared reuses the versioned vulnerability DB on a persistent runner
+        required: false
+        type: string
+        default: repository
       scan_type:
         description: "Tipo: fs (filesystem) ou image"
         required: false
@@ -94,6 +99,7 @@ jobs:
           severity: ${{ inputs.severity }}
           exit_code: ${{ inputs.exit_code }}
           trivy_version: v0.74.0
+          cache_scope: ${{ inputs.self_hosted_mode == 'ephemeral-pr' && 'repository' || inputs.trivy_cache_scope }}
       - name: Upload Trivy scan results as artifact
         if: always() && inputs.upload_artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

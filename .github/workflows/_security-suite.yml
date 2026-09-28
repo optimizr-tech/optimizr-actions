@@ -57,6 +57,11 @@ on:
         required: false
         type: string
         default: v0.74.0
+      trivy_cache_scope:
+        description: repository keeps isolated caches; shared reuses the versioned vulnerability DB on a persistent runner
+        required: false
+        type: string
+        default: repository
       node_version:
         description: Controlled Node.js version used by dependency policy
         required: false
@@ -208,6 +213,7 @@ jobs:
       ignore_unfixed: false
       exceptions_file: ${{ inputs.exceptions_file }}
       trivy_version: ${{ inputs.trivy_version }}
+      trivy_cache_scope: ${{ inputs.self_hosted_mode == 'ephemeral-pr' && 'repository' || inputs.trivy_cache_scope }}
       artifact_name: security-suite-filesystem
       retention_days: ${{ inputs.retention_days }}
 
@@ -222,6 +228,7 @@ jobs:
       working_directory: ${{ inputs.dependency_working_directory }}
       policy_file: ${{ inputs.dependency_policy_file }}
       trivy_version: ${{ inputs.trivy_version }}
+      trivy_cache_scope: ${{ inputs.self_hosted_mode == 'ephemeral-pr' && 'repository' || inputs.trivy_cache_scope }}
       node_version: ${{ inputs.node_version }}
       npm_version: ${{ inputs.npm_version }}
       artifact_name: security-suite-dependencies
@@ -250,6 +257,7 @@ jobs:
       self_hosted_mode: ${{ inputs.self_hosted_mode }}
       image_refs: ${{ inputs.image_refs }}
       trivy_version: ${{ inputs.trivy_version }}
+      trivy_cache_scope: ${{ inputs.self_hosted_mode == 'ephemeral-pr' && 'repository' || inputs.trivy_cache_scope }}
       artifact_name: security-suite-supply-chain
       retention_days: ${{ inputs.retention_days }}
 

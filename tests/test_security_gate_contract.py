@@ -13,7 +13,73 @@ def read(path: str) -> str:
 
 
 class SecurityGateContractTests(unittest.TestCase):
-    def test_trivy_actions_use_one_versioned_repository_cache(self) -> None:
+    def test_shared_trivy_database_is_opt_in_and_forwarded_by_workflows(self) -> None:
+        actions = (
+            ".github/actions/security-gate/action.yml",
+            ".github/actions/dependency-policy/action.yml",
+            ".github/actions/supply-chain-evidence/action.yml",
+            ".github/actions/trivy-scan/action.yml",
+        )
+        for action in actions:
+            with self.subTest(action=action):
+                content = read(action)
+                self.assertIn("  cache_scope:", content)
+                self.assertIn("default: repository", content)
+                self.assertIn("CACHE_SCOPE: ${{ inputs.cache_scope }}", content)
+                self.assertIn('source "$action_root/scripts/security_gate/trivy-cache.sh"', content)
+                self.assertIn("trivy_cache_setup", content)
+
+        helper = read("scripts/security_gate/trivy-cache.sh")
+        self.assertIn('--cache-scope "$cache_scope"', helper)
+        self.assertIn("flock -x 10", helper)
+        self.assertIn("flock -x 9", helper)
+        self.assertIn("flock -s 9", helper)
+        self.assertIn("flock -u 10", helper)
+        self.assertIn("--skip-db-update", helper)
+        self.assertIn("invalidate-shared-db", helper)
+
+        reusable_workflows = (
+            ".github/workflows/_security-gate.yml",
+            ".github/workflows/_dependency-policy.yml",
+            ".github/workflows/_supply-chain-evidence.yml",
+            ".github/workflows/_trivy-scan.yml",
+        )
+        for workflow in reusable_workflows:
+            with self.subTest(workflow=workflow):
+                content = read(workflow)
+                self.assertIn("trivy_cache_scope:", content)
+                self.assertIn("default: repository", content)
+                self.assertIn(
+                    "cache_scope: ${{ inputs.self_hosted_mode == 'ephemeral-pr' && 'repository' || inputs.trivy_cache_scope }}",
+                    content,
+                )
+
+        for workflow in (
+            ".github/workflows/_vps-self-hosted-deploy.yml",
+            ".github/workflows/_vps-monorepo-deploy.yml",
+            ".github/workflows/_container-build-publish.yml",
+            ".github/workflows/_container-candidate-promote.yml",
+        ):
+            with self.subTest(workflow=workflow):
+                content = read(workflow)
+                self.assertIn("security_trivy_cache_scope:", content)
+                self.assertIn("default: repository", content)
+                self.assertIn(
+                    "cache_scope: ${{ inputs.security_trivy_cache_scope }}", content
+                )
+
+        security_suite = read(".github/workflows/_security-suite.yml")
+        self.assertIn("trivy_cache_scope:", security_suite)
+        self.assertIn("default: repository", security_suite)
+        self.assertIn(
+            "trivy_cache_scope: ${{ inputs.self_hosted_mode == 'ephemeral-pr' && 'repository' || inputs.trivy_cache_scope }}",
+            security_suite,
+        )
+        validation_gate = read(".github/workflows/_validation-gate.yml")
+        self.assertIn("trivy_cache_scope:", validation_gate)
+        self.assertIn("trivy_cache_scope: ${{ inputs.trivy_cache_scope }}", validation_gate)
+
+    def test_trivy_actions_use_governed_versioned_cache_helper(self) -> None:
         for action in (
             ".github/actions/security-gate/action.yml",
             ".github/actions/dependency-policy/action.yml",
@@ -22,10 +88,8 @@ class SecurityGateContractTests(unittest.TestCase):
         ):
             with self.subTest(action=action):
                 content = read(action)
-                self.assertIn('cache.py" path', content)
-                self.assertIn('--trivy-version "$TRIVY_VERSION"', content)
-                self.assertIn("flock -x 9", content)
-                self.assertIn('cache.py" prepare', content)
+                self.assertIn("trivy_cache_setup", content)
+                self.assertIn('"${OPTIMIZR_TRIVY_DB_ARGS[@]}"', content)
 
     def test_legacy_trivy_workflow_uses_the_shared_cache_contract(self) -> None:
         content = read(".github/workflows/_trivy-scan.yml")
@@ -63,9 +127,11 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertIn('default: "v0.74.0"', content)
         self.assertIn('default: "true"', content)
         self.assertIn("--download-db-only", content)
-        self.assertIn("scripts/security_gate/cache.py", content)
-        self.assertIn("flock -x 9", content)
-        self.assertIn("chmod 700", content)
+        self.assertIn('source "$action_root/scripts/security_gate/trivy-cache.sh"', content)
+        self.assertIn("trivy_cache_setup", content)
+        cache_helper = read("scripts/security_gate/trivy-cache.sh")
+        self.assertIn("flock -x 9", cache_helper)
+        self.assertIn("chmod 700", cache_helper)
         self.assertIn("validate-db", content)
         self.assertIn("render-exceptions", content)
         self.assertIn('--scan-type "$INPUT_SCAN_TYPE"', content)
@@ -131,12 +197,13 @@ class SecurityGateContractTests(unittest.TestCase):
 
     def test_missing_flock_is_an_actionable_runner_prerequisite_failure(self) -> None:
         content = read(".github/actions/security-gate/action.yml")
+        cache_helper = read("scripts/security_gate/trivy-cache.sh")
 
         self.assertIn("failure_reason:", content)
-        self.assertIn("failure_reason=missing_flock", content)
-        self.assertIn("Install util-linux", content)
-        self.assertIn("self-hosted runner", content)
-        self.assertIn("do not bypass the lock", content)
+        self.assertIn("failure_reason=missing_flock", cache_helper)
+        self.assertIn("Install util-linux", cache_helper)
+        self.assertIn("self-hosted runner", cache_helper)
+        self.assertIn("do not bypass the lock", cache_helper)
 
         documentation = read("docs/SECURITY_GATE.md")
         self.assertIn("`flock` from the `util-linux` package", documentation)
