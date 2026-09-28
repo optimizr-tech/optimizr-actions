@@ -17,6 +17,14 @@ tags. A candidate that fails either check cannot be promoted. The published SHA
 tags are convenience references; production must
 consume the manifest's `image@sha256:...` values.
 
+Each service definition may include `security_exceptions_file`, a repository-
+relative path to that service's reviewed Optimizr exception policy. The reusable
+passes the policy to both pre-publication and pre-promotion Trivy scans for that
+service only. The path must use forward slashes, contain no `.` or `..` path
+segments, and omit shell metacharacters. Omitting the property preserves the
+default scan behavior. Per-service policies keep immutable image-ID scopes
+isolated when a matrix contains multiple images.
+
 After promotion, the reusable performs a bounded read-after-write verification
 of the release tag. This tolerates short GHCR registry propagation delays while
 remaining fail-closed: the manifest is not emitted as published unless the tag
@@ -123,7 +131,7 @@ jobs:
     with:
       candidate_sha: ${{ github.sha }}
       image_namespace: ${{ github.repository_owner }}/my-service
-      services_json: '[{"name":"api","context":".","dockerfile":"Dockerfile"}]'
+      services_json: '[{"name":"api","context":".","dockerfile":"Dockerfile","security_exceptions_file":"security/api-image-exceptions.json"}]'
       # Optional: the default is 150; accepted values are 1 through 360.
       # timeout_minutes: 300
       # For a trusted persistent runner, use local plus an absolute path
