@@ -61,14 +61,34 @@ system `python3`; consumers do not need to add a separate Python setup step.
 
 ### Trivy cache lifecycle
 
-All Trivy-based composites use the repository-scoped cache helper at
-`scripts/security_gate/cache.py`. The database is stored under a versioned
-`trivy-v<version>` directory, protected by a repository-level `flock`, and
-retained for 14 days after the last use. The helper migrates the previous
-unversioned `trivy` directory once, so existing runner databases are reused.
+All Trivy-based composites use `scripts/security_gate/cache.py` and default to
+`cache_scope: repository`, preserving the existing repository-isolated cache
+and automatic Trivy DB refresh behavior. The optional `cache_scope: shared`
+reuses only the versioned vulnerability database on the same persistent runner
+cache home; each repository keeps its own scan-result cache. It is intended for
+trusted jobs on persistent self-hosted runners, not ephemeral hosted runners.
+Reusable workflows forcibly use repository scope for
+`self_hosted_mode=ephemeral-pr`, even if a caller requests `shared`.
+
+In shared mode, each repository holds an exclusive lock for its scan-result
+cache. A short version-specific setup lock coordinates cache preparation and
+refresh decisions, then is released before scans. DB refreshes take an
+exclusive version-specific DB lock; scans hold that lock in shared/read mode
+and pass `--skip-db-update`, so different repositories can scan concurrently
+without racing DB writes. A stale or malformed shared DB is rebuilt under the
+exclusive lock. Existing repository-scoped DBs are not moved or deleted when a
+caller opts in. Shared version retention checks both setup and DB locks before
+removing an old DB; tiny version lock files are left in place deliberately to
+avoid unlink races. Platforms without Python `flock` support retain old shared
+DB versions rather than deleting a cache that could be active. The runner must
+provide `flock` (util-linux); missing shell-lock support fails closed.
+
 The setup action's binary download cache remains job-isolated; it is separate
-from the shared vulnerability database and is disabled for the compatibility
-scanner to avoid maintaining a second database cache.
+from the vulnerability database and is disabled for the compatibility scanner
+to avoid maintaining a second database cache. All reusable security workflows
+and deploy/container workflows expose an additive scope input, defaulting to
+`repository`, so existing callers keep their behavior until they explicitly
+opt into `shared`.
 
 ## Deploy integration
 
@@ -82,6 +102,7 @@ scanner to avoid maintaining a second database cache.
 | `security_ignore_unfixed` | `false` | Deprecated compatibility input; only the retry action's narrow `compatibility_allowed=true` result can use it. |
 | `security_exceptions_file` | empty | Optional Optimizr exception-policy JSON path. |
 | `security_trivy_version` | `v0.74.0` | Controlled Trivy version. |
+| `security_trivy_cache_scope` | `repository` | Keep caches isolated or opt into the shared versioned DB on a persistent runner. |
 | `security_db_max_age_hours` | `30` | Maximum accepted database download age. |
 | `security_rebuild_retry_enabled` | `true` | Permit one deterministic pull, rebuild and rescan for actionable image findings. |
 | `security_rebuild_retry_no_cache` | `true` | Disable the build cache during the bounded remediation retry. |
@@ -338,6 +359,8 @@ The last step provides defense in depth against caller condition mistakes.
 
 Before merging, record the previous known-good `optimizr-actions` commit. If the new contract causes an operational regression, pin the consumer to that commit or move governed `v1` back to it. Do not restore a deploy path that accepts all security jobs as skipped. Failed or unchanged remediation does not mutate the running stack, and the previous `last-successful.json` remains available.
 
-The self-hosted Trivy database cache is repository-scoped, runner-owned, mode
-`0700`, and protected by `flock`. The Trivy executable itself is isolated per
+The self-hosted Trivy database cache is repository-scoped by default. In
+opt-in shared mode, the DB remains runner-owned and mode `0700`, while scan
+caches stay repository-scoped and version-specific `flock` locks coordinate
+refreshes and concurrent reads. The Trivy executable itself is isolated per
 job under `runner.temp`.

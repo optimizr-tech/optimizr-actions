@@ -38,6 +38,10 @@ inputs:
     description: "Controlled Trivy release"
     required: false
     default: "v0.74.0"
+  cache_scope:
+    description: "repository preserves isolated caches; shared reuses the versioned vulnerability DB on the same persistent cache home while keeping scan caches isolated"
+    required: false
+    default: repository
   db_max_age_hours:
     description: "Maximum accepted age of the downloaded vulnerability database"
     required: false
@@ -164,6 +168,7 @@ runs:
       shell: bash
       env:
         TRIVY_VERSION: ${{ inputs.trivy_version }}
+        CACHE_SCOPE: ${{ inputs.cache_scope }}
         INPUT_SCAN_TYPE: ${{ inputs.scan_type }}
         INPUT_SCAN_REF: ${{ inputs.scan_ref }}
         INPUT_IMAGE_REFS: ${{ inputs.image_refs }}
@@ -190,8 +195,6 @@ runs:
         remediation_window_tool="$action_root/scripts/security_gate/remediation_window.py"
         transport_tool="$action_root/scripts/security_gate/image_transport.py"
         repository="${GITHUB_REPOSITORY:-local/unknown}"
-        cache_root="$(python3 "$action_root/scripts/security_gate/cache.py" root --repository "$repository")"
-        cache_dir="$(python3 "$action_root/scripts/security_gate/cache.py" path --repository "$repository" --trivy-version "$TRIVY_VERSION")"
         evidence_dir="$INPUT_EVIDENCE_DIR"
 
         {
@@ -222,29 +225,7 @@ runs:
           echo "remediation_window_failure_reason="
         } >> "$GITHUB_OUTPUT"
 
-        for path in "$cache_root" "$cache_dir"; do
-          if [ -L "$path" ]; then
-            echo "::error::security cache path must not be a symbolic link: $path" >&2
-            exit 2
-          fi
-        done
-        mkdir -p "$cache_root" "$evidence_dir"
-        if [ "$(stat -c '%u' "$cache_root")" != "$(id -u)" ]; then
-          echo "::error::security cache is not owned by the runner user: $cache_root" >&2
-          exit 2
-        fi
-        if ! command -v flock >/dev/null 2>&1; then
-          echo "failure_reason=missing_flock" >> "$GITHUB_OUTPUT"
-          echo "::error title=Missing security-gate runner dependency::flock is required to protect the shared Trivy cache. Install util-linux on the self-hosted runner or use a runner image that provides flock; do not bypass the lock." >&2
-          exit 2
-        fi
-        exec 9>"$cache_root/gate.lock"
-        flock -x 9
-        python3 "$action_root/scripts/security_gate/cache.py" prepare \
-          --repository "$repository" \
-          --trivy-version "$TRIVY_VERSION" \
-          --retention-days 14
-        chmod 700 "$cache_root" "$cache_dir"
+        mkdir -p "$evidence_dir"
 
         case "$INPUT_SCAN_TYPE" in
           fs) scanners="vuln,misconfig,secret" ;;
@@ -288,8 +269,16 @@ runs:
           exit 2
         fi
 
+        source "$action_root/scripts/security_gate/trivy-cache.sh"
+        trivy_cache_setup \
+          "$action_root" "$repository" "$TRIVY_VERSION" "$CACHE_SCOPE" \
+          "$INPUT_DB_MAX_AGE_HOURS" 14
+        cache_dir="$OPTIMIZR_TRIVY_CACHE_DIR"
+
         echo "::group::Refresh Trivy vulnerability database"
-        trivy --cache-dir "$cache_dir" image --download-db-only
+        if [ "$CACHE_SCOPE" = repository ]; then
+          trivy --cache-dir "$cache_dir" image --download-db-only
+        fi
         python3 "$evidence_tool" validate-db \
           --metadata "$cache_dir/db/metadata.json" \
           --max-age-hours "$INPUT_DB_MAX_AGE_HOURS" \
@@ -442,7 +431,7 @@ runs:
           blocking_args=("${report_args[@]}" --ignore-unfixed)
 
           echo "::group::Trivy $INPUT_SCAN_TYPE scan: $target"
-          trivy --cache-dir "$cache_dir" "$command_name" "${report_args[@]}" \
+          trivy --cache-dir "$cache_dir" "$command_name" "${OPTIMIZR_TRIVY_DB_ARGS[@]}" "${report_args[@]}" \
             --format table --exit-code 0 --output "$table_report" \
             "${target_args[@]}"
           if ! python3 - "$table_report" <<'PY'
@@ -473,10 +462,10 @@ runs:
           then
             echo "::warning::Unable to stream complete Trivy table report; full report remains in the security-gate artifact." >&2 || true
           fi
-          trivy --cache-dir "$cache_dir" "$command_name" "${report_args[@]}" \
+          trivy --cache-dir "$cache_dir" "$command_name" "${OPTIMIZR_TRIVY_DB_ARGS[@]}" "${report_args[@]}" \
             --format sarif --exit-code 0 --output "$sarif_report" \
             "${target_args[@]}"
-          trivy --cache-dir "$cache_dir" "$command_name" "${report_args[@]}" \
+          trivy --cache-dir "$cache_dir" "$command_name" "${OPTIMIZR_TRIVY_DB_ARGS[@]}" "${report_args[@]}" \
             --format json --exit-code 0 --output "$json_report" \
             "${target_args[@]}"
 
@@ -490,7 +479,7 @@ runs:
           python3 "$report_tool" "${complete_summary_args[@]}"
 
           set +e
-          trivy --cache-dir "$cache_dir" "$command_name" "${blocking_args[@]}" \
+          trivy --cache-dir "$cache_dir" "$command_name" "${OPTIMIZR_TRIVY_DB_ARGS[@]}" "${blocking_args[@]}" \
             --format json --exit-code 1 --output "$blocking_json_report" \
             "${target_args[@]}"
           scan_status=$?

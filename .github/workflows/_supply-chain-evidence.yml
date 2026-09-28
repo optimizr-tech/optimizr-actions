@@ -21,6 +21,11 @@ on:
         required: false
         type: string
         default: v0.74.0
+      trivy_cache_scope:
+        description: repository keeps isolated caches; shared reuses the versioned vulnerability DB on a persistent runner
+        required: false
+        type: string
+        default: repository
       artifact_name:
         description: Evidence artifact name
         required: false
@@ -106,6 +111,7 @@ jobs:
         with:
           image_refs: ${{ inputs.image_refs }}
           trivy_version: ${{ inputs.trivy_version }}
+          cache_scope: ${{ inputs.self_hosted_mode == 'ephemeral-pr' && 'repository' || inputs.trivy_cache_scope }}
       - name: Upload supply-chain evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

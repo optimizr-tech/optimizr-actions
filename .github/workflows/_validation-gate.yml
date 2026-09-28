@@ -40,6 +40,11 @@ on:
         type: string
         required: false
         default: infra
+      trivy_cache_scope:
+        description: repository keeps isolated caches; shared is for trusted jobs on persistent runners
+        type: string
+        required: false
+        default: repository
       dependency_working_directory:
         description: Confined project directory for dependency policy
         type: string
@@ -235,6 +240,7 @@ jobs:
       runner_json: ${{ inputs.runner_json }}
       self_hosted_mode: ${{ inputs.validation_path == 'ephemeral-pr' && 'ephemeral-pr' || ((inputs.validation_path == 'self-hosted' || inputs.validation_path == 'reviewed-emergency') && 'trusted-main' || 'none') }}
       profile: ${{ inputs.security_profile }}
+      trivy_cache_scope: ${{ inputs.trivy_cache_scope }}
       dependency_working_directory: ${{ inputs.dependency_working_directory }}
       dependency_policy_file: ${{ inputs.dependency_policy_file }}
       node_version: ${{ inputs.node_version }}

@@ -33,6 +33,7 @@
         "uses: optimizr-tech/optimizr-actions/.github/actions/dependency-policy@v1"
       ],
       "inputs": {
+        "cache_scope": "",
         "evidence_dir": "",
         "node_version": "",
         "npm_version": "",
@@ -54,7 +55,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "a7530024f49412b43de2a3a73fad922853238b2132d5a5c243ee4cda963c620e",
+      "source_sha256": "a6d40486058b8b883b1d2ce95bc8f00aa238b7a59068944b58475c2703acb345",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -563,6 +564,7 @@
       ],
       "inputs": {
         "baseline_file": "",
+        "cache_scope": "",
         "db_max_age_hours": "",
         "docker_mode": "",
         "evidence_dir": "",
@@ -617,7 +619,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "29d0334f3bebce59038fca60bc230bab054c153eda37e62a36bf568b5b9309c2",
+      "source_sha256": "ecbc319f7a22d43de243524e916bb3eee4f1ba998cef80146ba128cea1182815",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -759,6 +761,7 @@
         "uses: optimizr-tech/optimizr-actions/.github/actions/supply-chain-evidence@v1"
       ],
       "inputs": {
+        "cache_scope": "",
         "evidence_dir": "",
         "image_refs": "",
         "trivy_version": ""
@@ -777,7 +780,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "0cf290959ed1ce4cf94aa313754a8dcec1415d725b06a551f36813e8b2f2d424",
+      "source_sha256": "87ea60ab4331a83ce9bc63e2deb985f6dddfeb843a191e2bdc4037bec239c35a",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -787,6 +790,7 @@
         "uses: optimizr-tech/optimizr-actions/.github/actions/trivy-scan@v1"
       ],
       "inputs": {
+        "cache_scope": "",
         "exit_code": "",
         "scan_ref": "",
         "scan_type": "",
@@ -805,7 +809,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "2c61e17a2e8c57c497816164a2dbea44ffcfd18566169e36802dc2232a1e15ab",
+      "source_sha256": "4f40730e2da9054cea816fc02a9ad7b4de4c74d3e028d5938dfbad460ad7f4c5",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1084,6 +1088,7 @@
         "security_ignore_unfixed": "",
         "security_scan_timeout": "",
         "security_severity": "",
+        "security_trivy_cache_scope": "",
         "security_trivy_version": "",
         "services_json": "",
         "timeout_minutes": ""
@@ -1104,7 +1109,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "885c7936102616e457c6d9793df38ae7a553d41480fb85532ef7eadd00272613",
+      "source_sha256": "2e54df65f5d797ad4337c49cea38f795b21931213445c9bc831a67876eb74625",
       "trust_boundary": "trusted-push"
     },
     {
@@ -1122,6 +1127,7 @@
         "security_db_max_age_hours": "",
         "security_exceptions_file": "",
         "security_severity": "",
+        "security_trivy_cache_scope": "",
         "security_trivy_version": ""
       },
       "kind": "workflow",
@@ -1140,7 +1146,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "7894bbd898afaef4a613db6878ce4ac31c015b897e8b987375608a24c6dd2f31",
+      "source_sha256": "307e0373decd6112be13eab333ad36bf92b1c61d3b1a02ea57996e8f90bf2123",
       "trust_boundary": "trusted-push"
     },
     {
@@ -1180,6 +1186,7 @@
         "retention_days": "",
         "runner_json": "",
         "self_hosted_mode": "",
+        "trivy_cache_scope": "",
         "trivy_version": "",
         "working_directory": ""
       },
@@ -1197,7 +1204,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "aa4a3c9d6ed06c98961d6064882bcf9883234f9af4a9f870e2182d4cdcbf366f",
+      "source_sha256": "3d01de7eb330708e5075290365d6f0d275fff5fa0d6613b634d873e41dbcbd0e",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1764,6 +1771,7 @@
         "scan_type": "",
         "self_hosted_mode": "",
         "severity": "",
+        "trivy_cache_scope": "",
         "trivy_version": ""
       },
       "kind": "workflow",
@@ -1780,7 +1788,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "183b2dc6a88e73ecb833ac2c0268341eb4cb05efbd304e5729c063515300a1a3",
+      "source_sha256": "1f71e3bb1266fab9980091f22e93a85e187474a0743a94a9071412a717a6315e",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1803,6 +1811,7 @@
         "self_hosted_mode": "",
         "shellcheck_severity": "",
         "static_lint_exclusions": "",
+        "trivy_cache_scope": "",
         "trivy_version": ""
       },
       "kind": "workflow",
@@ -1822,7 +1831,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "a866c1029ff9c66f99477ad889a2e78c5179b01905dc65ba8adffc9125fc9a16",
+      "source_sha256": "97ce2601b39dbfda234b14cb29e483122a247999df02715a8efb4bec71a0d2d8",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1931,6 +1940,7 @@
         "retention_days": "",
         "runner_json": "",
         "self_hosted_mode": "",
+        "trivy_cache_scope": "",
         "trivy_version": ""
       },
       "kind": "workflow",
@@ -1947,7 +1957,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "c6649c6168f8aa05930cbf0c610a8dea9ae8bfb7388b9e1816500d45d31708a1",
+      "source_sha256": "169d4fef21d461097d6d1ca241b3033de514dcc886ba9f77ba9cc37f74c8d4b2",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1996,6 +2006,7 @@
         "self_hosted_mode": "",
         "severity": "",
         "skip": "",
+        "trivy_cache_scope": "",
         "upload_artifact": ""
       },
       "kind": "workflow",
@@ -2013,7 +2024,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "bc2799eb6a103e36027863cf93d8cab5775c37a033ee413c4ee6bc54da8b212f",
+      "source_sha256": "bbce398ff19890e97f3279f5a21c71979626a0388a2fb8bacf4c30b6093c5f31",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -2077,6 +2088,7 @@
         "script_path": "",
         "security_profile": "",
         "timeout_seconds": "",
+        "trivy_cache_scope": "",
         "validation_path": ""
       },
       "kind": "workflow",
@@ -2101,7 +2113,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "0e44586aa8e2844e2c24a3900e692233bef3dd389860bff70a94d9666c0de8b9",
+      "source_sha256": "e3e7932cea3460a105526fedc133bf96f362490f4c985d5f0090e18158d7717d",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -2149,6 +2161,7 @@
         "security_remediation_window_service_scope": "",
         "security_require_image_scan": "",
         "security_severity": "",
+        "security_trivy_cache_scope": "",
         "security_trivy_version": "",
         "service_name": "",
         "services_build": "",
@@ -2167,7 +2180,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "59d632828c05f568b970b2104155228a2fabd86ecb3a49603f8e7a1745c4be65",
+      "source_sha256": "fd62f4e08f4a332602fffcb99f87fd10275bbda9629f93c4fe16a7d6e620dc31",
       "trust_boundary": "trusted-push"
     },
     {
@@ -2219,6 +2232,7 @@
         "security_remediation_window_service_scope": "",
         "security_require_image_scan": "",
         "security_severity": "",
+        "security_trivy_cache_scope": "",
         "security_trivy_version": "",
         "service_name": ""
       },
@@ -2232,7 +2246,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "422abc186a64d77b38e7d7e22d2dbe7a46cb44769c6bd7d64e2c71ab1de8e9a0",
+      "source_sha256": "02fa01d7d83b4defb5e747213839c78443353d71eec18cf72e49e280f9e79860",
       "trust_boundary": "trusted-push"
     },
     {
