@@ -199,9 +199,13 @@ class SecurityGateRemediationWindowTests(unittest.TestCase):
             observations=observations,
             enabled=True,
             evaluation_time="2026-07-31T00:00:00Z",
+            source_sha="c" * 40,
+            image_digest="sha256:" + "e" * 64,
         )
 
         self.assertTrue(result["remediation_window_allowed"])
+        self.assertEqual("c" * 40, result["source_sha"])
+        self.assertEqual("sha256:" + "e" * 64, result["image_digest"])
         self.assertEqual(2, result["window_covered"])
         self.assertEqual(0, result["uncovered_blocking_findings"])
         self.assertEqual("allowed_window", result["decision"])

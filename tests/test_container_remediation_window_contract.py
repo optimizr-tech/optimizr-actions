@@ -119,10 +119,12 @@ class PublisherRemediationWindowContractTests(unittest.TestCase):
             "outcome": "failure",
             "result": "failed",
             "classification": "actionable_vulnerability",
+            "push": True,
             "window_enabled": True,
             "window_allowed": "true",
             "window_decision": "allowed_window",
             "window_classification": "actionable_vulnerability",
+            "window_count": "2",
             "blocking_total": "2",
             "covered": "2",
             "uncovered": "0",
@@ -140,6 +142,26 @@ class PublisherRemediationWindowContractTests(unittest.TestCase):
         }
         self.assertTrue(contract.security_gate_acceptable(fields))
 
+    def test_publishing_clean_scan_requires_exact_digest_and_source_binding(self) -> None:
+        contract = load_contract(self)
+        fields = {
+            "outcome": "success",
+            "result": "passed",
+            "classification": "clean",
+            "push": "true",
+            "image_digest": "sha256:" + "b" * 64,
+            "scanned_image_ref": "ghcr.io/optimizr/api@sha256:" + "b" * 64,
+            "source_sha": "c" * 40,
+        }
+        self.assertTrue(contract.security_gate_acceptable(fields))
+        for changes in (
+            {"image_digest": ""},
+            {"scanned_image_ref": "ghcr.io/optimizr/api:latest"},
+            {"source_sha": ""},
+        ):
+            with self.subTest(changes=changes):
+                self.assertFalse(contract.security_gate_acceptable({**fields, **changes}))
+
     def test_default_and_all_non_vulnerability_or_uncovered_failures_remain_blocked(self) -> None:
         contract = load_contract(self)
         allowed = {
@@ -150,6 +172,7 @@ class PublisherRemediationWindowContractTests(unittest.TestCase):
             "window_allowed": "true",
             "window_decision": "allowed_window",
             "window_classification": "actionable_vulnerability",
+            "window_count": "1",
             "blocking_total": "1",
             "covered": "1",
             "uncovered": "0",
@@ -200,10 +223,12 @@ class PublisherRemediationWindowContractTests(unittest.TestCase):
                 "outcome": "failure",
                 "result": "failed",
                 "classification": "actionable_vulnerability",
+                "push": "true",
                 "window_enabled": "true",
                 "window_allowed": "true",
                 "window_decision": "allowed_window",
                 "window_classification": "actionable_vulnerability",
+                "window_count": "2",
                 "blocking_total": "2",
                 "covered": "2",
                 "uncovered": "0",
@@ -220,9 +245,28 @@ class PublisherRemediationWindowContractTests(unittest.TestCase):
         )
         self.assertEqual("sha256:" + "b" * 64, evidence["image_digest"])
         self.assertEqual("c" * 40, evidence["source_sha"])
+        self.assertTrue(evidence["push"])
+        self.assertTrue(evidence["security_gate_accepted"])
+        self.assertTrue(evidence["promotion_authorized"])
         self.assertEqual(2, evidence["remediation_window"]["covered"])
         self.assertEqual("a" * 64, evidence["remediation_window"]["policy_digest"])
         self.assertNotIn("findings", evidence["remediation_window"])
+
+    def test_non_publishing_clean_scan_is_accepted_without_promotion_authorization(self) -> None:
+        contract = load_contract(self)
+        evidence = contract.build_security_evidence(
+            {
+                "outcome": "success",
+                "result": "passed",
+                "classification": "clean",
+                "push": "false",
+            },
+            image_digest="sha256:" + "b" * 64,
+            scanned_image_ref="ghcr.io/optimizr/api:candidate",
+            source_sha="c" * 40,
+        )
+        self.assertTrue(evidence["security_gate_accepted"])
+        self.assertFalse(evidence["promotion_authorized"])
 
 
 class PublisherRemediationWindowWorkflowTests(unittest.TestCase):
@@ -232,6 +276,7 @@ class PublisherRemediationWindowWorkflowTests(unittest.TestCase):
         self.assertIn("security_remediation_window_policy_file:", content)
         self.assertIn("Validate remediation-window contract", content)
         self.assertIn("scripts/container_release/remediation_window_contract.py", content)
+        self.assertIn("SECURITY_PUSH: ${{ inputs.push }}", content)
         self.assertEqual(
             2, content.count("remediation_window_service_scope: ${{ matrix.service.remediation_window_service_scope }}")
         )
@@ -256,10 +301,10 @@ class PublisherRemediationWindowWorkflowTests(unittest.TestCase):
 
     def test_promotion_depends_on_the_governed_decision_and_records_its_evidence(self) -> None:
         content = WORKFLOW_PATH.read_text(encoding="utf-8")
-        self.assertIn("security_gate_acceptable", content)
+        self.assertIn("remediation_window_contract.py record", content)
         self.assertIn("security-decision.outputs.allowed == 'true'", content)
-        self.assertIn('"remediation_window"', content)
-        self.assertIn('"policy_digest"', content)
-        self.assertIn('"covered"', content)
-        self.assertIn('"uncovered"', content)
-        self.assertIn('"source_sha"', content)
+        self.assertIn('"security_evidence"', content)
+        self.assertIn("publisher-security-decision.json", content)
+        self.assertIn('security_evidence.get("source_sha") != os.environ["CANDIDATE_SHA"]', content)
+        self.assertIn('security_evidence.get("security_gate_accepted") is not True', content)
+        self.assertIn('security_evidence.get("promotion_authorized") is not True', content)

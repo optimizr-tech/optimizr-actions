@@ -110,6 +110,16 @@ on:
         required: false
         type: boolean
         default: false
+      security_remediation_window_enabled:
+        description: Enable governed remediation windows for exact immutable published image digests
+        required: false
+        type: boolean
+        default: false
+      security_remediation_window_policy_file:
+        description: Repository-relative governed remediation-window policy JSON
+        required: false
+        type: string
+        default: ''
     secrets:
       registry_username:
         description: Registry username used only when push is true
@@ -137,6 +147,15 @@ jobs:
     outputs:
       services_json: ${{ steps.validate.outputs.services_json }}
     steps:
+      - name: Checkout exact reusable implementation for remediation validation
+        if: inputs.security_remediation_window_enabled
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .optimizr-actions-source
+          persist-credentials: false
+
       - name: Validate service definitions and image namespace
         id: validate
         shell: bash
@@ -148,6 +167,8 @@ jobs:
           CACHE_SCOPE_PREFIX: ${{ inputs.cache_scope_prefix }}
           CACHE_TYPE: ${{ inputs.cache_type }}
           LOCAL_CACHE_PATH: ${{ inputs.local_cache_path }}
+          SECURITY_REMEDIATION_WINDOW_ENABLED: ${{ inputs.security_remediation_window_enabled }}
+          SECURITY_REMEDIATION_WINDOW_POLICY_FILE: ${{ inputs.security_remediation_window_policy_file }}
           PROVENANCE: ${{ inputs.provenance }}
           SBOM: ${{ inputs.sbom }}
           MAX_PARALLEL: ${{ inputs.max_parallel }}
@@ -229,6 +250,16 @@ jobs:
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write("services_json=" + json.dumps(services, separators=(",", ":")) + "\n")
           PY
+
+      - name: Validate remediation-window contract
+        if: inputs.security_remediation_window_enabled
+        shell: bash
+        env:
+          SECURITY_REMEDIATION_WINDOW_ENABLED: ${{ inputs.security_remediation_window_enabled }}
+          SECURITY_REMEDIATION_WINDOW_POLICY_FILE: ${{ inputs.security_remediation_window_policy_file }}
+          SERVICES_JSON: ${{ steps.validate.outputs.services_json }}
+          PUSH: ${{ inputs.push }}
+        run: python3 .optimizr-actions-source/scripts/container_release/remediation_window_contract.py validate
 
   build:
     name: Build ${{ matrix.service.name }}
@@ -357,6 +388,12 @@ jobs:
           cache_scope: ${{ inputs.security_trivy_cache_scope }}
           db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
           scan_timeout: ${{ inputs.security_scan_timeout }}
+          remediation_window_enabled: ${{ inputs.security_remediation_window_enabled }}
+          remediation_window_policy_file: ${{ inputs.security_remediation_window_policy_file }}
+          remediation_window_service_scope: ${{ matrix.service.remediation_window_service_scope }}
+          remediation_window_exposure_criticality: ${{ matrix.service.remediation_window_exposure_criticality }}
+          remediation_window_source_sha: ${{ inputs.candidate_sha }}
+          remediation_window_image_digest: ${{ steps.build.outputs.digest }}
           evidence_dir: artifacts/security-gate/prepublish/${{ env.SERVICE_NAME }}
 
       - name: Pull exact quarantine digest for local scan
@@ -385,14 +422,51 @@ jobs:
           cache_scope: ${{ inputs.security_trivy_cache_scope }}
           db_max_age_hours: ${{ inputs.security_db_max_age_hours }}
           scan_timeout: ${{ inputs.security_scan_timeout }}
+          remediation_window_enabled: ${{ inputs.security_remediation_window_enabled }}
+          remediation_window_policy_file: ${{ inputs.security_remediation_window_policy_file }}
+          remediation_window_service_scope: ${{ matrix.service.remediation_window_service_scope }}
+          remediation_window_exposure_criticality: ${{ matrix.service.remediation_window_exposure_criticality }}
+          remediation_window_source_sha: ${{ inputs.candidate_sha }}
+          remediation_window_image_digest: ${{ steps.build.outputs.digest }}
           evidence_dir: artifacts/security-gate/prepromotion/${{ env.SERVICE_NAME }}
+
+      - name: Evaluate and record image security decision
+        id: security-decision
+        if: always() && steps.build.outcome == 'success'
+        shell: bash
+        env:
+          SECURITY_OUTCOME: ${{ inputs.push && steps.prepromotion-security.outcome || steps.prepublish-security.outcome }}
+          SECURITY_RESULT: ${{ inputs.push && steps.prepromotion-security.outputs.result || steps.prepublish-security.outputs.result }}
+          SECURITY_CLASSIFICATION: ${{ inputs.push && steps.prepromotion-security.outputs.classification || steps.prepublish-security.outputs.classification }}
+          SECURITY_PUSH: ${{ inputs.push }}
+          SECURITY_WINDOW_ENABLED: ${{ inputs.security_remediation_window_enabled }}
+          SECURITY_WINDOW_ALLOWED: ${{ inputs.push && steps.prepromotion-security.outputs.remediation_window_allowed || steps.prepublish-security.outputs.remediation_window_allowed }}
+          SECURITY_WINDOW_DECISION: ${{ inputs.push && steps.prepromotion-security.outputs.remediation_window_decision || steps.prepublish-security.outputs.remediation_window_decision }}
+          SECURITY_WINDOW_CLASSIFICATION: ${{ inputs.push && steps.prepromotion-security.outputs.remediation_window_classification || steps.prepublish-security.outputs.remediation_window_classification }}
+          SECURITY_WINDOW_COUNT: ${{ inputs.push && steps.prepromotion-security.outputs.remediation_window_count || steps.prepublish-security.outputs.remediation_window_count }}
+          SECURITY_WINDOW_BLOCKING_TOTAL: ${{ inputs.push && steps.prepromotion-security.outputs.remediation_window_blocking_total || steps.prepublish-security.outputs.remediation_window_blocking_total }}
+          SECURITY_WINDOW_COVERED: ${{ inputs.push && steps.prepromotion-security.outputs.remediation_window_covered || steps.prepublish-security.outputs.remediation_window_covered }}
+          SECURITY_WINDOW_UNCOVERED: ${{ inputs.push && steps.prepromotion-security.outputs.remediation_window_uncovered || steps.prepublish-security.outputs.remediation_window_uncovered }}
+          SECURITY_WINDOW_REJECTED: ${{ inputs.push && steps.prepromotion-security.outputs.remediation_window_rejected_count || steps.prepublish-security.outputs.remediation_window_rejected_count }}
+          SECURITY_WINDOW_OVERDUE: ${{ inputs.push && steps.prepromotion-security.outputs.remediation_window_overdue_count || steps.prepublish-security.outputs.remediation_window_overdue_count }}
+          SECURITY_WINDOW_UNMATCHED: ${{ inputs.push && steps.prepromotion-security.outputs.remediation_window_unmatched_count || steps.prepublish-security.outputs.remediation_window_unmatched_count }}
+          SECURITY_WINDOW_REINTRODUCED: ${{ inputs.push && steps.prepromotion-security.outputs.remediation_window_reintroduced_count || steps.prepublish-security.outputs.remediation_window_reintroduced_count }}
+          SECURITY_WINDOW_POLICY_DIGEST: ${{ inputs.push && steps.prepromotion-security.outputs.policy_digest || steps.prepublish-security.outputs.policy_digest }}
+          SECURITY_WINDOW_EVALUATOR_VERSION: ${{ inputs.push && steps.prepromotion-security.outputs.evaluator_version || steps.prepublish-security.outputs.evaluator_version }}
+          SECURITY_FAILURE_REASON: ${{ inputs.push && steps.prepromotion-security.outputs.failure_reason || steps.prepublish-security.outputs.failure_reason }}
+          SECURITY_WINDOW_FAILURE_REASON: ${{ inputs.push && steps.prepromotion-security.outputs.remediation_window_failure_reason || steps.prepublish-security.outputs.remediation_window_failure_reason }}
+          SECURITY_IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          SECURITY_SCANNED_IMAGE_REF: ${{ inputs.push && format('{0}@{1}', env.CANDIDATE_IMAGE, steps.build.outputs.digest) || env.CANDIDATE_IMAGE }}
+          SECURITY_SOURCE_SHA: ${{ inputs.candidate_sha }}
+          SECURITY_EVIDENCE_PATH: artifacts/security-gate/publisher-security-decision.json
+        run: python3 .optimizr-actions-source/scripts/container_release/remediation_window_contract.py record
 
       - name: Promote verified image by digest
         id: promote
         if: >-
           inputs.push &&
           steps.verify-quarantine-attestations.outcome == 'success' &&
-          steps.prepromotion-security.outcome == 'success'
+          steps.security-decision.outputs.allowed == 'true'
         shell: bash
         env:
           CANDIDATE_IMAGE: ${{ env.CANDIDATE_IMAGE }}
@@ -443,6 +517,7 @@ jobs:
           SECURITY_OUTCOME: ${{ inputs.push && steps.prepromotion-security.outcome || steps.prepublish-security.outcome }}
           SECURITY_RESULT: ${{ inputs.push && steps.prepromotion-security.outputs.result || steps.prepublish-security.outputs.result }}
           SECURITY_CLASSIFICATION: ${{ inputs.push && steps.prepromotion-security.outputs.classification || steps.prepublish-security.outputs.classification }}
+          SECURITY_EVIDENCE_PATH: artifacts/security-gate/publisher-security-decision.json
           FRAGMENT_DIR: ${{ runner.temp }}/optimizr-container-manifest
         run: |
           set -euo pipefail
@@ -468,7 +543,14 @@ jobs:
               "security_gate_outcome": os.environ["SECURITY_OUTCOME"],
               "security_result": os.environ["SECURITY_RESULT"],
               "security_classification": os.environ["SECURITY_CLASSIFICATION"],
+              "security_evidence": json.loads(
+                  Path(os.environ["SECURITY_EVIDENCE_PATH"]).read_text(encoding="utf-8")
+              ),
           }
+          if payload["security_evidence"].get("image_digest") != digest:
+              raise SystemExit("security evidence is not bound to the built image digest")
+          if payload["security_evidence"].get("source_sha") != os.environ["CANDIDATE_SHA"]:
+              raise SystemExit("security evidence is not bound to the candidate source commit")
           Path(os.environ["FRAGMENT_DIR"], "release-fragment.json").write_text(
               json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8"
           )
@@ -479,12 +561,12 @@ jobs:
         shell: bash
         env:
           PUSH: ${{ inputs.push }}
-          SECURITY_OUTCOME: ${{ inputs.push && steps.prepromotion-security.outcome || steps.prepublish-security.outcome }}
+          SECURITY_ALLOWED: ${{ steps.security-decision.outputs.allowed }}
           ATTESTATION_OUTCOME: ${{ inputs.push && steps.verify-quarantine-attestations.outcome || 'success' }}
           PROMOTE_OUTCOME: ${{ inputs.push && steps.promote.outcome || 'success' }}
         run: |
           set -euo pipefail
-          if [ "$SECURITY_OUTCOME" != success ]; then
+          if [ "$SECURITY_ALLOWED" != true ]; then
             echo "::error::exact image security gate failed before publication/promotion" >&2
             exit 1
           fi
@@ -555,6 +637,17 @@ jobs:
                   raise SystemExit("release manifest contains a non-immutable digest")
               if item.get("image", "").rsplit("@", 1)[-1] != item["digest"]:
                   raise SystemExit("release manifest image reference does not match its digest")
+              security_evidence = item.get("security_evidence")
+              if not isinstance(security_evidence, dict):
+                  raise SystemExit("release manifest is missing per-image security evidence")
+              if security_evidence.get("image_digest") != item["digest"]:
+                  raise SystemExit("release security evidence does not match its image digest")
+              if security_evidence.get("source_sha") != os.environ["CANDIDATE_SHA"]:
+                  raise SystemExit("release security evidence does not match its candidate source commit")
+              if security_evidence.get("security_gate_accepted") is not True:
+                  raise SystemExit("release manifest contains an image rejected by the security gate")
+              if os.environ["PUSHED"] == "true" and security_evidence.get("promotion_authorized") is not True:
+                  raise SystemExit("published release manifest contains an image without promotion authorization")
               if os.environ["PUSHED"] == "true" and not item.get("published"):
                   raise SystemExit("published release manifest contains an unpublished image")
               if os.environ["PUSHED"] == "true" and not item.get("attestation_verified"):
