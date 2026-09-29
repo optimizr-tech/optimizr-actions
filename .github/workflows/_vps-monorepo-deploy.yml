@@ -697,10 +697,20 @@ jobs:
       - name: Pull declared runtime images
         if: inputs.security_require_image_scan
         shell: bash
+        env:
+          DOCKER_CONFIG_DIR: ${{ runner.temp }}/optimizr-ghcr-docker-config
+          REGISTRY_AUTH_MODE: ${{ inputs.registry_auth_mode }}
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          compose_cmd pull --ignore-buildable
+          if [ "$DEPLOYMENT_MODE" = prebuilt-images ] && [ "$REGISTRY_AUTH_MODE" != anonymous ]; then
+            export DOCKER_CONFIG="$DOCKER_CONFIG_DIR"
+          fi
+          if [ "$DEPLOYMENT_MODE" = prebuilt-images ]; then
+            compose_cmd pull
+          else
+            compose_cmd pull --ignore-buildable
+          fi
 
       - name: Discover declarative Compose images
         id: security-images-initial
@@ -899,9 +909,14 @@ jobs:
         shell: bash
         env:
           COMPOSE_UP_FLAGS: ${{ inputs.compose_up_flags }}
+          DOCKER_CONFIG_DIR: ${{ runner.temp }}/optimizr-ghcr-docker-config
+          REGISTRY_AUTH_MODE: ${{ inputs.registry_auth_mode }}
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
+          if [ "$DEPLOYMENT_MODE" = prebuilt-images ] && [ "$REGISTRY_AUTH_MODE" != anonymous ]; then
+            export DOCKER_CONFIG="$DOCKER_CONFIG_DIR"
+          fi
           up_flags=()
           read -r -a up_flags <<< "$COMPOSE_UP_FLAGS"
           if [ "$DEPLOYMENT_MODE" = prebuilt-images ]; then

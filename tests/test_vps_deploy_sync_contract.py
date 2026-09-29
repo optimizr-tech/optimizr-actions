@@ -64,5 +64,13 @@ class VpsDeploySyncContractTests(unittest.TestCase):
                 self.assertIn("exit 1", verify_block)
 
 
+    def test_prebuilt_images_pull_and_rollout_authenticate_without_ignore_buildable(self) -> None:
+        for workflow_name, content in self.contents.items():
+            with self.subTest(workflow=workflow_name):
+                self.assertIn('if [ "$DEPLOYMENT_MODE" = prebuilt-images ]; then', content)
+                self.assertIn('compose_cmd pull', content)
+                self.assertIn('DOCKER_CONFIG="$DOCKER_CONFIG_DIR"', content)
+
+
 if __name__ == "__main__":
     unittest.main()
