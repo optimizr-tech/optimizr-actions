@@ -356,6 +356,36 @@ class SecurityGateRemediationWindowTests(unittest.TestCase):
             self.assertFalse(result["remediation_window_allowed"])
             self.assertEqual(1, result["rejected_count"])
 
+    def test_unknown_exposure_context_fails_closed(self) -> None:
+        digest = "sha256:" + "a" * 64
+        policy = self._policy([
+            self._entry(
+                entry_id="rw-unknown-exposure",
+                advisory="CVE-2026-0001",
+                package="pkg:deb/debian/openssl@1.2.3",
+                installed="1.2.3",
+                fixed="1.2.4",
+                digest=digest,
+            )
+        ])
+        observation = self._observation(
+            advisory="CVE-2026-0001",
+            package="pkg:deb/debian/openssl@1.2.3",
+            installed="1.2.3",
+            fixed="1.2.4",
+            digest=digest,
+            image_identity="sha256:" + "d" * 64,
+            exposure="public-ish",
+        )
+
+        with self.assertRaises(self.module.RemediationWindowError):
+            self.module.evaluate_remediation_windows(
+                policy_path=policy,
+                observations=[observation],
+                enabled=True,
+                evaluation_time="2026-07-31T00:00:00Z",
+            )
+
     def test_trivy_conversion_preserves_all_fixable_findings(self) -> None:
         report = self.root / "trivy.json"
         report.write_text(
