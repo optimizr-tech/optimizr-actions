@@ -563,6 +563,7 @@
         "uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@v1"
       ],
       "inputs": {
+        "active_image_ids_file": "",
         "baseline_file": "",
         "cache_scope": "",
         "db_max_age_hours": "",
@@ -619,7 +620,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "a152daedfc27d8c0adf1f57f06542343b650a4ce1cfae57fa1221b69354d4a00",
+      "source_sha256": "c0b65ecefeab0c4762f1569dc16017f734b2659a2cf61016ba73056fb69191d6",
       "trust_boundary": "trusted-pr"
     },
     {

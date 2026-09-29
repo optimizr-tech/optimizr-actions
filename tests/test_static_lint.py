@@ -170,6 +170,45 @@ jobs:
             2,
         )
 
+    def test_actionlint_filter_accepts_empty_json_array_as_no_diagnostics(self):
+        filtered_output, suppressed_count, parseable = filter_actionlint_queue_errors(
+            " \n[]\n",
+            {},
+        )
+
+        self.assertEqual(filtered_output, "")
+        self.assertEqual(suppressed_count, 0)
+        self.assertTrue(parseable)
+        self.assertEqual(
+            effective_actionlint_exit_code(
+                0,
+                filtered_output,
+                suppressed_count,
+                parseable,
+            ),
+            0,
+        )
+
+    def test_actionlint_filter_rejects_nonempty_json_array(self):
+        raw_output = '[{"unexpected":"shape"}]\n'
+        filtered_output, suppressed_count, parseable = filter_actionlint_queue_errors(
+            raw_output,
+            {},
+        )
+
+        self.assertEqual(filtered_output, raw_output)
+        self.assertEqual(suppressed_count, 0)
+        self.assertFalse(parseable)
+        self.assertEqual(
+            effective_actionlint_exit_code(
+                0,
+                filtered_output,
+                suppressed_count,
+                parseable,
+            ),
+            2,
+        )
+
     def test_run_lints_preserves_raw_queue_diagnostic_and_uses_filtered_status(self):
         diagnostic = {
             "Message": 'unexpected key "queue" for "concurrency" section',
