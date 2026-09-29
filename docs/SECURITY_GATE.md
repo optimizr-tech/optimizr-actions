@@ -296,6 +296,15 @@ When deploy manifests are enabled, they also record only these remediation state
 
 Standalone and deploy workflows upload the evidence as a GitHub Actions artifact with 30-day retention. Evidence upload uses `if: always()` so failed scans retain their reports.
 
+If the action exits before its aggregate evidence is finalized (for example,
+Trivy cannot read its configuration or initialize its database), it writes a
+sanitized `security-gate-failure.json` record before exiting. The record marks
+the result as failed with `classification=scanner_error`, a generic
+`security_gate_execution_failed` reason, an allow-listed execution phase, and
+the original exit code. It never copies scanner stderr, environment values, or
+credentials. The required artifact upload remains fail-closed; this fallback
+does not turn an incomplete scan into a clean result or hide an upload failure.
+
 ## Runner requirements
 
 A self-hosted security runner must:

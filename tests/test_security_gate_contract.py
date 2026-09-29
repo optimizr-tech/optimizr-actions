@@ -199,7 +199,7 @@ class SecurityGateContractTests(unittest.TestCase):
         content = read(".github/actions/security-gate/action.yml")
 
         mkdir_index = content.index('mkdir -p "$evidence_dir"')
-        trap_index = content.index("trap cleanup_transport_artifacts EXIT")
+        trap_index = content.index("trap write_failure_evidence_on_exit EXIT")
         trivy_setup_index = content.index("trivy_cache_setup")
         failure_writer_index = content.index("write-execution-failure")
         finalized_index = content.index("security_gate_finalized=1")
@@ -207,6 +207,12 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertLess(mkdir_index, trap_index)
         self.assertLess(trap_index, trivy_setup_index)
         self.assertLess(trap_index, failure_writer_index)
+        failure_trap_index = content.index("write_failure_evidence_on_exit()")
+        failure_trap_end = content.index("\n        }", failure_trap_index)
+        self.assertIn(
+            "cleanup_transport_artifacts",
+            content[failure_trap_index:failure_trap_end],
+        )
         self.assertIn("security_gate_execution_failed", content)
         self.assertLess(finalized_index, content.index('exit "$aggregate_status"'))
 
@@ -237,7 +243,13 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertIn("scripts/security_gate/image_transport.py", action)
         self.assertIn('["sudo", "-n", "docker", "save"', transport)
         self.assertIn("--input", action)
-        self.assertIn("trap cleanup_transport_artifacts EXIT", action)
+        self.assertIn("trap write_failure_evidence_on_exit EXIT", action)
+        failure_trap_index = action.index("write_failure_evidence_on_exit()")
+        failure_trap_end = action.index("\n        }", failure_trap_index)
+        self.assertIn(
+            "cleanup_transport_artifacts",
+            action[failure_trap_index:failure_trap_end],
+        )
         self.assertIn("rm -f -- \"$temporary_image\"", action)
         self.assertIn("failure_reason:", action)
         self.assertIn("docker_save_failed", transport)
