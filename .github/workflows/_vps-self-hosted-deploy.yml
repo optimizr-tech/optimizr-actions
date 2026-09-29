@@ -380,7 +380,6 @@ jobs:
             rm -rf -- "$DOCKER_CONFIG_DIR"
             install -d -m 700 -- "$DOCKER_CONFIG_DIR"
             export DOCKER_CONFIG="$DOCKER_CONFIG_DIR"
-            echo "DOCKER_CONFIG=$DOCKER_CONFIG_DIR" >> "$GITHUB_ENV"
             docker_cmd login "$REGISTRY" --username "$REGISTRY_USERNAME" --password-stdin <<< "$REGISTRY_PASSWORD"
           fi
           python3 - <<'PY'
@@ -653,9 +652,15 @@ jobs:
       - name: Pull declared runtime images
         if: inputs.security_require_image_scan
         shell: bash
+        env:
+          DOCKER_CONFIG_DIR: ${{ runner.temp }}/optimizr-ghcr-docker-config
+          REGISTRY_AUTH_MODE: ${{ inputs.registry_auth_mode }}
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
+          if [ "$DEPLOYMENT_MODE" = prebuilt-images ] && [ "$REGISTRY_AUTH_MODE" != anonymous ]; then
+            export DOCKER_CONFIG="$DOCKER_CONFIG_DIR"
+          fi
           compose_cmd pull --ignore-buildable
 
       - name: Discover declarative Compose images

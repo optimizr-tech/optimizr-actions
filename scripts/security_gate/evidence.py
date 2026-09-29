@@ -16,6 +16,18 @@ _IMAGE_DIGEST_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$", re.IGNORECASE)
 _EXCESS_FRACTIONAL_SECONDS = re.compile(
     r"(?<=\.\d{6})\d+(?=(?:Z|[+-]\d{2}:?\d{2})?$)"
 )
+_EXECUTION_FAILURE_PHASES = frozenset(
+    {
+        "input_validation",
+        "trivy_database_initialization",
+        "trivy_database_refresh",
+        "trivy_database_validation",
+        "target_preparation",
+        "trivy_scan",
+        "remediation_window_evaluation",
+        "aggregate_evidence",
+    }
+)
 
 
 def _parse_datetime(value: Any, field: str) -> datetime:
@@ -598,6 +610,37 @@ def write_evidence(
     return payload
 
 
+def write_execution_failure(
+    destination: Path,
+    *,
+    phase: str,
+    exit_code: int,
+    created_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Write a generic failure record without retaining scanner output."""
+    if phase not in _EXECUTION_FAILURE_PHASES:
+        raise ValueError("phase is not an allowed security-gate execution phase")
+    if (
+        isinstance(exit_code, bool)
+        or not isinstance(exit_code, int)
+        or not 1 <= exit_code <= 255
+    ):
+        raise ValueError("exit_code must be between 1 and 255")
+
+    timestamp = (created_at or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    payload: dict[str, Any] = {
+        "schema_version": 1,
+        "created_at": timestamp.isoformat(),
+        "result": "failed",
+        "classification": "scanner_error",
+        "failure_reason": "security_gate_execution_failed",
+        "phase": phase,
+        "exit_code": exit_code,
+    }
+    _atomic_write_json(destination, payload)
+    return payload
+
+
 def _read_json(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
@@ -690,6 +733,15 @@ def _command_write_evidence(args: argparse.Namespace) -> int:
     return 0
 
 
+def _command_write_execution_failure(args: argparse.Namespace) -> int:
+    write_execution_failure(
+        args.output,
+        phase=args.phase,
+        exit_code=args.exit_code,
+    )
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -740,6 +792,12 @@ def _build_parser() -> argparse.ArgumentParser:
     write.add_argument("--report", action="append", default=[], required=True)
     write.add_argument("--result", choices=("passed", "failed"), required=True)
     write.set_defaults(handler=_command_write_evidence)
+
+    failure = subparsers.add_parser("write-execution-failure")
+    failure.add_argument("--output", type=Path, required=True)
+    failure.add_argument("--phase", choices=sorted(_EXECUTION_FAILURE_PHASES), required=True)
+    failure.add_argument("--exit-code", type=int, required=True)
+    failure.set_defaults(handler=_command_write_execution_failure)
     return parser
 
 

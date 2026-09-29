@@ -195,6 +195,27 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertIn("remediation_window_allowed", self_hosted)
         self.assertIn("remediation_window_allowed", monorepo)
 
+    def test_scanner_initialization_failure_writes_evidence_before_trivy_starts(self) -> None:
+        content = read(".github/actions/security-gate/action.yml")
+
+        mkdir_index = content.index('mkdir -p "$evidence_dir"')
+        trap_index = content.index("trap write_failure_evidence_on_exit EXIT")
+        trivy_setup_index = content.index("trivy_cache_setup")
+        finalized_index = content.index("security_gate_finalized=1")
+
+        self.assertLess(mkdir_index, trap_index)
+        self.assertLess(trap_index, trivy_setup_index)
+        failure_trap_index = content.index("write_failure_evidence_on_exit()")
+        failure_trap_end = content.index("\n        }", failure_trap_index)
+        failure_trap = content[failure_trap_index:failure_trap_end]
+        self.assertIn(
+            "cleanup_transport_artifacts",
+            failure_trap,
+        )
+        self.assertIn("write-execution-failure", failure_trap)
+        self.assertIn("security-gate-failure.json", failure_trap)
+        self.assertLess(finalized_index, content.index('exit "$aggregate_status"'))
+
     def test_missing_flock_is_an_actionable_runner_prerequisite_failure(self) -> None:
         content = read(".github/actions/security-gate/action.yml")
         cache_helper = read("scripts/security_gate/trivy-cache.sh")
@@ -222,7 +243,13 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertIn("scripts/security_gate/image_transport.py", action)
         self.assertIn('["sudo", "-n", "docker", "save"', transport)
         self.assertIn("--input", action)
-        self.assertIn("trap cleanup_transport_artifacts EXIT", action)
+        self.assertIn("trap write_failure_evidence_on_exit EXIT", action)
+        failure_trap_index = action.index("write_failure_evidence_on_exit()")
+        failure_trap_end = action.index("\n        }", failure_trap_index)
+        self.assertIn(
+            "cleanup_transport_artifacts",
+            action[failure_trap_index:failure_trap_end],
+        )
         self.assertIn("rm -f -- \"$temporary_image\"", action)
         self.assertIn("failure_reason:", action)
         self.assertIn("docker_save_failed", transport)
