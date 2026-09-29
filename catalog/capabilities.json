@@ -574,8 +574,10 @@
         "image_refs": "",
         "remediation_window_enabled": "",
         "remediation_window_exposure_criticality": "",
+        "remediation_window_image_digest": "",
         "remediation_window_policy_file": "",
         "remediation_window_service_scope": "",
+        "remediation_window_source_sha": "",
         "scan_ref": "",
         "scan_timeout": "",
         "scan_type": "",
@@ -604,9 +606,11 @@
         "remediation_window_decision": "",
         "remediation_window_due_soon_count": "",
         "remediation_window_failure_reason": "",
+        "remediation_window_image_digest": "",
         "remediation_window_overdue_count": "",
         "remediation_window_reintroduced_count": "",
         "remediation_window_rejected_count": "",
+        "remediation_window_source_sha": "",
         "remediation_window_uncovered": "",
         "remediation_window_unmatched_count": "",
         "result": "",
@@ -620,7 +624,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "c0b65ecefeab0c4762f1569dc16017f734b2659a2cf61016ba73056fb69191d6",
+      "source_sha256": "623f4c2b5ed14bc4d7f7d50ce84ce935541811c82fe46bb61bb4bbac7500cccd",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1087,6 +1091,8 @@
         "sbom": "",
         "security_db_max_age_hours": "",
         "security_ignore_unfixed": "",
+        "security_remediation_window_enabled": "",
+        "security_remediation_window_policy_file": "",
         "security_scan_timeout": "",
         "security_severity": "",
         "security_trivy_cache_scope": "",
@@ -1110,7 +1116,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "2e54df65f5d797ad4337c49cea38f795b21931213445c9bc831a67876eb74625",
+      "source_sha256": "7df8e62a8b1982660a932ccbbf85158cfcbe32a09311a78fcee26bfd094cf0ea",
       "trust_boundary": "trusted-push"
     },
     {

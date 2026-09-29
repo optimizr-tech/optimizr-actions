@@ -382,13 +382,17 @@ class SecurityGateRemediationWindowTests(unittest.TestCase):
             exposure="public-ish",
         )
 
-        with self.assertRaises(self.module.RemediationWindowError):
-            self.module.evaluate_remediation_windows(
-                policy_path=policy,
-                observations=[observation],
-                enabled=True,
-                evaluation_time="2026-07-31T00:00:00Z",
-            )
+        result = self.module.evaluate_remediation_windows(
+            policy_path=policy,
+            observations=[observation],
+            enabled=True,
+            evaluation_time="2026-07-31T00:00:00Z",
+        )
+
+        self.assertFalse(result["remediation_window_allowed"])
+        self.assertEqual(1, result["rejected_count"])
+        self.assertEqual("blocked", result["decision"])
+        self.assertEqual("window_rejected", result["failure_reason"])
 
     def test_trivy_conversion_preserves_all_fixable_findings(self) -> None:
         report = self.root / "trivy.json"
