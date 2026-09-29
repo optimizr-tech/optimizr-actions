@@ -79,15 +79,26 @@ class VpsDockerModeContractTests(unittest.TestCase):
             content,
         )
 
+        prepare_start = content.index("- name: Prepare immutable registry images")
+        filesystem_start = content.index("- name: Security gate (filesystem)")
         pull_start = content.index("- name: Pull declared runtime images")
         discover_start = content.index("- name: Discover declarative Compose images")
+        filesystem_end = content.index("\n      - name:", filesystem_start)
+        filesystem_step = content[filesystem_start:filesystem_end]
         pull_step = content[pull_start:discover_start]
+
+        self.assertLess(prepare_start, filesystem_start)
+        self.assertLess(filesystem_start, pull_start)
+        self.assertNotIn("DOCKER_CONFIG", filesystem_step)
         self.assertIn(
             "DOCKER_CONFIG_DIR: ${{ runner.temp }}/optimizr-ghcr-docker-config",
             pull_step,
         )
         self.assertIn("REGISTRY_AUTH_MODE: ${{ inputs.registry_auth_mode }}", pull_step)
-        self.assertIn('if [ "$REGISTRY_AUTH_MODE" != anonymous ]; then', pull_step)
+        self.assertIn(
+            'if [ "$DEPLOYMENT_MODE" = prebuilt-images ] && [ "$REGISTRY_AUTH_MODE" != anonymous ]; then',
+            pull_step,
+        )
         self.assertIn('export DOCKER_CONFIG="$DOCKER_CONFIG_DIR"', pull_step)
 
     def test_docker_access_mode_is_configured_before_networks_and_volumes(self) -> None:

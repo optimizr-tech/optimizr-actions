@@ -227,6 +227,34 @@ runs:
 
         mkdir -p "$evidence_dir"
 
+        security_gate_phase=input_validation
+        security_gate_finalized=0
+        temporary_image=""
+        transport_metadata=""
+        cleanup_transport_artifacts() {
+          if [ -n "${temporary_image:-}" ]; then
+            rm -f -- "$temporary_image" 2>/dev/null || true
+          fi
+          if [ -n "${transport_metadata:-}" ]; then
+            rm -f -- "$transport_metadata" 2>/dev/null || true
+          fi
+        }
+        write_failure_evidence_on_exit() {
+          local exit_status=$?
+          trap - EXIT
+          cleanup_transport_artifacts
+          if [ "$security_gate_finalized" -ne 1 ]; then
+            if ! python3 "$evidence_tool" write-execution-failure \
+              --output "$evidence_dir/security-gate-failure.json" \
+              --phase "$security_gate_phase" \
+              --exit-code "$exit_status"; then
+              echo "::warning::Unable to write sanitized security-gate failure evidence" >&2
+            fi
+          fi
+          exit "$exit_status"
+        }
+        trap write_failure_evidence_on_exit EXIT
+
         case "$INPUT_SCAN_TYPE" in
           fs) scanners="vuln,misconfig,secret" ;;
           image) scanners="vuln,secret" ;;
@@ -269,22 +297,26 @@ runs:
           exit 2
         fi
 
+        security_gate_phase=trivy_database_initialization
         source "$action_root/scripts/security_gate/trivy-cache.sh"
         trivy_cache_setup \
           "$action_root" "$repository" "$TRIVY_VERSION" "$CACHE_SCOPE" \
           "$INPUT_DB_MAX_AGE_HOURS" 14
         cache_dir="$OPTIMIZR_TRIVY_CACHE_DIR"
 
+        security_gate_phase=trivy_database_refresh
         echo "::group::Refresh Trivy vulnerability database"
         if [ "$CACHE_SCOPE" = repository ]; then
           trivy --cache-dir "$cache_dir" image --download-db-only
         fi
+        security_gate_phase=trivy_database_validation
         python3 "$evidence_tool" validate-db \
           --metadata "$cache_dir/db/metadata.json" \
           --max-age-hours "$INPUT_DB_MAX_AGE_HOURS" \
           --output "$evidence_dir/trivy-db.json"
         echo "::endgroup::"
 
+        security_gate_phase=target_preparation
         targets=()
         if [ "$INPUT_SCAN_TYPE" = fs ]; then
           targets+=("$INPUT_SCAN_REF")
@@ -300,6 +332,7 @@ runs:
           exit 2
         fi
 
+        security_gate_phase=trivy_scan
         trivy_version="$(trivy --version | head -n 1)"
         head_sha="${GITHUB_SHA:-$(git rev-parse HEAD)}"
         aggregate_status=0
@@ -307,17 +340,6 @@ runs:
         summary_paths=()
         remediation_observation_paths=()
         remediation_summary="$evidence_dir/remediation-window-summary.json"
-        temporary_image=""
-        transport_metadata=""
-        cleanup_transport_artifacts() {
-          if [ -n "${temporary_image:-}" ]; then
-            rm -f -- "$temporary_image" 2>/dev/null || true
-          fi
-          if [ -n "${transport_metadata:-}" ]; then
-            rm -f -- "$transport_metadata" 2>/dev/null || true
-          fi
-        }
-        trap cleanup_transport_artifacts EXIT
 
         for target in "${targets[@]}"; do
           slug="$(printf '%s' "$target" | sha256sum | cut -c1-16)"
@@ -612,6 +634,7 @@ runs:
           rm -f "$temporary_image" "$transport_metadata"
         done
 
+        security_gate_phase=remediation_window_evaluation
         remediation_eval_args=(
           evaluate
           --workspace "${GITHUB_WORKSPACE:-$PWD}"
@@ -641,6 +664,7 @@ runs:
           fi
         fi
 
+        security_gate_phase=aggregate_evidence
         aggregate_args=()
         for summary_path in "${summary_paths[@]}"; do
           aggregate_args+=(--summary "$summary_path")
@@ -651,6 +675,7 @@ runs:
         python3 "$aggregate_tool" \
           "${aggregate_args[@]}" \
           --github-output "$GITHUB_OUTPUT"
+        security_gate_finalized=1
 
         if [ "$aggregate_status" -eq 0 ]; then
           echo "result=passed" >> "$GITHUB_OUTPUT"

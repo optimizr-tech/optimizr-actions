@@ -548,6 +548,33 @@ class SecurityGateEvidenceTests(unittest.TestCase):
         self.assertNotIn("stderr", payload)
         self.assertNotIn("error_message", payload)
 
+        with self.assertRaisesRegex(ValueError, "allowed security-gate execution phase"):
+            writer(destination, phase="token=must-not-be-recorded", exit_code=1)
+        with self.assertRaisesRegex(ValueError, "between 1 and 255"):
+            writer(destination, phase="trivy_scan", exit_code=0)
+
+    def test_execution_failure_cli_writes_the_sanitized_record(self) -> None:
+        destination = self.root / "cli-execution-failure.json"
+
+        result = evidence.main(
+            [
+                "write-execution-failure",
+                "--output",
+                str(destination),
+                "--phase",
+                "trivy_database_initialization",
+                "--exit-code",
+                "2",
+            ]
+        )
+
+        self.assertEqual(result, 0)
+        payload = json.loads(destination.read_text(encoding="utf-8"))
+        self.assertEqual(payload["phase"], "trivy_database_initialization")
+        self.assertEqual(payload["exit_code"], 2)
+        self.assertNotIn("stderr", payload)
+        self.assertNotIn("error_message", payload)
+
     def test_write_evidence_binds_reports_to_exact_commit(self) -> None:
         table = self.root / "scan.txt"
         report = self.root / "scan.json"
