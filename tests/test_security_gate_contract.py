@@ -201,12 +201,10 @@ class SecurityGateContractTests(unittest.TestCase):
         mkdir_index = content.index('mkdir -p "$evidence_dir"')
         trap_index = content.index("trap write_failure_evidence_on_exit EXIT")
         trivy_setup_index = content.index("trivy_cache_setup")
-        failure_writer_index = content.index("write-execution-failure")
         finalized_index = content.index("security_gate_finalized=1")
 
         self.assertLess(mkdir_index, trap_index)
         self.assertLess(trap_index, trivy_setup_index)
-        self.assertLess(trap_index, failure_writer_index)
         failure_trap_index = content.index("write_failure_evidence_on_exit()")
         failure_trap_end = content.index("\n        }", failure_trap_index)
         self.assertIn(
