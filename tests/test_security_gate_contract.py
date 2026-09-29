@@ -207,11 +207,13 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertLess(trap_index, trivy_setup_index)
         failure_trap_index = content.index("write_failure_evidence_on_exit()")
         failure_trap_end = content.index("\n        }", failure_trap_index)
+        failure_trap = content[failure_trap_index:failure_trap_end]
         self.assertIn(
             "cleanup_transport_artifacts",
-            content[failure_trap_index:failure_trap_end],
+            failure_trap,
         )
-        self.assertIn("security_gate_execution_failed", content)
+        self.assertIn("write-execution-failure", failure_trap)
+        self.assertIn("security-gate-failure.json", failure_trap)
         self.assertLess(finalized_index, content.index('exit "$aggregate_status"'))
 
     def test_missing_flock_is_an_actionable_runner_prerequisite_failure(self) -> None:
