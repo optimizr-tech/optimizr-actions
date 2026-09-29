@@ -125,6 +125,173 @@ def _digest_list(entry: Mapping[str, Any], field: str, index: int) -> list[str]:
     return sorted({value.lower() for value in values})
 
 
+def _load_exception_entries(source: Path) -> list[Any]:
+    if not source.is_file():
+        raise ValueError(f"exception policy is missing: {source}")
+    try:
+        raw = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"exception policy is not valid JSON: {source}") from exc
+    if not isinstance(raw, dict) or raw.get("version") != 1:
+        raise ValueError("exception policy version must be 1")
+    entries = raw.get("vulnerabilities")
+    if not isinstance(entries, list):
+        raise ValueError("exception policy vulnerabilities must be an array")
+    return entries
+
+
+def _load_active_image_ids(path: Path) -> list[str]:
+    if not path.is_file():
+        raise ValueError(f"active image ID file is missing: {path}")
+    try:
+        values = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise ValueError(f"active image ID file cannot be read: {path}") from exc
+    if not values:
+        raise ValueError("active image ID set must not be empty")
+    if any(not value or value != value.strip() for value in values):
+        raise ValueError("active image ID set contains malformed values")
+    if any(
+        not _IMAGE_DIGEST_PATTERN.fullmatch(value) or value != value.lower()
+        for value in values
+    ):
+        raise ValueError(
+            "active image ID set contains invalid values; expected full lowercase sha256 IDs"
+        )
+    if len(set(values)) != len(values):
+        raise ValueError("active image ID set contains a duplicate active image ID")
+    return values
+
+
+def validate_complete_exception_policy(
+    source: Path,
+    *,
+    active_image_ids_file: Path,
+    image_refs: Sequence[str],
+    today: date | None = None,
+) -> int:
+    """Validate every exception against the exact immutable image set before scanning."""
+    active_image_ids = _load_active_image_ids(active_image_ids_file)
+    if not image_refs:
+        raise ValueError("image_refs must contain the complete active image set")
+    if any(
+        not isinstance(image_ref, str)
+        or not _IMAGE_DIGEST_PATTERN.fullmatch(image_ref)
+        or image_ref != image_ref.lower()
+        for image_ref in image_refs
+    ):
+        raise ValueError("image_refs must contain full immutable sha256 image IDs")
+    if len(set(image_refs)) != len(image_refs):
+        raise ValueError("image_refs contains a duplicate immutable image ID")
+    if set(active_image_ids) != set(image_refs):
+        raise ValueError("active image ID file must match the complete image_refs set")
+
+    entries = _load_exception_entries(source)
+    reference_date = today or datetime.now(timezone.utc).date()
+    seen: set[tuple[Any, ...]] = set()
+    for index, item in enumerate(entries):
+        if not isinstance(item, dict):
+            raise ValueError(f"vulnerabilities[{index}] must be an object")
+        vulnerability_id = _require_text(item, "id", index)
+        _require_text(item, "owner", index)
+        _require_text(item, "statement", index)
+        _require_text(item, "compensating_control", index)
+        expires_text = _require_text(item, "expires", index)
+        try:
+            expires = date.fromisoformat(expires_text)
+        except ValueError as exc:
+            raise ValueError(
+                f"vulnerabilities[{index}].expires must use YYYY-MM-DD"
+            ) from exc
+        if expires.isoformat() != expires_text:
+            raise ValueError(
+                f"vulnerabilities[{index}].expires must use YYYY-MM-DD"
+            )
+        if expires < reference_date:
+            raise ValueError(
+                f"vulnerabilities[{index}] {vulnerability_id} expired on {expires_text}"
+            )
+
+        scan_types_value = item.get("scan_types", ["image"])
+        if not isinstance(scan_types_value, list) or any(
+            not isinstance(value, str) or not value.strip()
+            for value in scan_types_value
+        ):
+            raise ValueError(
+                f"vulnerabilities[{index}].scan_types must be a string array"
+            )
+        scan_types = [value.strip() for value in scan_types_value]
+        if not scan_types or any(
+            value not in {"fs", "image"} for value in scan_types
+        ):
+            raise ValueError(
+                f"vulnerabilities[{index}].scan_types must contain fs or image"
+            )
+        if len(set(scan_types)) != len(scan_types):
+            raise ValueError(
+                f"vulnerabilities[{index}] {vulnerability_id} contains duplicate scan types"
+            )
+
+        targets = _string_list(item, "targets", index)
+        lineage_digests = _digest_list(item, "lineage_digests", index)
+        paths = _string_list(item, "paths", index)
+        purls = _string_list(item, "purls", index)
+
+        if "image" in scan_types:
+            if not targets and not lineage_digests:
+                raise ValueError(
+                    f"vulnerabilities[{index}] must scope the exception by targets "
+                    "or lineage_digests"
+                )
+            if any(
+                not _IMAGE_DIGEST_PATTERN.fullmatch(target)
+                or target != target.lower()
+                for target in targets
+            ):
+                raise ValueError(
+                    f"vulnerabilities[{index}].targets must contain full lowercase "
+                    "sha256 image IDs"
+                )
+            unknown_targets = sorted(set(targets) - set(active_image_ids))
+            if unknown_targets:
+                raise ValueError(
+                    f"vulnerabilities[{index}] targets image IDs outside the exact "
+                    "active image set"
+                )
+            if not paths and not purls:
+                raise ValueError(
+                    f"vulnerabilities[{index}] must be narrowed by path or purl"
+                )
+            if lineage_digests and not purls:
+                raise ValueError(
+                    f"vulnerabilities[{index}].purls is required for lineage-scoped exceptions"
+                )
+        elif targets or lineage_digests:
+            raise ValueError(
+                f"vulnerabilities[{index}] filesystem-only exceptions must not target image IDs"
+            )
+
+        if "fs" in scan_types and not paths:
+            raise ValueError(
+                f"vulnerabilities[{index}] {vulnerability_id} filesystem exceptions "
+                "must target paths"
+            )
+
+        identity = (
+            vulnerability_id,
+            expires.isoformat(),
+            tuple(sorted(scan_types)),
+            tuple(sorted(targets)),
+            tuple(sorted(lineage_digests)),
+            tuple(sorted(paths)),
+            tuple(sorted(purls)),
+        )
+        if identity in seen:
+            raise ValueError(f"duplicate exception: {vulnerability_id}")
+        seen.add(identity)
+    return len(entries)
+
+
 def render_exception_policy(
     source: Path,
     *,
@@ -137,17 +304,7 @@ def render_exception_policy(
     """Validate Optimizr exception metadata and render Trivy YAML as JSON."""
     if scan_type not in {"fs", "image"}:
         raise ValueError("scan_type must be fs or image")
-    if not source.is_file():
-        raise ValueError(f"exception policy is missing: {source}")
-    try:
-        raw = json.loads(source.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ValueError(f"exception policy is not valid JSON: {source}") from exc
-    if not isinstance(raw, dict) or raw.get("version") != 1:
-        raise ValueError("exception policy version must be 1")
-    entries = raw.get("vulnerabilities")
-    if not isinstance(entries, list):
-        raise ValueError("exception policy vulnerabilities must be an array")
+    entries = _load_exception_entries(source)
 
     reference_date = today or datetime.now(timezone.utc).date()
     normalized_lineage = sorted({digest.lower() for digest in lineage_digests})
@@ -482,6 +639,19 @@ def _command_render_exceptions(args: argparse.Namespace) -> int:
     return 0
 
 
+def _command_validate_exceptions(args: argparse.Namespace) -> int:
+    count = validate_complete_exception_policy(
+        args.source,
+        active_image_ids_file=args.active_image_ids_file,
+        image_refs=args.image_ref,
+    )
+    print(
+        "Complete Trivy exception policy passed: "
+        f"active_images={len(args.image_ref)} exceptions={count}"
+    )
+    return 0
+
+
 def _command_filter_report(args: argparse.Namespace) -> int:
     filter_report(args.report, args.policy, args.output)
     return 0
@@ -538,6 +708,12 @@ def _build_parser() -> argparse.ArgumentParser:
     render.add_argument("--summary-output", type=Path, required=True)
     render.add_argument("--lineage-digest", action="append", default=[])
     render.set_defaults(handler=_command_render_exceptions)
+
+    validate_exceptions = subparsers.add_parser("validate-exceptions")
+    validate_exceptions.add_argument("--source", type=Path, required=True)
+    validate_exceptions.add_argument("--active-image-ids-file", type=Path, required=True)
+    validate_exceptions.add_argument("--image-ref", action="append", required=True)
+    validate_exceptions.set_defaults(handler=_command_validate_exceptions)
 
     filter_parser = subparsers.add_parser("filter-report")
     filter_parser.add_argument("--report", type=Path, required=True)

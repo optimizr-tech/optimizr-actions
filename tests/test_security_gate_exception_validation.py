@@ -142,6 +142,22 @@ class CompleteExceptionPolicyTests(unittest.TestCase):
                 image_refs=[IMAGE_A],
             )
 
+    def test_rejects_empty_scanned_image_ref_set(self) -> None:
+        with self.assertRaisesRegex(ValueError, "complete active image set"):
+            self._validate(
+                [self._entry()],
+                active_ids=[IMAGE_A],
+                image_refs=[],
+            )
+
+    def test_rejects_duplicate_scanned_image_refs(self) -> None:
+        with self.assertRaisesRegex(ValueError, "duplicate immutable image ID"):
+            self._validate(
+                [self._entry()],
+                active_ids=[IMAGE_A],
+                image_refs=[IMAGE_A, IMAGE_A],
+            )
+
     def test_rejects_exception_target_outside_active_set(self) -> None:
         with self.assertRaisesRegex(ValueError, "outside the exact active image set"):
             self._validate(
@@ -170,6 +186,10 @@ class CompleteExceptionPolicyTests(unittest.TestCase):
                 image_refs=[IMAGE_A, IMAGE_B],
             )
 
+    def test_rejects_noncanonical_expiration_date(self) -> None:
+        with self.assertRaisesRegex(ValueError, "expires must use YYYY-MM-DD"):
+            self._validate([self._entry(expires="20300101")])
+
     def test_rejects_malformed_entry_for_another_image_in_the_complete_set(self) -> None:
         with self.assertRaisesRegex(ValueError, "owner is required"):
             self._validate(
@@ -195,10 +215,16 @@ class SecurityGateExceptionContractTests(unittest.TestCase):
         documentation = (ROOT / "docs/SECURITY_GATE.md").read_text(encoding="utf-8")
 
         self.assertIn("  active_image_ids_file:", action)
+        active_input = action.split("  active_image_ids_file:\n", 1)[1].split(
+            "\n  baseline_file:", 1
+        )[0]
+        self.assertIn("required: false", active_input)
+        self.assertIn('default: ""', active_input)
         self.assertIn('INPUT_ACTIVE_IMAGE_IDS_FILE: ${{ inputs.active_image_ids_file }}', action)
         self.assertIn("validate-exceptions", action)
         self.assertIn('--active-image-ids-file "$INPUT_ACTIVE_IMAGE_IDS_FILE"', action)
-        self.assertIn('--image-ref "$image_ref"', action)
+        self.assertIn('"--image-ref=$image_ref"', action)
+        self.assertIn("requires an image scan and exceptions_file", action)
         validate_at = action.index('python3 "$evidence_tool" "${validation_args[@]}"')
         scan_loop_at = action.index('for target in "${targets[@]}"; do')
         scan_at = action.index('trivy --cache-dir "$cache_dir" "$command_name"')
