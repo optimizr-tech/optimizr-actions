@@ -30,6 +30,12 @@ inputs:
     description: "Optional Optimizr JSON exception policy"
     required: false
     default: ""
+  active_image_ids_file:
+    description: >-
+      Optional newline-delimited complete set of immutable image IDs for strict
+      exception-policy validation.
+    required: false
+    default: ""
   baseline_file:
     description: "Optional reviewed, expiring vulnerability baseline for immutable image IDs"
     required: false
@@ -176,6 +182,7 @@ runs:
         INPUT_SEVERITY: ${{ inputs.severity }}
         INPUT_IGNORE_UNFIXED: ${{ inputs.ignore_unfixed }}
         INPUT_EXCEPTIONS_FILE: ${{ inputs.exceptions_file }}
+        INPUT_ACTIVE_IMAGE_IDS_FILE: ${{ inputs.active_image_ids_file }}
         INPUT_BASELINE_FILE: ${{ inputs.baseline_file }}
         INPUT_DB_MAX_AGE_HOURS: ${{ inputs.db_max_age_hours }}
         INPUT_SCAN_TIMEOUT: ${{ inputs.scan_timeout }}
@@ -298,6 +305,26 @@ runs:
         if [ "${#targets[@]}" -eq 0 ]; then
           echo "::error::security gate has no targets" >&2
           exit 2
+        fi
+
+        if [ -n "$INPUT_ACTIVE_IMAGE_IDS_FILE" ]; then
+          if [ "$INPUT_SCAN_TYPE" != image ] || [ -z "$INPUT_EXCEPTIONS_FILE" ]; then
+            echo "failure_reason=invalid_exception_policy_contract" >> "$GITHUB_OUTPUT"
+            echo "::error::active_image_ids_file requires an image scan and exceptions_file" >&2
+            exit 2
+          fi
+          validation_args=(
+            validate-exceptions
+            --source "$INPUT_EXCEPTIONS_FILE"
+            --active-image-ids-file "$INPUT_ACTIVE_IMAGE_IDS_FILE"
+          )
+          for image_ref in "${targets[@]}"; do
+            validation_args+=("--image-ref=$image_ref")
+          done
+          if ! python3 "$evidence_tool" "${validation_args[@]}"; then
+            echo "failure_reason=invalid_exception_policy" >> "$GITHUB_OUTPUT"
+            exit 2
+          fi
         fi
 
         trivy_version="$(trivy --version | head -n 1)"
