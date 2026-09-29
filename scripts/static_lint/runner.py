@@ -49,6 +49,8 @@ SPECS: dict[str, dict[str, dict[str, str]]] = {
     },
 }
 
+ACTIONLINT_JSONL_FORMAT = "{{range $err := .}}{{json $err}}{{end}}"
+
 
 def install_spec(machine: str) -> dict[str, dict[str, str]]:
     aliases = {"amd64": "x86_64", "arm64": "aarch64"}
@@ -374,7 +376,7 @@ def run_lints(*, root: Path, shellcheck: Path, actionlint: Path, severity: str, 
         for failure in queue_failures:
             print(f"concurrency queue contract: {failure['path']}: {failure['error']}")
         result = _run(
-            [str(actionlint), "-format", "{{json .}}", *workflows],
+            [str(actionlint), "-format", ACTIONLINT_JSONL_FORMAT, *workflows],
             root,
             print_output=False,
         )

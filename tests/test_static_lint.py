@@ -8,6 +8,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
+ACTIONLINT_JSONL_FORMAT = "{{range $err := .}}{{json $err}}{{end}}"
 
 from static_lint.runner import (
     LintError,
@@ -170,6 +171,69 @@ jobs:
             2,
         )
 
+    def test_run_lints_accepts_actionlint_empty_jsonl_output(self):
+        with TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            workflow = root / ".github/workflows/ci.yml"
+            workflow.parent.mkdir(parents=True)
+            workflow.write_text("name: CI\non: push\n", encoding="utf-8")
+            evidence_dir = root / "artifacts/static-lint"
+            tracked = b".github/workflows/ci.yml\0"
+
+            def fake_run(argv, *, cwd, capture_output, text=False, check=False):
+                if argv[:3] == ["git", "ls-files", "-z"]:
+                    return subprocess.CompletedProcess(argv, 0, stdout=tracked)
+                if argv[0] == "shellcheck":
+                    return subprocess.CompletedProcess(
+                        argv,
+                        0,
+                        stdout="ShellCheck - version 0.11.0\nlicense info\n",
+                        stderr="",
+                    )
+                if argv[0] == "actionlint" and argv[1] == "-version":
+                    return subprocess.CompletedProcess(
+                        argv,
+                        0,
+                        stdout="actionlint 1.7.12\n",
+                        stderr="",
+                    )
+                if argv[0] == "actionlint":
+                    self.assertEqual(
+                        argv[1:3],
+                        ["-format", ACTIONLINT_JSONL_FORMAT],
+                    )
+                    return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+                self.fail(f"unexpected subprocess: {argv}")
+
+            with patch("static_lint.runner.subprocess.run", side_effect=fake_run):
+                status = static_lint_runner.run_lints(
+                    root=root,
+                    shellcheck=Path("shellcheck"),
+                    actionlint=Path("actionlint"),
+                    severity="warning",
+                    exclusions=[],
+                    evidence_dir=evidence_dir,
+                )
+
+            self.assertEqual(status, 0)
+            self.assertEqual(
+                (evidence_dir / "actionlint.jsonl").read_text(encoding="utf-8"),
+                "",
+            )
+            self.assertEqual(
+                (evidence_dir / "actionlint.filtered.jsonl").read_text(encoding="utf-8"),
+                "",
+            )
+            evidence = json.loads((evidence_dir / "evidence.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                evidence["commands"]["actionlint"],
+                {
+                    "exit_code": 0,
+                    "effective_exit_code": 0,
+                    "suppressed_queue_diagnostics": 0,
+                },
+            )
+
     def test_run_lints_preserves_raw_queue_diagnostic_and_uses_filtered_status(self):
         diagnostic = {
             "Message": 'unexpected key "queue" for "concurrency" section',
@@ -210,6 +274,10 @@ jobs:
                         stderr="",
                     )
                 if argv[0] == "actionlint":
+                    self.assertEqual(
+                        argv[1:3],
+                        ["-format", ACTIONLINT_JSONL_FORMAT],
+                    )
                     return subprocess.CompletedProcess(
                         argv,
                         1,
