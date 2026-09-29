@@ -661,7 +661,11 @@ jobs:
           if [ "$DEPLOYMENT_MODE" = prebuilt-images ] && [ "$REGISTRY_AUTH_MODE" != anonymous ]; then
             export DOCKER_CONFIG="$DOCKER_CONFIG_DIR"
           fi
-          compose_cmd pull --ignore-buildable
+          if [ "$DEPLOYMENT_MODE" = prebuilt-images ]; then
+            compose_cmd pull
+          else
+            compose_cmd pull --ignore-buildable
+          fi
 
       - name: Discover declarative Compose images
         id: security-images-initial
@@ -860,16 +864,28 @@ jobs:
       - name: Pre-deploy validation (nginx -t)
         if: inputs.pre_deploy_validation
         shell: bash
+        env:
+          DOCKER_CONFIG_DIR: ${{ runner.temp }}/optimizr-ghcr-docker-config
+          REGISTRY_AUTH_MODE: ${{ inputs.registry_auth_mode }}
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
+          if [ "$DEPLOYMENT_MODE" = prebuilt-images ] && [ "$REGISTRY_AUTH_MODE" != anonymous ]; then
+            export DOCKER_CONFIG="$DOCKER_CONFIG_DIR"
+          fi
           compose_cmd run --rm --no-deps --entrypoint '' nginx nginx -t
 
       - name: Roll out and verify primary container
         shell: bash
+        env:
+          DOCKER_CONFIG_DIR: ${{ runner.temp }}/optimizr-ghcr-docker-config
+          REGISTRY_AUTH_MODE: ${{ inputs.registry_auth_mode }}
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
+          if [ "$DEPLOYMENT_MODE" = prebuilt-images ] && [ "$REGISTRY_AUTH_MODE" != anonymous ]; then
+            export DOCKER_CONFIG="$DOCKER_CONFIG_DIR"
+          fi
           set +e
           compose_cmd up -d --remove-orphans ${{ inputs.deployment_mode == 'prebuilt-images' && '--no-build' || '' }}
           compose_status=$?

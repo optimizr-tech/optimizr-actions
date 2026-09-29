@@ -624,7 +624,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "623f4c2b5ed14bc4d7f7d50ce84ce935541811c82fe46bb61bb4bbac7500cccd",
+      "source_sha256": "adcee50cfd44c690c0c0481ba6469bb13ad641ef8423cc8d356134404c421884",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -2187,7 +2187,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "fd62f4e08f4a332602fffcb99f87fd10275bbda9629f93c4fe16a7d6e620dc31",
+      "source_sha256": "76be3bab8229d722f23c73312cfea0ffa3a00377f3460df87b7ec0ac903a50de",
       "trust_boundary": "trusted-push"
     },
     {
@@ -2253,7 +2253,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "a2bb2dac8042fb29717c2ddaa82fdd8d146197ed74f792712fe4c09a8da9fcdb",
+      "source_sha256": "2b5158fe7f7dcda9d39a1e2b7b669428eab46bf7d12bb651fe32ab84872fbca6",
       "trust_boundary": "trusted-push"
     },
     {

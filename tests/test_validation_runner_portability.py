@@ -26,7 +26,7 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
 
     def test_reusables_accept_governed_runner_selection(self):
         for name in self.WORKFLOWS:
-            text = (ROOT / ".github/workflows" / name).read_text()
+            text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
             with self.subTest(workflow=name):
                 self.assertIn("runner_json:", text)
                 self.assertIn("self_hosted_mode:", text)
@@ -35,7 +35,7 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
 
     def test_reusables_never_infer_billing_policy_from_skip_tests(self):
         for name in self.WORKFLOWS:
-            text = (ROOT / ".github/workflows" / name).read_text()
+            text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
             with self.subTest(workflow=name):
                 self.assertNotIn("[skip-tests]", text)
                 self.assertNotIn("github.event.head_commit.message", text)
@@ -52,7 +52,7 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
             "_static-lint.yml",
             "_supply-chain-evidence.yml",
         ):
-            text = (ROOT / ".github/workflows" / name).read_text()
+            text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
             with self.subTest(workflow=name):
                 self.assertIn("clean: true", text)
                 self.assertIn("checkout-integrity@v1", text)
@@ -60,10 +60,10 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
     def test_matrix_reusables_require_materialized_paths_before_consuming_workspace(self):
         security = (
             ROOT / ".github/workflows/_quality-gate-collect-security.yml"
-        ).read_text()
+        ).read_text(encoding="utf-8")
         duplication = (
             ROOT / ".github/workflows/_quality-gate-collect-dup.yml"
-        ).read_text()
+        ).read_text(encoding="utf-8")
 
         self.assertIn("required_paths_json:", security)
         self.assertIn("required_paths_json: ${{ matrix.required_paths_json }}", security)
@@ -87,7 +87,7 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
             "_sast-gate.yml",
             "_supply-chain-evidence.yml",
         ):
-            text = (ROOT / ".github/workflows" / name).read_text()
+            text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
             with self.subTest(workflow=name):
                 self.assertIn('"ephemeral" not in labels', text)
                 self.assertIn('os.environ["EVENT_NAME"] != "pull_request"', text)
@@ -103,7 +103,7 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
             "_sast-gate.yml",
             "_supply-chain-evidence.yml",
         ):
-            text = (ROOT / ".github/workflows" / name).read_text()
+            text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
             with self.subTest(workflow=name):
                 self.assertIn("trusted-pr", text)
                 trusted_pr_index = text.index('mode == "trusted-pr"')
@@ -118,12 +118,12 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
             "_trivy-scan.yml",
             "_python-uv-test.yml",
         ):
-            text = (ROOT / ".github/workflows" / name).read_text()
+            text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
             with self.subTest(workflow=name):
                 self.assertIn("!inputs.skip", text)
 
     def test_python_uv_uses_actions_owned_composite(self):
-        text = (ROOT / ".github/workflows/_python-uv-test.yml").read_text()
+        text = (ROOT / ".github/workflows/_python-uv-test.yml").read_text(encoding="utf-8")
         self.assertNotIn(
             "optimizr-infra-ops/.github/actions/python-uv-test-steps",
             text,
@@ -137,12 +137,12 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
         )
 
     def test_rabbitmq_service_avoids_deprecated_memory_environment(self):
-        text = (ROOT / ".github/workflows/_python-uv-test.yml").read_text()
+        text = (ROOT / ".github/workflows/_python-uv-test.yml").read_text(encoding="utf-8")
         self.assertIn("--memory 1g", text)
         self.assertNotIn("RABBITMQ_VM_MEMORY_HIGH_WATERMARK", text)
 
     def test_serve_integration_services_match_runtime_pins(self):
-        text = (ROOT / ".github/workflows/_python-uv-test.yml").read_text()
+        text = (ROOT / ".github/workflows/_python-uv-test.yml").read_text(encoding="utf-8")
         for image in (
             "postgres:16.14-alpine@sha256:e013e867e712fec275706a6c51c966f0bb0c93cfa8f51000f85a15f9865a28cb",
             "redis:7.4.9-alpine@sha256:b1addbe72465a718643cff9e60a58e6df1841e29d6d7d60c9a85d8d72f08d1a7",

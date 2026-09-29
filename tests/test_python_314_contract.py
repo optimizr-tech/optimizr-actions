@@ -56,7 +56,7 @@ class Python314ContractTests(unittest.TestCase):
         content = read(".github/actions/security-gate/action.yml")
 
         self.assertIn(
-            "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065",
+            "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
             content,
         )
         self.assertIn('python-version: "3.14"', content)
