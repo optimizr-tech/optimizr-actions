@@ -123,6 +123,49 @@ For an already-built quarantine image, use the opt-in
 [`GHCR_CANDIDATE_REVALIDATION.md`](GHCR_CANDIDATE_REVALIDATION.md) contract to
 revalidate and promote its immutable digest without rebuilding it.
 
+### Governed remediation windows
+
+The image publisher exposes `security_remediation_window_enabled` and
+`security_remediation_window_policy_file`; the feature is disabled by default.
+Enabling it requires `push: true`, a repository-relative policy path, and an
+explicit context on every service in `services_json`:
+
+```json
+{
+  "name": "api",
+  "context": "api",
+  "dockerfile": "api/Dockerfile",
+  "remediation_window_service_scope": "monitoring/api",
+  "remediation_window_exposure_criticality": "internet-facing"
+}
+```
+
+Scopes are bounded identifiers; exposure must be `internal`,
+`internet-facing`, or `privileged-boundary`. Missing or unknown context fails
+before the matrix starts. The publisher forwards the same policy and per-service
+context to its image gates, and binds the candidate source SHA and Buildx digest
+to the security-gate evaluation. A non-publishing build cannot use a window to
+turn a failed scan into a passing check.
+
+For publication, a window authorizes promotion only when the exact immutable
+candidate digest has `classification=actionable_vulnerability`, the evaluator
+returns `allowed_window`, and all blocking findings are covered with zero
+uncovered, rejected, overdue, unmatched, or reintroduced findings. The gate's
+own result remains `failed` and its classification remains actionable; the
+separate `promotion_authorized` field records the governed decision. Scanner or
+database errors, missing context, secrets, misconfigurations, invalid policies,
+and digest or evidence mismatches always block.
+
+The per-image security artifact and release-manifest image fragment contain the
+candidate digest, source SHA, policy digest, evaluator version, and sanitized
+coverage counts. Raw finding contents are not copied into the release fragment.
+No consumer opts in automatically; each caller must add reviewed policy and
+service context in its own repository.
+
+Evidence distinguishes a passing security gate from permission to publish:
+non-publishing builds may record an accepted scan, but only a `push: true` run
+can record `promotion_authorized: true`.
+
 ## Registry authentication
 
 The publish job uses the caller's short-lived `GITHUB_TOKEN` with

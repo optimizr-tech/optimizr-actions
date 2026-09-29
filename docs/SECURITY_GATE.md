@@ -236,6 +236,31 @@ The `security-gate` action preserves `result=passed|failed` for `v1` compatibili
 - `failure_reason` (empty on success; otherwise a sanitized operational code,
   such as `docker_save_failed` or `missing_flock`).
 
+## Image remediation windows
+
+The `security-gate` composite accepts optional `remediation_window_source_sha`
+and `remediation_window_image_digest` inputs. Existing callers may omit them;
+the image publisher supplies the exact source commit and Buildx digest so the
+sanitized window summary is bound to the artifact in its release fragment.
+
+Enabled evaluations require a bounded service scope and one of the supported
+exposure classes: `internal`, `internet-facing`, or `privileged-boundary`.
+Unknown values fail closed. `internet-facing` and `privileged-boundary`
+critical findings remain ineligible, as do known-exploited or already-fixed
+findings, secrets, misconfigurations, scanner errors, invalid policies, and
+uncovered or overdue findings.
+
+An `allowed_window` is not a clean scan: the security gate retains
+`result=failed` and `classification=actionable_vulnerability`. The image
+publisher may authorize promotion only when every blocking finding is covered,
+the immutable scan reference matches the candidate digest, the source SHA and
+policy digest are valid, and no rejected, overdue, unmatched, reintroduced, or
+operational failure is reported. Per-image evidence distinguishes an accepted
+security gate from publication authorization: a non-publishing clean scan may
+pass the gate, but only a `push: true` run can authorize promotion. Evidence
+records the decision and counts without copying finding details. The feature is
+disabled by default and cannot be enabled for a non-publishing build.
+
 ## Exception policy
 
 Exceptions use JSON so they can be validated with the Python standard library before Trivy receives a generated `.yaml` ignore document.

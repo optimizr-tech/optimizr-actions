@@ -199,9 +199,13 @@ class SecurityGateRemediationWindowTests(unittest.TestCase):
             observations=observations,
             enabled=True,
             evaluation_time="2026-07-31T00:00:00Z",
+            source_sha="c" * 40,
+            image_digest="sha256:" + "e" * 64,
         )
 
         self.assertTrue(result["remediation_window_allowed"])
+        self.assertEqual("c" * 40, result["source_sha"])
+        self.assertEqual("sha256:" + "e" * 64, result["image_digest"])
         self.assertEqual(2, result["window_covered"])
         self.assertEqual(0, result["uncovered_blocking_findings"])
         self.assertEqual("allowed_window", result["decision"])
@@ -355,6 +359,40 @@ class SecurityGateRemediationWindowTests(unittest.TestCase):
             )
             self.assertFalse(result["remediation_window_allowed"])
             self.assertEqual(1, result["rejected_count"])
+
+    def test_unknown_exposure_context_fails_closed(self) -> None:
+        digest = "sha256:" + "a" * 64
+        policy = self._policy([
+            self._entry(
+                entry_id="rw-unknown-exposure",
+                advisory="CVE-2026-0001",
+                package="pkg:deb/debian/openssl@1.2.3",
+                installed="1.2.3",
+                fixed="1.2.4",
+                digest=digest,
+            )
+        ])
+        observation = self._observation(
+            advisory="CVE-2026-0001",
+            package="pkg:deb/debian/openssl@1.2.3",
+            installed="1.2.3",
+            fixed="1.2.4",
+            digest=digest,
+            image_identity="sha256:" + "d" * 64,
+            exposure="public-ish",
+        )
+
+        result = self.module.evaluate_remediation_windows(
+            policy_path=policy,
+            observations=[observation],
+            enabled=True,
+            evaluation_time="2026-07-31T00:00:00Z",
+        )
+
+        self.assertFalse(result["remediation_window_allowed"])
+        self.assertEqual(1, result["rejected_count"])
+        self.assertEqual("blocked", result["decision"])
+        self.assertEqual("window_rejected", result["failure_reason"])
 
     def test_trivy_conversion_preserves_all_fixable_findings(self) -> None:
         report = self.root / "trivy.json"

@@ -30,6 +30,8 @@ _RFC3339_Z = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\Z")
 _ALLOWED_SEVERITIES = {"HIGH", "CRITICAL"}
 _ALLOWED_CLASSIFICATION = "actionable_vulnerability"
 _BLOCKED_CRITICAL_EXPOSURES = {"internet-facing", "privileged-boundary"}
+_ALLOWED_EXPOSURES = {"internal", *_BLOCKED_CRITICAL_EXPOSURES}
+_SERVICE_SCOPE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}\Z")
 _MAX_WINDOW_DAYS = {"CRITICAL": 7, "HIGH": 30}
 _DUE_SOON = timedelta(hours=72)
 _EVALUATOR_VERSION = "3"
@@ -121,6 +123,23 @@ def resolve_policy_path(workspace: Path, relative_path: str) -> Path:
     if not resolved.is_file() or resolved.is_symlink():
         raise RemediationWindowError("policy must be a regular non-symlink file")
     return resolved
+
+
+def validate_remediation_context(
+    service_scope: Any, exposure_criticality: Any
+) -> tuple[str, str]:
+    """Normalize and validate the service identity and reviewed exposure class."""
+    if not isinstance(service_scope, str):
+        raise RemediationWindowError("service_scope must be text")
+    scope = service_scope.strip()
+    if not _SERVICE_SCOPE.fullmatch(scope):
+        raise RemediationWindowError("service_scope must be a bounded safe identifier")
+    if not isinstance(exposure_criticality, str):
+        raise RemediationWindowError("exposure_criticality must be text")
+    exposure = exposure_criticality.strip().lower()
+    if exposure not in _ALLOWED_EXPOSURES:
+        raise RemediationWindowError("exposure_criticality is not a supported risk class")
+    return scope, exposure
 
 
 def _canonical_fingerprint(raw: Mapping[str, Any], *, label: str = "fingerprint") -> dict[str, Any]:
@@ -245,9 +264,13 @@ def load_policy(path: Path, *, reference_time: str | None = None) -> dict[str, A
 
 def _canonical_observation(raw: Mapping[str, Any], *, index: int) -> dict[str, Any]:
     label = f"observations[{index}]"
+    service_scope, exposure = validate_remediation_context(
+        _required_text(raw, "service_scope", label=label),
+        _required_text(raw, "exposure_criticality", label=label),
+    )
     fingerprint = _canonical_fingerprint(
         {
-            "service": _required_text(raw, "service_scope", label=label),
+            "service": service_scope,
             "advisory_id": _required_text(raw, "advisory_id", label=label),
             "package_purl": _required_text(raw, "package_purl", label=label),
             "installed_version": _required_text(raw, "installed_version", label=label),
@@ -258,7 +281,6 @@ def _canonical_observation(raw: Mapping[str, Any], *, index: int) -> dict[str, A
     )
     classification = _required_text(raw, "classification", label=label)
     severity = _required_text(raw, "severity", label=label).upper()
-    exposure = _required_text(raw, "exposure_criticality", label=label).lower()
     source_sha = _required_text(raw, "source_sha", label=label).lower()
     image_identity = _required_text(raw, "image_identity", label=label).lower()
     if _GIT_SHA.fullmatch(source_sha) is None:
@@ -359,6 +381,8 @@ def _evaluate_one(
 
 def _empty_result() -> dict[str, Any]:
     return {
+        "source_sha": "",
+        "image_digest": "",
         "classification": "",
         "remediation_window_allowed": False,
         "remediation_state": "not_applicable",
@@ -386,6 +410,8 @@ def evaluate_remediation_windows(
     observations: Sequence[Mapping[str, Any]],
     enabled: bool,
     evaluation_time: str | None = None,
+    source_sha: str = "",
+    image_digest: str = "",
 ) -> dict[str, Any]:
     """Evaluate all blocking findings and allow only complete exact coverage."""
     result = _empty_result()
@@ -393,6 +419,16 @@ def evaluate_remediation_windows(
         return result
     if policy_path is None:
         raise RemediationWindowError("policy path is required when remediation windows are enabled")
+    if source_sha:
+        normalized_source_sha = source_sha.lower()
+        if _GIT_SHA.fullmatch(normalized_source_sha) is None:
+            raise RemediationWindowError("source_sha must be a 40-character git SHA")
+        result["source_sha"] = normalized_source_sha
+    if image_digest:
+        normalized_image_digest = image_digest.lower()
+        if _SHA256_DIGEST.fullmatch(normalized_image_digest) is None:
+            raise RemediationWindowError("image_digest must be a full immutable sha256 digest")
+        result["image_digest"] = normalized_image_digest
 
     evaluation = (
         _parse_rfc3339_utc(evaluation_time, label="evaluation_time")
@@ -645,6 +681,8 @@ def _write_github_output(path: Path, result: Mapping[str, Any]) -> None:
         "policy_digest": result.get("policy_digest", ""),
         "evaluator_version": result.get("evaluator_version", ""),
         "remediation_window_failure_reason": result.get("failure_reason", ""),
+        "remediation_window_source_sha": result.get("source_sha", ""),
+        "remediation_window_image_digest": result.get("image_digest", ""),
     }
     with path.open("a", encoding="utf-8") as stream:
         for key, value in fields.items():
@@ -694,6 +732,8 @@ def _parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--observations", type=Path, action="append", default=[])
     evaluate.add_argument("--output", type=Path, required=True)
     evaluate.add_argument("--github-output", type=Path)
+    evaluate.add_argument("--source-sha", default="")
+    evaluate.add_argument("--image-digest", default="")
     evaluate.add_argument("--enabled", type=_boolean, required=True)
     evaluate.add_argument("--evaluation-time")
     evaluate.add_argument("--test-mode", action="store_true")
@@ -731,6 +771,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = evaluate_remediation_windows(
                 policy_path=policy, observations=observations, enabled=True,
                 evaluation_time=args.evaluation_time,
+                source_sha=args.source_sha,
+                image_digest=args.image_digest,
             )
         _atomic_write(args.output, result)
         if args.github_output:
