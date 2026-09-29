@@ -199,7 +199,18 @@ jobs:
 
           install_packages=("semantic-release@${SEMANTIC_RELEASE_VERSION}")
           for pkg in "${plugin_packages[@]}"; do
-            [[ -n "$pkg" ]] && install_packages+=("$pkg")
+            [[ -n "$pkg" ]] || continue
+            case "$pkg" in
+              "@semantic-release/commit-analyzer"|\
+              "@semantic-release/release-notes-generator"|\
+              "@semantic-release/npm"|\
+              "@semantic-release/github")
+                printf 'Using bundled semantic-release default plugin: %s\n' "$pkg"
+                ;;
+              *)
+                install_packages+=("$pkg")
+                ;;
+            esac
           done
 
           if [[ -n "${SEMANTIC_RELEASE_EXTRA_PACKAGES}" ]]; then

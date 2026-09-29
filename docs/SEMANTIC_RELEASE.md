@@ -10,6 +10,8 @@ The default dependency command remains `npm ci`. A reviewed consumer may overrid
 
 The semantic-release runtime and plugins are installed ephemerally with `--package-lock=false`. The reusable does not regenerate `package-lock.json` and does not use `npm install --package-lock-only`.
 
+The four default plugins (`@semantic-release/commit-analyzer`, `@semantic-release/release-notes-generator`, `@semantic-release/npm`, and `@semantic-release/github`) are provided by the pinned `semantic-release` runtime and are not installed again as independent latest packages. Reinstalling a default plugin can override the version selected by semantic-release and create an incompatible plugin/dependency combination. Additional plugins declared by the release configuration and explicit `semantic_release_extra_packages` retain the existing ephemeral installation behavior.
+
 ## Changelog preset compatibility
 
 Consumers that set `preset: conventionalcommits` in a local `.releaserc.json` must declare and lock one of the supported pairs:

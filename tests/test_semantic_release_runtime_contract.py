@@ -32,6 +32,24 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         self.assertIn("npx semantic-release --dry-run", text)
         self.assertIn("run: npx semantic-release", text)
 
+    def test_default_plugins_are_not_reinstalled_over_semantic_release_runtime(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        runtime_step = text.split("- name: Install semantic-release runtime", 1)[1].split(
+            "- name: Validate changelog preset compatibility", 1
+        )[0]
+
+        default_plugins = (
+            "@semantic-release/commit-analyzer",
+            "@semantic-release/release-notes-generator",
+            "@semantic-release/npm",
+            "@semantic-release/github",
+        )
+        self.assertIn('case "$pkg" in', runtime_step)
+        for plugin in default_plugins:
+            with self.subTest(plugin=plugin):
+                self.assertIn(f'"{plugin}"', runtime_step)
+        self.assertIn('install_packages+=("$pkg")', runtime_step)
+
     def test_workflow_validates_conventional_commits_preset_writer_matrix(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("Validate changelog preset compatibility", text)
