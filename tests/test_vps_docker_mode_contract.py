@@ -72,6 +72,24 @@ class VpsDockerModeContractTests(unittest.TestCase):
                     content,
                 )
 
+    def test_registry_credentials_do_not_leak_to_filesystem_security_scan(self) -> None:
+        content = WORKFLOWS[0].read_text(encoding="utf-8")
+        self.assertNotIn(
+            'echo "DOCKER_CONFIG=$DOCKER_CONFIG_DIR" >> "$GITHUB_ENV"',
+            content,
+        )
+
+        pull_start = content.index("- name: Pull declared runtime images")
+        discover_start = content.index("- name: Discover declarative Compose images")
+        pull_step = content[pull_start:discover_start]
+        self.assertIn(
+            "DOCKER_CONFIG_DIR: ${{ runner.temp }}/optimizr-ghcr-docker-config",
+            pull_step,
+        )
+        self.assertIn("REGISTRY_AUTH_MODE: ${{ inputs.registry_auth_mode }}", pull_step)
+        self.assertIn('if [ "$REGISTRY_AUTH_MODE" != anonymous ]; then', pull_step)
+        self.assertIn('export DOCKER_CONFIG="$DOCKER_CONFIG_DIR"', pull_step)
+
     def test_docker_access_mode_is_configured_before_networks_and_volumes(self) -> None:
         for workflow in WORKFLOWS:
             content = workflow.read_text(encoding="utf-8")

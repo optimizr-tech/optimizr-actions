@@ -527,6 +527,27 @@ class SecurityGateEvidenceTests(unittest.TestCase):
         )
         self.assertEqual(evidence.resolve_image_identity(without_digest), "sha256:local-id")
 
+    def test_execution_failure_evidence_contains_only_sanitized_diagnostics(self) -> None:
+        writer = getattr(evidence, "write_execution_failure", None)
+        self.assertTrue(callable(writer), "security-gate must write fallback failure evidence")
+        destination = self.root / "execution-failure.json"
+
+        writer(
+            destination,
+            phase="trivy_database_initialization",
+            exit_code=1,
+        )
+
+        payload = json.loads(destination.read_text(encoding="utf-8"))
+        self.assertEqual(payload["schema_version"], 1)
+        self.assertEqual(payload["result"], "failed")
+        self.assertEqual(payload["classification"], "scanner_error")
+        self.assertEqual(payload["failure_reason"], "security_gate_execution_failed")
+        self.assertEqual(payload["phase"], "trivy_database_initialization")
+        self.assertEqual(payload["exit_code"], 1)
+        self.assertNotIn("stderr", payload)
+        self.assertNotIn("error_message", payload)
+
     def test_write_evidence_binds_reports_to_exact_commit(self) -> None:
         table = self.root / "scan.txt"
         report = self.root / "scan.json"

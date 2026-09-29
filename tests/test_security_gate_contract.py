@@ -195,6 +195,21 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertIn("remediation_window_allowed", self_hosted)
         self.assertIn("remediation_window_allowed", monorepo)
 
+    def test_scanner_initialization_failure_writes_evidence_before_trivy_starts(self) -> None:
+        content = read(".github/actions/security-gate/action.yml")
+
+        mkdir_index = content.index('mkdir -p "$evidence_dir"')
+        trap_index = content.index("trap cleanup_transport_artifacts EXIT")
+        trivy_setup_index = content.index("trivy_cache_setup")
+        failure_writer_index = content.index("write-execution-failure")
+        finalized_index = content.index("security_gate_finalized=1")
+
+        self.assertLess(mkdir_index, trap_index)
+        self.assertLess(trap_index, trivy_setup_index)
+        self.assertLess(trap_index, failure_writer_index)
+        self.assertIn("security_gate_execution_failed", content)
+        self.assertLess(finalized_index, content.index('exit "$aggregate_status"'))
+
     def test_missing_flock_is_an_actionable_runner_prerequisite_failure(self) -> None:
         content = read(".github/actions/security-gate/action.yml")
         cache_helper = read("scripts/security_gate/trivy-cache.sh")
