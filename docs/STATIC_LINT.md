@@ -27,6 +27,8 @@ The pinned actionlint 1.7.12 schema predates GitHub Actions' `concurrency.queue`
 
 The runner uses actionlint's range template to emit one JSON object per diagnostic line. A clean run emits no output; this matches the filter's JSONL input contract. Only actionlint's exact unsupported-`queue` syntax diagnostic at the validated key's file, line, and column is suppressed. Invalid queue contracts, malformed output, and every other actionlint diagnostic remain blocking. The evidence artifact keeps both the original `actionlint.jsonl` and the filtered `actionlint.filtered.jsonl`, and records the raw/effective exit codes and suppression count. The official binary versions and architecture-specific checksums remain unchanged. Remove this compatibility layer after the pinned official release supports the property and the contract tests confirm it.
 
+For compatibility with the legacy JSON-array format, the runner treats only the complete value `[]` as zero diagnostics while preserving the raw output in the evidence artifact. Non-empty arrays, malformed JSON, and unknown diagnostic shapes remain fail-closed.
+
 See [GitHub's concurrency documentation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency) and the upstream [actionlint queue support PR](https://github.com/rhysd/actionlint/pull/654).
 
 Rollback is to pin the previous `optimizr-actions` commit and preserve equivalent pinned lint tooling. Do not convert failures into global warnings.

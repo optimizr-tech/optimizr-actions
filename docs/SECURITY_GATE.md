@@ -263,6 +263,27 @@ Required fields are `id`, `owner`, `statement`, `compensating_control`, `expires
 
 The gate keeps the complete Trivy report for evidence, then applies the active exception policy to the blocking report by exact finding ID plus `paths`/`purls` when those scopes are present. This is intentional: Trivy 0.70's native line-oriented ignorefile cannot enforce the JSON policy's path and PURL boundaries for misconfigurations. A finding with the same ID in another path or package therefore remains blocking.
 
+### Complete active image-set validation (opt-in)
+
+The `security-gate` composite accepts `active_image_ids_file` for callers that
+need the complete exception document checked before any image is scanned. The
+file is newline-delimited and must match the complete `image_refs` set of full
+lowercase `sha256:<64 hex>` IDs; duplicate, missing, malformed, or extra
+IDs fail closed. This mode requires `scan_type: image` and a non-empty
+`exceptions_file`, and every `image_refs` value must itself be an immutable
+image ID rather than a tag or mutable reference.
+
+The action validates every policy entry once against that full set before the
+existing per-image rendering loop. It rejects expired or malformed entries,
+duplicate exception identities or scan types, wildcard/noncanonical image
+targets, and targets outside the active set. Image exceptions must retain an
+exact path or PURL scope; lineage exceptions also require exact PURLs.
+Filesystem-only entries remain valid when scoped to exact paths, and lineage
+digests remain supported. When `active_image_ids_file` is omitted, the existing
+per-target `v1` behavior and defaults are unchanged. A consumer can roll back
+the opt-in by removing this input; it should retain any local validator until
+the runner verifies the shared contract.
+
 For a rebuilt image whose local ID changes, the reviewed exception can therefore retain the stable parent or published digest without matching unrelated images:
 
 ```json
@@ -295,6 +316,15 @@ The evidence record contains the repository name, exact 40-character commit SHA,
 When deploy manifests are enabled, they also record only these remediation states: initial classification, whether rebuild was attempted, rebuild result and final classification. `security_rebuild_result` is `passed`, `failed`, `skipped`, or `no_change`; only `passed` means that changed immutable IDs passed the final security gate. Failed or unchanged remediation never replaces `last-successful.json`.
 
 Standalone and deploy workflows upload the evidence as a GitHub Actions artifact with 30-day retention. Evidence upload uses `if: always()` so failed scans retain their reports.
+
+If the action exits before its aggregate evidence is finalized (for example,
+Trivy cannot read its configuration or initialize its database), it writes a
+sanitized `security-gate-failure.json` record before exiting. The record marks
+the result as failed with `classification=scanner_error`, a generic
+`security_gate_execution_failed` reason, an allow-listed execution phase, and
+the original exit code. It never copies scanner stderr, environment values, or
+credentials. The required artifact upload remains fail-closed; this fallback
+does not turn an incomplete scan into a clean result or hide an upload failure.
 
 ## Runner requirements
 

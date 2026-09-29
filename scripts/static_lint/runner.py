@@ -259,6 +259,9 @@ def filter_actionlint_queue_errors(
     valid_locations: dict[str, set[tuple[int, int]]],
 ) -> tuple[str, int, bool]:
     """Suppress only the known actionlint error at a contract-validated key."""
+    if output.strip() == "[]":
+        return "", 0, True
+
     kept: list[str] = []
     suppressed = 0
     parseable = True

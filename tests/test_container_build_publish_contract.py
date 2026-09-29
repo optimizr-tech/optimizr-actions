@@ -420,7 +420,7 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
             content = workflow.read_text(encoding="utf-8")
             with self.subTest(workflow=workflow.name):
                 self.assertIn("DOCKER_CONFIG_DIR", content)
-                self.assertIn("DOCKER_CONFIG=$DOCKER_CONFIG_DIR", content)
+                self.assertIn('DOCKER_CONFIG="$DOCKER_CONFIG_DIR"', content)
                 self.assertIn(
                     'DOCKER_CONFIG="$DOCKER_CONFIG_DIR" docker_cmd logout "$REGISTRY"',
                     content,
