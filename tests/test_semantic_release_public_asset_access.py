@@ -47,7 +47,7 @@ class SemanticReleasePublicAssetAccessTests(unittest.TestCase):
                 if path.endswith(".json"):
                     self.assertIsInstance(json.loads(content), dict)
                 else:
-                    self.assertIn(b"prepare_protected_releaserc", content)
+                    self.assertIn(b"class ProtectedReleaseError", content)
 
 
 if __name__ == "__main__":

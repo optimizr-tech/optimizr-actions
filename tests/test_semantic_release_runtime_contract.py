@@ -89,8 +89,10 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
 
         self.assertNotIn("GH_TOKEN:", resolver)
         self.assertNotIn("gh api", resolver)
-        self.assertIn("curl --fail --silent --show-error --get", resolver)
-        self.assertIn("--connect-timeout 15 --max-time 60", resolver)
+        self.assertIn(
+            "curl --fail --silent --show-error --connect-timeout 15 --max-time 60 --get",
+            resolver,
+        )
         self.assertIn('Accept: application/vnd.github.raw+json', resolver)
         self.assertNotIn('Authorization:', resolver)
         self.assertIn('if [[ -z "$SOURCE_REF" ]]', resolver)
