@@ -40,8 +40,9 @@ jobs:
 When `releaserc_source: canonical` is selected, the workflow fetches the public
 release configuration through the unauthenticated GitHub Contents API.
 Normal mode uses the exact `actions_ref` input; protected-main mode uses the
-verified `job.workflow_sha` for both the configuration and transformer. The resolver does not use the
-caller's `GITHUB_TOKEN` or require a cross-repository secret. An empty ref or
+verified `job.workflow_sha` for both the configuration and transformer. The
+resolver does not use the caller's `GITHUB_TOKEN` or require a cross-repository
+secret. An empty ref or
 failed content request stops the job; it never silently falls back to a
 different ref or to the local configuration. GitHub's unauthenticated REST API
 quota is per originating IP; normal mode makes one content request and
