@@ -37,6 +37,17 @@ jobs:
     secrets: inherit
 ```
 
+When `releaserc_source: canonical` is selected, the workflow fetches the public
+release configuration without authentication. Normal mode uses the exact
+`actions_ref` input; protected-main mode uses the verified `job.workflow_sha`
+for both the configuration and transformer. The resolver does not use the
+caller's `GITHUB_TOKEN` or require a cross-repository secret. An empty ref or
+failed content request stops the job; it never silently falls back to a
+different ref or to the local configuration. GitHub's unauthenticated REST API
+quota is per originating IP; normal mode makes one content request and
+protected-main mode makes two. If that quota or network access is unavailable,
+the request fails closed rather than using a caller token.
+
 ## Release behavior
 
 The workflow checks out complete history, installs dependencies, resolves either the caller configuration or the canonical Optimizr configuration, installs the ephemeral release runtime, executes a dry-run, and then executes semantic-release. Badge maintenance runs only after a successful release job.

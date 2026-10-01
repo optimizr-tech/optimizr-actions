@@ -131,7 +131,6 @@ jobs:
         env:
           REQUESTED_REF: ${{ inputs.actions_ref }}
           JOB_CONTEXT_JSON: ${{ toJSON(job) }}
-          GH_TOKEN: ${{ github.token }}
           PROTECTED_MAIN_MODE: ${{ inputs.protected_main_mode }}
         run: |
           set -euo pipefail
@@ -163,17 +162,28 @@ jobs:
             fi
           fi
 
+          if [[ -z "$SOURCE_REF" ]]; then
+            echo "::error::canonical assets require a non-empty source ref"
+            exit 2
+          fi
+
+          fetch_asset() {
+            local ASSET_PATH="$1"
+            local DESTINATION="$2"
+            curl --fail --silent --show-error --connect-timeout 15 --max-time 60 --get \
+              --header "Accept: application/vnd.github.raw+json" \
+              --data-urlencode "ref=${SOURCE_REF}" \
+              "https://api.github.com/repos/${SOURCE_REPOSITORY}/contents/${ASSET_PATH}" \
+              --output "$DESTINATION"
+          }
+
           DEST=".releaserc.json"
-          gh api -H "Accept: application/vnd.github.raw" \
-            "repos/${SOURCE_REPOSITORY}/contents/templates/.releaserc.json?ref=${SOURCE_REF}" \
-            > "$DEST"
+          fetch_asset "templates/.releaserc.json" "$DEST"
           echo "Using canonical releaserc from ${SOURCE_REPOSITORY}@${SOURCE_REF}"
 
           if [[ "$PROTECTED_MAIN_MODE" == "true" ]]; then
             TRANSFORMER="$RUNNER_TEMP/prepare_protected_releaserc.py"
-            gh api -H "Accept: application/vnd.github.raw" \
-              "repos/${SOURCE_REPOSITORY}/contents/scripts/release/prepare_protected_releaserc.py?ref=${SOURCE_REF}" \
-              > "$TRANSFORMER"
+            fetch_asset "scripts/release/prepare_protected_releaserc.py" "$TRANSFORMER"
             chmod 700 "$TRANSFORMER"
             echo "Using protected-main transformer from ${SOURCE_REPOSITORY}@${SOURCE_REF}"
           fi

@@ -90,8 +90,11 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         self.assertNotIn("GH_TOKEN:", resolver)
         self.assertNotIn("gh api", resolver)
         self.assertIn("curl --fail --silent --show-error --get", resolver)
+        self.assertIn("--connect-timeout 15 --max-time 60", resolver)
         self.assertIn('Accept: application/vnd.github.raw+json', resolver)
         self.assertNotIn('Authorization:', resolver)
+        self.assertIn('if [[ -z "$SOURCE_REF" ]]', resolver)
+        self.assertIn("canonical assets require a non-empty source ref", resolver)
 
     def test_canonical_assets_use_one_urlencoded_source_ref_for_both_files(self):
         text = WORKFLOW.read_text(encoding="utf-8")
@@ -116,6 +119,8 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         text = DOC.read_text(encoding="utf-8")
         self.assertIn("Node 24", text)
         self.assertIn("npm 12.0.2", text)
+        self.assertIn("unauthenticated GitHub Contents API", text)
+        self.assertIn("does not use the caller's `GITHUB_TOKEN`", text)
         self.assertIn("controlled npm", text)
         self.assertIn("does not regenerate `package-lock.json`", text)
         self.assertIn("optimizr-infra-ops", text)
