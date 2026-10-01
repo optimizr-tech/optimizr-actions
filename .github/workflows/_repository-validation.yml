@@ -248,12 +248,14 @@ jobs:
             echo "::error::node_version is required when npm_version or pnpm_version is set"
             exit 2
           fi
-          case "$NPM_VERSION" in
-            ""|*[!0-9A-Za-z._+-]*)
-              echo "::error::npm_version contains unsupported characters"
-              exit 2
-              ;;
-          esac
+          if [[ -n "$NPM_VERSION" ]]; then
+            case "$NPM_VERSION" in
+              *[!0-9A-Za-z._+-]*)
+                echo "::error::npm_version contains unsupported characters"
+                exit 2
+                ;;
+            esac
+          fi
       - name: Setup Node.js for repository contract
         if: inputs.node_version != ''
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
