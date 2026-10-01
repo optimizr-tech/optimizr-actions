@@ -81,6 +81,37 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
             text,
         )
 
+    def test_canonical_assets_do_not_rely_on_the_callers_repository_token(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        resolver = text.split("- name: Resolve canonical release assets", 1)[1].split(
+            "- name: Prepare protected-main release config", 1
+        )[0]
+
+        self.assertNotIn("GH_TOKEN:", resolver)
+        self.assertNotIn("gh api", resolver)
+        self.assertIn("curl --fail --silent --show-error --get", resolver)
+        self.assertIn('Accept: application/vnd.github.raw+json', resolver)
+        self.assertNotIn('Authorization:', resolver)
+
+    def test_canonical_assets_use_one_urlencoded_source_ref_for_both_files(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        resolver = text.split("- name: Resolve canonical release assets", 1)[1].split(
+            "- name: Prepare protected-main release config", 1
+        )[0]
+
+        self.assertIn('--data-urlencode "ref=${SOURCE_REF}"', resolver)
+        self.assertIn(
+            'https://api.github.com/repos/${SOURCE_REPOSITORY}/contents/${ASSET_PATH}',
+            resolver,
+        )
+        self.assertIn('fetch_asset "templates/.releaserc.json" "$DEST"', resolver)
+        self.assertIn(
+            'fetch_asset "scripts/release/prepare_protected_releaserc.py" "$TRANSFORMER"',
+            resolver,
+        )
+        self.assertIn('SOURCE_REF="$REQUESTED_REF"', resolver)
+        self.assertIn('SOURCE_REF="$WORKFLOW_SHA"', resolver)
+
     def test_documentation_defines_runtime_migration_and_rollback(self):
         text = DOC.read_text(encoding="utf-8")
         self.assertIn("Node 24", text)
