@@ -31,6 +31,20 @@ class NodeProjectContractTests(unittest.TestCase):
         self.assertLess(pnpm_setup, text.index("cache: pnpm"))
         self.assertIn("cache-dependency-path:", text)
 
+    def test_pnpm_store_isolated_per_runner_job_before_cache_restore(self):
+        text = (ROOT / ".github/workflows/_node-project-test.yml").read_text()
+        store_setup = text.index("- name: Prepare isolated pnpm store")
+        cache_setup = text.index("- name: Initialize pnpm cache")
+        project_validation = text.index("- name: Run bounded Node project validation")
+
+        self.assertLess(store_setup, cache_setup)
+        self.assertLess(cache_setup, project_validation)
+        self.assertIn('mkdir -p "$PNPM_CONFIG_STORE_DIR"', text[store_setup:cache_setup])
+        self.assertGreaterEqual(
+            text.count("PNPM_CONFIG_STORE_DIR: ${{ runner.temp }}/pnpm-store"),
+            3,
+        )
+
     def test_contract_is_read_only_and_has_no_arbitrary_command_input(self):
         text = (ROOT / ".github/workflows/_node-project-test.yml").read_text()
         action = (ROOT / ".github/actions/node-project-test/action.yml").read_text()
