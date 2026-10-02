@@ -186,9 +186,16 @@ jobs:
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271
         with:
           version: ${{ inputs.pnpm_version }}
+      - name: Prepare isolated pnpm store
+        if: matrix.project.package_manager == 'pnpm'
+        env:
+          PNPM_CONFIG_STORE_DIR: ${{ runner.temp }}/pnpm-store
+        run: mkdir -p "$PNPM_CONFIG_STORE_DIR"
       - name: Initialize pnpm cache
         if: matrix.project.package_manager == 'pnpm'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        env:
+          PNPM_CONFIG_STORE_DIR: ${{ runner.temp }}/pnpm-store
         with:
           node-version: ${{ inputs.node_version }}
           cache: pnpm
@@ -200,6 +207,8 @@ jobs:
           node-version: ${{ inputs.node_version }}
       - name: Run bounded Node project validation
         uses: optimizr-tech/optimizr-actions/.github/actions/node-project-test@v1
+        env:
+          PNPM_CONFIG_STORE_DIR: ${{ runner.temp }}/pnpm-store
         with:
           project_json: ${{ toJSON(matrix.project) }}
       - name: Upload project evidence and collected artifacts
