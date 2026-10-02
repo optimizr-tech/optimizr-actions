@@ -126,10 +126,19 @@ jobs:
         with:
           node-version: 24
 
+      - name: Prepare job-local pnpm store
+        shell: bash
+        env:
+          PNPM_CONFIG_STORE_DIR: ${{ runner.temp }}/pnpm-store-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-${{ strategy.job-index }}
+        run: |
+          mkdir -p "$PNPM_CONFIG_STORE_DIR"
+          printf 'PNPM_CONFIG_STORE_DIR=%s\n' "$PNPM_CONFIG_STORE_DIR" >> "$GITHUB_ENV"
+
       - name: Install pnpm
         uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093
         with:
           version: 10
+          dest: ${{ runner.temp }}/pnpm-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
 
       - name: Run jscpd
         run: |

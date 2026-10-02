@@ -84,3 +84,22 @@ documentation, affected-consumer inventory and rollback guidance. Generated
 catalogs must be regenerated and checked before the PR is opened. After merge,
 confirm the release validation and `v1` SHA before adapting consumers; use one
 non-legacy consumer as a canary before broader adoption.
+
+## pnpm isolation on persistent runners
+
+Every pnpm action bootstrap uses an explicit destination under `runner.temp`,
+identified by workflow run, attempt and job. No portable workflow installs the
+executable in the shared `~/setup-pnpm` home. Matrix jobs execute exclusively
+on each runner; separate runners must have distinct temporary directories.
+
+The quality-gate collectors also create a matrix-indexed package store and
+export `PNPM_CONFIG_STORE_DIR` through `GITHUB_ENV` before pnpm installation.
+Bootstrap, dependency installation, `dlx` and setup-node cache discovery inherit
+the same value. The store is initialized at step scope because `runner` is not
+available in job-level `env` expressions; see the [GitHub context availability
+reference](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability).
+Node/pnpm versions, caller inputs, report semantics and trust gates are unchanged.
+Repository validation uses the same step-scoped export for its non-matrix
+package store, so repository-owned frontend installs inherit isolation too.
+Rollback is a reviewed revert and normal validated `v1` publication; never delete
+persistent host caches to hide a bootstrap regression.
