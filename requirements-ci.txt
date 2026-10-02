@@ -1,0 +1,2 @@
+# Runtime dependencies for the repository contract suite.
+PyYAML==6.0.3

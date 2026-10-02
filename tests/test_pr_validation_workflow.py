@@ -11,49 +11,33 @@ WORKFLOW = ROOT / ".github" / "workflows" / "validate-pr.yml"
 
 
 class PullRequestValidationWorkflowTests(unittest.TestCase):
-    def test_validation_runs_on_hosted_runner_with_read_only_permissions(self) -> None:
+    def test_pr_validation_uses_self_hosted_metadata_with_read_only_permissions(self) -> None:
         content = WORKFLOW.read_text(encoding="utf-8")
 
         self.assertIn("pull_request:", content)
         self.assertNotIn("pull_request_target", content)
-        self.assertIn("runs-on: ubuntu-latest", content)
-        self.assertNotIn("self-hosted", content)
+        self.assertIn('runner_json: \'["self-hosted","Linux","local-docker"]\'', content)
+        self.assertIn("self_hosted_mode: metadata-pr", content)
+        self.assertNotIn("ubuntu-latest", content)
         self.assertIn("permissions:\n  contents: read", content)
+        self.assertIn("pull-requests: read", content)
         self.assertNotIn("contents: write", content)
 
-    def test_validation_executes_repository_and_action_contract_checks(self) -> None:
+    def test_pr_never_checks_out_or_executes_candidate_code(self) -> None:
         content = WORKFLOW.read_text(encoding="utf-8")
-
-        self.assertIn("python3 -m unittest discover", content)
-        self.assertIn("python3 -m compileall", content)
-        self.assertIn("scripts tests", content)
-        self.assertIn("git diff --check", content)
-        self.assertIn("continue-on-error: true", content)
-        self.assertIn("Upload failed suite diagnostics", content)
-        self.assertIn("steps.full-suite.outcome == 'failure'", content)
         self.assertIn(
-            "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@v1",
             content,
         )
-        self.assertIn(
-            "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
-            content,
-        )
-        self.assertIn(
-            "rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667",
-            content,
-        )
-        self.assertIn(
-            "mikefarah/yq@sha256:76def1f56f456ecc1c3173ea275218ee17139bc2018c5a07887b15afd88ec03e",
-            content,
-        )
-
-    def test_dispatch_diff_check_does_not_require_a_shallow_parent_commit(self) -> None:
-        content = WORKFLOW.read_text(encoding="utf-8")
-
-        self.assertIn('git fetch --no-tags --depth=1 origin main', content)
-        self.assertIn('BASE_SHA="$(git rev-parse origin/main)"', content)
-        self.assertNotIn('git rev-parse HEAD^', content)
+        for forbidden in (
+            "actions/checkout", "steps:", "run:", "docker ",
+            "python3 -m unittest", "secrets:", "workflow_dispatch:",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, content)
+        for field in ("pr_number", "pr_title", "pr_body", "base_sha", "head_sha"):
+            with self.subTest(field=field):
+                self.assertIn(f"      {field}:", content)
 
 
 if __name__ == "__main__":
