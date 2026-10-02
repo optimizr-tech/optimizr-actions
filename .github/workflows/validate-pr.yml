@@ -3,92 +3,25 @@ name: Validate pull request
 on:
   pull_request:
     branches: [main]
-  workflow_dispatch:
+    types: [opened, edited, synchronize, reopened]
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
-  group: validate-pr-${{ github.event.pull_request.number || github.ref }}
+  group: validate-pr-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   validate:
-    name: Validate portable action contracts
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout candidate
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-        with:
-          fetch-depth: 1
-          persist-credentials: false
-          show-progress: false
-
-      - name: Show Python version
-        run: python3 --version
-
-      - name: Verify repository boundary
-        run: python3 -m unittest tests.test_repository_boundary -v
-
-      - name: Verify deploy manifest writer
-        run: python3 -m unittest tests.test_deploy_manifest_writer -v
-
-      - name: Verify deploy manifest action
-        run: python3 -m unittest tests.test_deploy_manifest_action -v
-
-      - name: Verify PR validation policy
-        run: python3 -m unittest tests.test_pr_validation_workflow -v
-
-      - name: Run full Python contract suite
-        id: full-suite
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-          test_log="$RUNNER_TEMP/optimizr-unittest.log"
-          python3 -m unittest discover >"$test_log" 2>&1
-          tail -n 8 "$test_log"
-          python3 -m compileall -q scripts tests
-
-      - name: Upload failed suite diagnostics
-        if: steps.full-suite.outcome == 'failure'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: validation-failure-${{ github.run_id }}
-          path: ${{ runner.temp }}/optimizr-unittest.log
-          if-no-files-found: error
-          retention-days: 3
-
-      - name: Enforce full suite result
-        if: steps.full-suite.outcome == 'failure'
-        run: exit 1
-
-      - name: Check candidate diff
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          if [ -z "$BASE_SHA" ]; then
-            git fetch --no-tags --depth=1 origin main
-            BASE_SHA="$(git rev-parse origin/main)"
-          else
-            git fetch --no-tags --depth=1 origin "$BASE_SHA"
-          fi
-          git diff --check "$BASE_SHA" HEAD
-
-      - name: Run actionlint
-        run: |
-          set -euo pipefail
-          docker run --rm \
-            -v "$GITHUB_WORKSPACE:/repo" \
-            -w /repo \
-            rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
-
-      - name: Validate composite action metadata
-        run: |
-          set -euo pipefail
-          docker run --rm \
-            -v "$GITHUB_WORKSPACE:/repo" \
-            -w /repo \
-            mikefarah/yq@sha256:76def1f56f456ecc1c3173ea275218ee17139bc2018c5a07887b15afd88ec03e \
-            eval 'true' .github/actions/*/action.yml
+    name: Validate PR metadata
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@v1
+    with:
+      runner_json: '["self-hosted","Linux","local-docker"]'
+      self_hosted_mode: metadata-pr
+      pr_number: ${{ github.event.pull_request.number }}
+      pr_title: ${{ github.event.pull_request.title }}
+      pr_body: ${{ github.event.pull_request.body || '' }}
+      base_sha: ${{ github.event.pull_request.base.sha }}
+      head_sha: ${{ github.event.pull_request.head.sha }}

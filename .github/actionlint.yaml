@@ -2,6 +2,10 @@
 # identity properties used by reusable workflows to check out their own source.
 # Keep these exceptions path-scoped and remove them after upstream support lands:
 # https://github.com/rhysd/actionlint/pull/661
+self-hosted-runner:
+  labels:
+    - local-docker
+
 paths:
   .github/workflows/_vps-self-hosted-deploy.yml:
     ignore:

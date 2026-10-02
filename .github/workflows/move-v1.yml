@@ -1,7 +1,8 @@
 name: Validate and move v1 compatibility tag
 
 # `v1` is the floating compatibility contract for backward-compatible changes.
-# Pull requests validate the synthetic merge candidate before publication.
+# Pull requests validate metadata without checking out candidate code.
+# The full suite validates the trusted main SHA before publication.
 # Push remains the normal publication path. pull_request_target:closed is used
 # only as the recovery path when a merged commit contains a native GitHub skip
 # instruction that suppresses the push-triggered workflow.
@@ -10,21 +11,15 @@ on:
   push:
     branches: [main]
     paths:
+      - ".github/actionlint.yaml"
       - ".github/actions/**"
       - ".github/workflows/**"
       - "templates/**"
       - "presets/**"
       - "scripts/**"
       - "catalog/**"
-  pull_request:
-    branches: [main]
-    paths:
-      - ".github/actions/**"
-      - ".github/workflows/**"
-      - "templates/**"
-      - "presets/**"
-      - "scripts/**"
-      - "catalog/**"
+      - "tests/**"
+      - "requirements-ci.txt"
   pull_request_target:
     types: [closed]
     branches: [main]
@@ -45,9 +40,10 @@ jobs:
   scope:
     name: Resolve candidate contract revision
     if: >-
-      github.event_name != 'pull_request_target' ||
-      github.event.pull_request.merged == true
-    runs-on: ubuntu-latest
+      github.ref == 'refs/heads/main' &&
+      (github.event_name != 'pull_request_target' ||
+      github.event.pull_request.merged == true)
+    runs-on: [self-hosted, Linux, local-docker]
     timeout-minutes: 5
     permissions:
       contents: read
@@ -56,6 +52,25 @@ jobs:
       publish: ${{ steps.scope.outputs.publish }}
       target_sha: ${{ steps.scope.outputs.target_sha }}
     steps:
+      - name: Validate trusted main event
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+          PR_MERGED: ${{ github.event.pull_request.merged }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          python3 - <<'PY'
+          import os
+          if os.environ["EVENT_REF"] != "refs/heads/main":
+              raise SystemExit("contract validation requires refs/heads/main")
+          event = os.environ["EVENT_NAME"]
+          if event not in {"push", "workflow_dispatch"}:
+              if (event != "pull_request_target"
+                  or os.environ["PR_MERGED"] != "true"
+                  or os.environ["PR_BASE_REF"] != "main"):
+                  raise SystemExit("contract validation requires trusted main or a merged main PR")
+          PY
+
       - id: scope
         name: Detect portable-contract changes
         env:
@@ -92,7 +107,7 @@ jobs:
                   --jq '.[].filename'
               )"
               if printf '%s\n' "$changed_files" \
-                | grep -Eq '^(\.github/actions/|\.github/workflows/|templates/|presets/|scripts/|catalog/)'; then
+                | grep -Eq '^(\.github/actionlint\.yaml$|\.github/actions/|\.github/workflows/|templates/|presets/|scripts/|catalog/|tests/|requirements-ci\.txt$)'; then
                 publish=true
               else
                 publish=false
@@ -113,7 +128,7 @@ jobs:
     name: Validate workflows and composite actions
     needs: [scope]
     if: needs.scope.outputs.publish == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, local-docker]
     timeout-minutes: 10
     permissions:
       contents: read
@@ -123,6 +138,29 @@ jobs:
         with:
           ref: ${{ needs.scope.outputs.target_sha }}
           persist-credentials: false
+          fetch-depth: 2
+
+      - name: Verify validated revision and diff
+        env:
+          TARGET_SHA: ${{ needs.scope.outputs.target_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          git diff --check HEAD^ HEAD
+
+      - name: Install validation Python toolchain
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          python-version: '3.14'
+          enable-cache: false
+
+      - name: Prepare job-local contract dependencies
+        run: |
+          set -euo pipefail
+          validation_venv="$RUNNER_TEMP/optimizr-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          uv venv --python 3.14 "$validation_venv"
+          uv pip install --python "$validation_venv/bin/python" --requirement requirements-ci.txt
+          echo "$validation_venv/bin" >> "$GITHUB_PATH"
 
       - name: Run Python contract tests
         run: |
@@ -151,8 +189,8 @@ jobs:
   move-v1:
     name: Move floating v1 tag
     needs: [scope, validate]
-    if: needs.scope.outputs.publish == 'true' && github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
+    if: needs.scope.outputs.publish == 'true' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: [self-hosted, Linux, local-docker]
     timeout-minutes: 5
     permissions:
       contents: write

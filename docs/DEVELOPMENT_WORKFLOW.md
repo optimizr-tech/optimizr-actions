@@ -48,9 +48,34 @@ Focused tests remain appropriate during development:
 python -m unittest tests.test_<contract> -v
 ```
 
-The hosted `Validate pull request` workflow remains the authoritative Linux
-check. Local Windows results must keep platform limitations visible, especially
-for symlink, Unix-mode and Docker tests.
+`Validate pull request` runs only read-only PR metadata validation on
+`[self-hosted, Linux, local-docker]`, using the published metadata contract
+without checking out candidate code. This check does not claim that candidate
+tests passed. Candidate code can be tested locally or in an optional isolated
+ephemeral canary; an ephemeral runner is not required for the normal flow.
+
+After a human-reviewed merge, `Validate and move v1 compatibility tag` checks
+the exact trusted `main` revision on the same self-hosted validation pool. The
+catalog, full Python contract suite, actionlint, YAML metadata and revision/diff
+checks must all succeed before `v1` can move. Only `main` push/dispatch and the
+existing merged-PR recovery path are accepted. There is no automatic hosted
+fallback. Local Windows results must keep platform limitations visible,
+especially for symlink, Unix-mode and Docker tests.
+
+The trusted-main job provisions Python 3.14 and installs the pinned
+`requirements-ci.txt` dependencies in a run/attempt-specific virtualenv under
+`runner.temp`. It does not depend on packages installed in the runner's system
+Python or modify the system environment.
+
+Before activating this owner-repository route, infra-ops must authorize this
+repository for the `local-docker` pool and prove runner scheduling and tooling.
+Runner registration, access policy and capacity remain infra-ops responsibilities.
+Because this repository is public, access must be limited to approved workflow
+definitions: candidate PR edits must not be able to schedule arbitrary jobs on
+the persistent pool. Merely granting repository access is insufficient.
+An unavailable runner is pending validation, not a successful check. Any branch
+protection rule must use the metadata check for PRs and retain full trusted-main
+validation as a prerequisite to publishing `v1`.
 
 ## PR and release checkpoints
 
