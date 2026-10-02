@@ -89,7 +89,7 @@ class ProtectedReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('SOURCE_REPOSITORY="$WORKFLOW_REPOSITORY"', self.workflow)
         self.assertIn('SOURCE_REF="$WORKFLOW_SHA"', self.workflow)
         self.assertIn(
-            '"repos/${SOURCE_REPOSITORY}/contents/scripts/release/prepare_protected_releaserc.py?ref=${SOURCE_REF}"',
+            'fetch_asset "scripts/release/prepare_protected_releaserc.py" "$TRANSFORMER"',
             self.workflow,
         )
         self.assertIn("$RUNNER_TEMP/prepare_protected_releaserc.py", self.workflow)
