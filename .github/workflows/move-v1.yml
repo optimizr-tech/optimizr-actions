@@ -1,7 +1,7 @@
 name: Validate and move v1 compatibility tag
 
 # `v1` is the floating compatibility contract for backward-compatible changes.
-# Pull requests validate metadata without checking out candidate code.
+# The metadata check validates PR details without checking out candidate code.
 # The full suite validates the trusted main SHA before publication.
 # Push remains the normal publication path. pull_request_target:closed is used
 # only as the recovery path when a merged commit contains a native GitHub skip
@@ -43,7 +43,7 @@ jobs:
       github.ref == 'refs/heads/main' &&
       (github.event_name != 'pull_request_target' ||
       github.event.pull_request.merged == true)
-    runs-on: [self-hosted, Linux, local-docker]
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
@@ -128,7 +128,7 @@ jobs:
     name: Validate workflows and composite actions
     needs: [scope]
     if: needs.scope.outputs.publish == 'true'
-    runs-on: [self-hosted, Linux, local-docker]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
@@ -190,7 +190,7 @@ jobs:
     name: Move floating v1 tag
     needs: [scope, validate]
     if: needs.scope.outputs.publish == 'true' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    runs-on: [self-hosted, Linux, local-docker]
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: write

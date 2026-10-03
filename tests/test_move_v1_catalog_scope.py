@@ -20,8 +20,8 @@ class MoveV1CatalogScopeTests(unittest.TestCase):
         self.assertIn('      - "catalog/**"', self.workflow)
         self.assertIn('      - "tests/**"', self.workflow)
         self.assertIn('      - "requirements-ci.txt"', self.workflow)
-        self.assertEqual(self.workflow.count("runs-on: [self-hosted, Linux, local-docker]"), 3)
-        self.assertNotIn("ubuntu-latest", self.workflow)
+        self.assertEqual(self.workflow.count("runs-on: ubuntu-latest"), 3)
+        self.assertNotIn("self-hosted", self.workflow)
 
     def test_recovery_path_recognizes_catalog_changes(self) -> None:
         self.assertIn(

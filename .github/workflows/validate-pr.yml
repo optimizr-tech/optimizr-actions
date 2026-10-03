@@ -18,10 +18,89 @@ jobs:
     name: Validate PR metadata
     uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@v1
     with:
-      runner_json: '["self-hosted","Linux","local-docker"]'
-      self_hosted_mode: metadata-pr
+      runner_json: '["ubuntu-latest"]'
+      self_hosted_mode: none
       pr_number: ${{ github.event.pull_request.number }}
       pr_title: ${{ github.event.pull_request.title }}
       pr_body: ${{ github.event.pull_request.body || '' }}
       base_sha: ${{ github.event.pull_request.base.sha }}
       head_sha: ${{ github.event.pull_request.head.sha }}
+
+  validate-candidate:
+    name: Validate portable action contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+          show-progress: false
+
+      - name: Install validation Python toolchain
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          python-version: '3.14'
+          enable-cache: false
+
+      - name: Prepare job-local contract dependencies
+        run: |
+          set -euo pipefail
+          validation_venv="$RUNNER_TEMP/optimizr-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          uv venv --python 3.14 "$validation_venv"
+          uv pip install --python "$validation_venv/bin/python" --requirement requirements-ci.txt
+          echo "$validation_venv/bin" >> "$GITHUB_PATH"
+
+      - name: Verify generated capability catalog
+        run: python3 -m scripts.capability_catalog.generate --check
+
+      - name: Run Python contract tests
+        id: full-suite
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          test_log="$RUNNER_TEMP/optimizr-unittest.log"
+          python3 -m unittest discover -v >"$test_log" 2>&1
+          tail -n 8 "$test_log"
+          python3 -m compileall -q scripts tests
+
+      - name: Upload failed suite diagnostics
+        if: steps.full-suite.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: validation-failure-${{ github.run_id }}
+          path: ${{ runner.temp }}/optimizr-unittest.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Enforce full suite result
+        if: steps.full-suite.outcome == 'failure'
+        run: exit 1
+
+      - name: Check candidate diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          git diff --check "$BASE_SHA" HEAD
+
+      - name: Run actionlint
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/repo" \
+            -w /repo \
+            rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+
+      - name: Validate composite action metadata
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/repo" \
+            -w /repo \
+            mikefarah/yq@sha256:76def1f56f456ecc1c3173ea275218ee17139bc2018c5a07887b15afd88ec03e \
+            eval 'true' .github/actions/*/action.yml
