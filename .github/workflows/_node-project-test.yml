@@ -186,6 +186,7 @@ jobs:
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271
         with:
           version: ${{ inputs.pnpm_version }}
+          dest: ${{ runner.temp }}/pnpm-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
       - name: Prepare isolated pnpm store
         if: matrix.project.package_manager == 'pnpm'
         env:

@@ -1305,7 +1305,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "f428066bd2c0e8efc00a2671e1ed158fb4b46b9cc14e142b21dcfb7a2bd5fefa",
+      "source_sha256": "ad5ec114503b9ede0e06cebc2d1527d6e50922557dc03f1092a0fdf581bfa149",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1515,7 +1515,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "818a0239a949930ba023ad71fdd6c923ae4a59067be2c51d2a336962a61ae48d",
+      "source_sha256": "336ba9c8a29416a680aba0bdb30ca1da49eaa2e871f186ed4edd7f747b5403e8",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1544,7 +1544,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "099e0c6f84ab4a8078e37d7d0a2dc2df286e140e792ce74deeff0adc89cade98",
+      "source_sha256": "1b0e3acb0cb7ed06d745dce8490e9b843e1f3481ff4c21856eb6d50cf415a332",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1720,7 +1720,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "74afc1efa44bc8df47636b7cf4bfad83a01233b71e3e53d19c6eb0897cfb9cf6",
+      "source_sha256": "5896bdbf13658e7e0a94a5a75f4d6f3cb9ee477cffd57ca5c1868d9277491321",
       "trust_boundary": "trusted-pr"
     },
     {
