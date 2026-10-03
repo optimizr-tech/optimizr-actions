@@ -1,7 +1,7 @@
 name: Validate and move v1 compatibility tag
 
 # `v1` is the floating compatibility contract for backward-compatible changes.
-# Pull requests validate metadata without checking out candidate code.
+# The metadata check validates PR details without checking out candidate code.
 # The full suite validates the trusted main SHA before publication.
 # Push remains the normal publication path. pull_request_target:closed is used
 # only as the recovery path when a merged commit contains a native GitHub skip

@@ -48,12 +48,14 @@ Focused tests remain appropriate during development:
 python -m unittest tests.test_<contract> -v
 ```
 
-`Validate pull request` runs only read-only PR metadata validation on
-`ubuntu-latest`, using the published metadata contract without checking out
-candidate code. This check does not claim that candidate tests passed. The
-standard hosted runner gives each job an isolated, disposable environment and
-avoids scheduling public pull-request metadata work on a persistent
-self-hosted machine.
+`Validate pull request` runs two checks on `ubuntu-latest`: read-only PR
+metadata validation through the published contract, and the candidate's full
+portable-contract suite, actionlint and composite-action metadata validation.
+The metadata job does not check out candidate code. The candidate job uses
+read-only permissions and disables persisted checkout credentials; it runs on
+an isolated, disposable hosted runner, never on the persistent self-hosted
+pool. This preserves pre-merge candidate evidence without exposing that pool
+to public fork code.
 
 After a human-reviewed merge, `Validate and move v1 compatibility tag` checks
 the exact trusted `main` revision on `ubuntu-latest`. The catalog, full Python
