@@ -11,14 +11,14 @@ WORKFLOW = ROOT / ".github" / "workflows" / "validate-pr.yml"
 
 
 class PullRequestValidationWorkflowTests(unittest.TestCase):
-    def test_pr_validation_uses_self_hosted_metadata_with_read_only_permissions(self) -> None:
+    def test_pr_validation_uses_hosted_metadata_with_read_only_permissions(self) -> None:
         content = WORKFLOW.read_text(encoding="utf-8")
 
         self.assertIn("pull_request:", content)
         self.assertNotIn("pull_request_target", content)
-        self.assertIn('runner_json: \'["self-hosted","Linux","local-docker"]\'', content)
-        self.assertIn("self_hosted_mode: metadata-pr", content)
-        self.assertNotIn("ubuntu-latest", content)
+        self.assertIn('runner_json: \'["ubuntu-latest"]\'', content)
+        self.assertIn("self_hosted_mode: none", content)
+        self.assertNotIn("self-hosted", content)
         self.assertIn("permissions:\n  contents: read", content)
         self.assertIn("pull-requests: read", content)
         self.assertNotIn("contents: write", content)

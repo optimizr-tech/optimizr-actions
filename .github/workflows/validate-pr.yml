@@ -18,8 +18,8 @@ jobs:
     name: Validate PR metadata
     uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@v1
     with:
-      runner_json: '["self-hosted","Linux","local-docker"]'
-      self_hosted_mode: metadata-pr
+      runner_json: '["ubuntu-latest"]'
+      self_hosted_mode: none
       pr_number: ${{ github.event.pull_request.number }}
       pr_title: ${{ github.event.pull_request.title }}
       pr_body: ${{ github.event.pull_request.body || '' }}

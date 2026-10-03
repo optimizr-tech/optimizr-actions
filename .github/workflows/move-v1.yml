@@ -43,7 +43,7 @@ jobs:
       github.ref == 'refs/heads/main' &&
       (github.event_name != 'pull_request_target' ||
       github.event.pull_request.merged == true)
-    runs-on: [self-hosted, Linux, local-docker]
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
@@ -128,7 +128,7 @@ jobs:
     name: Validate workflows and composite actions
     needs: [scope]
     if: needs.scope.outputs.publish == 'true'
-    runs-on: [self-hosted, Linux, local-docker]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
@@ -190,7 +190,7 @@ jobs:
     name: Move floating v1 tag
     needs: [scope, validate]
     if: needs.scope.outputs.publish == 'true' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    runs-on: [self-hosted, Linux, local-docker]
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: write
