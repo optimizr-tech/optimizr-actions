@@ -27,6 +27,14 @@ files they consume from the checkout index and validate those paths before
 running their scanners. This prevents a partial persistent checkout from
 being reported as a clean scan; the derived path set is bounded to 256 entries.
 
+Static lint reads the lowercase JSON diagnostic fields emitted by pinned
+actionlint 1.7.12. Its exact unsupported `concurrency.queue` diagnostic is
+accepted only at a file/line/column already approved by the companion queue
+validator. Raw diagnostics remain in the evidence; unrelated diagnostics,
+unknown JSON schemas and fatal tool exits remain blocking. Residual diagnostics
+also block a tool result that incorrectly reports success. Caller inputs,
+permissions and runner selection are unchanged.
+
 The VPS deploy reusables delegate their per-job Docker and runner cleanup to
 [`docker-prune-safe`](.github/actions/docker-prune-safe/action.yml). The
 `run_prune` and `image_age_threshold` inputs remain backward-compatible. The

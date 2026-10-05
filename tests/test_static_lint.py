@@ -114,25 +114,28 @@ jobs:
 
     def test_actionlint_filter_only_suppresses_validated_queue_error_location(self):
         valid_error = {
-            "Message": 'unexpected key "queue" for "concurrency" section',
-            "Filepath": "ci.yml",
-            "Line": 5,
-            "Column": 3,
-            "Kind": "syntax-check",
+            "message": (
+                'unexpected key "queue" for "concurrency" section. '
+                'expected one of "cancel-in-progress", "group"'
+            ),
+            "filepath": "ci.yml",
+            "line": 5,
+            "column": 3,
+            "kind": "syntax-check",
         }
         unrelated_errors = [
             {
                 **valid_error,
-                "Line": 5,
-                "Column": 10,
+                "line": 5,
+                "column": 10,
             },
             {
                 **valid_error,
-                "Message": 'unexpected key "unknown"',
+                "message": 'unexpected key "unknown"',
             },
             {
                 **valid_error,
-                "Filepath": "other.yml",
+                "filepath": "other.yml",
             },
         ]
         raw_output = "\n".join(
@@ -275,11 +278,14 @@ jobs:
 
     def test_run_lints_preserves_raw_queue_diagnostic_and_uses_filtered_status(self):
         diagnostic = {
-            "Message": 'unexpected key "queue" for "concurrency" section',
-            "Filepath": ".github/workflows/ci.yml",
-            "Line": 5,
-            "Column": 3,
-            "Kind": "syntax-check",
+            "message": (
+                'unexpected key "queue" for "concurrency" section. '
+                'expected one of "cancel-in-progress", "group"'
+            ),
+            "filepath": ".github/workflows/ci.yml",
+            "line": 5,
+            "column": 3,
+            "kind": "syntax-check",
         }
 
         with TemporaryDirectory() as temporary_directory:

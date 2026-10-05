@@ -265,7 +265,11 @@ def filter_actionlint_queue_errors(
     kept: list[str] = []
     suppressed = 0
     parseable = True
-    expected_message = 'unexpected key "queue" for "concurrency" section'
+    # Match the pinned actionlint 1.7.12 JSON contract, not its Go field names.
+    expected_message = (
+        'unexpected key "queue" for "concurrency" section. '
+        'expected one of "cancel-in-progress", "group"'
+    )
 
     for line in output.splitlines(keepends=True):
         if not line.strip():
@@ -282,15 +286,15 @@ def filter_actionlint_queue_errors(
             kept.append(line)
             continue
 
-        filepath = diagnostic.get("Filepath")
-        line_number = diagnostic.get("Line")
-        column = diagnostic.get("Column")
+        filepath = diagnostic.get("filepath")
+        line_number = diagnostic.get("line")
+        column = diagnostic.get("column")
         if not (
             isinstance(filepath, str)
             and type(line_number) is int
             and type(column) is int
-            and isinstance(diagnostic.get("Message"), str)
-            and isinstance(diagnostic.get("Kind"), str)
+            and isinstance(diagnostic.get("message"), str)
+            and isinstance(diagnostic.get("kind"), str)
         ):
             parseable = False
             kept.append(line)
@@ -300,8 +304,8 @@ def filter_actionlint_queue_errors(
         while normalized_path.startswith("./"):
             normalized_path = normalized_path[2:]
         if (
-            diagnostic["Message"] == expected_message
-            and diagnostic["Kind"] == "syntax-check"
+            diagnostic["message"] == expected_message
+            and diagnostic["kind"] == "syntax-check"
             and (line_number, column) in valid_locations.get(normalized_path, set())
         ):
             suppressed += 1
@@ -317,8 +321,8 @@ def effective_actionlint_exit_code(
     suppressed_count: int,
     parseable: bool,
 ) -> int:
-    if exit_code == 0 and filtered_output.strip() and not parseable:
-        return 2
+    if exit_code == 0 and filtered_output.strip():
+        return 1 if parseable else 2
     if (
         exit_code == 1
         and suppressed_count > 0
