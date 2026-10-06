@@ -176,7 +176,12 @@ jobs:
       - name: Run actionlint
         run: |
           set -euo pipefail
+          # The self-hosted checkout is mode 0700 owned by the runner user and
+          # Docker Desktop mounts do not map container root to that owner, so
+          # the container must run as the runner user (2026-10-06, run
+          # 37504666776 failed with "no project was found").
           docker run --rm \
+            --user "$(id -u):$(id -g)" \
             -v "$GITHUB_WORKSPACE:/repo" \
             -w /repo \
             rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
@@ -185,6 +190,7 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm \
+            --user "$(id -u):$(id -g)" \
             -v "$GITHUB_WORKSPACE:/repo" \
             -w /repo \
             mikefarah/yq@sha256:76def1f56f456ecc1c3173ea275218ee17139bc2018c5a07887b15afd88ec03e \
