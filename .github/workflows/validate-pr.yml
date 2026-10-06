@@ -14,12 +14,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Metadata validation runs on the restricted owner runner group
+  # (local-docker-owner). The published contract stays API-only: read-only
+  # token, no candidate checkout, and it re-validates the self-hosted trust
+  # contract before doing any work.
   validate:
     name: Validate PR metadata
     uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@v1
     with:
-      runner_json: '["ubuntu-latest"]'
-      self_hosted_mode: none
+      runner_json: '["self-hosted","Linux","local-docker"]'
+      self_hosted_mode: metadata-pr
       pr_number: ${{ github.event.pull_request.number }}
       pr_title: ${{ github.event.pull_request.title }}
       pr_body: ${{ github.event.pull_request.body || '' }}
