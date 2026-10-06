@@ -88,6 +88,15 @@ class MoveV1CatalogScopeTests(unittest.TestCase):
                         with self.assertRaises(SystemExit):
                             exec(guard, {})
 
+    def test_container_steps_run_as_the_runner_user(self) -> None:
+        # 2026-10-06 (run 37504666776): the self-hosted checkout is mode 0700
+        # owned by the runner user; container root cannot read it through the
+        # Docker Desktop mount, so both container steps must run as that user.
+        self.assertEqual(
+            self.workflow.count('--user "$(id -u):$(id -g)"'),
+            2,
+        )
+
     def test_catalog_check_runs_before_general_contract_tests(self) -> None:
         catalog_check = "python3 -m scripts.capability_catalog.generate --check"
         unittest_run = "python3 -m unittest discover -v"
