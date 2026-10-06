@@ -11,14 +11,15 @@ WORKFLOW = ROOT / ".github" / "workflows" / "validate-pr.yml"
 
 
 class PullRequestValidationWorkflowTests(unittest.TestCase):
-    def test_pr_metadata_validation_uses_hosted_runner_with_read_only_permissions(self) -> None:
+    def test_pr_metadata_validation_uses_authorized_self_hosted_runner_with_read_only_permissions(self) -> None:
         content = WORKFLOW.read_text(encoding="utf-8")
 
         self.assertIn("pull_request:", content)
         self.assertNotIn("pull_request_target", content)
-        self.assertIn('runner_json: \'["ubuntu-latest"]\'', content)
-        self.assertIn("self_hosted_mode: none", content)
-        self.assertNotIn("self-hosted", content)
+        self.assertIn(
+            'runner_json: \'["self-hosted","Linux","local-docker"]\'', content
+        )
+        self.assertIn("self_hosted_mode: metadata-pr", content)
         self.assertIn("permissions:\n  contents: read", content)
         self.assertIn("pull-requests: read", content)
         self.assertNotIn("contents: write", content)
@@ -45,16 +46,17 @@ class PullRequestValidationWorkflowTests(unittest.TestCase):
     def test_candidate_contracts_run_on_hosted_runner_without_persisted_credentials(self) -> None:
         content = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("validate-candidate:\n", content)
-        self.assertIn("name: Validate portable action contracts", content)
-        self.assertIn("runs-on: ubuntu-latest", content)
-        self.assertIn("actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0", content)
-        self.assertIn("persist-credentials: false", content)
-        self.assertIn("python3 -m unittest discover -v", content)
-        self.assertIn("python3 -m compileall -q scripts tests", content)
-        self.assertIn("git diff --check", content)
-        self.assertIn("rhysd/actionlint@sha256:", content)
-        self.assertIn("mikefarah/yq@sha256:", content)
-        self.assertNotIn("self-hosted", content)
+        candidate_job = content.split("  validate-candidate:\n", 1)[1]
+        self.assertIn("name: Validate portable action contracts", candidate_job)
+        self.assertIn("runs-on: ubuntu-latest", candidate_job)
+        self.assertIn("actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0", candidate_job)
+        self.assertIn("persist-credentials: false", candidate_job)
+        self.assertIn("python3 -m unittest discover -v", candidate_job)
+        self.assertIn("python3 -m compileall -q scripts tests", candidate_job)
+        self.assertIn("git diff --check", candidate_job)
+        self.assertIn("rhysd/actionlint@sha256:", candidate_job)
+        self.assertIn("mikefarah/yq@sha256:", candidate_job)
+        self.assertNotIn("self-hosted", candidate_job)
         self.assertNotIn("secrets:", content)
 
 

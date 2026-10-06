@@ -48,34 +48,40 @@ Focused tests remain appropriate during development:
 python -m unittest tests.test_<contract> -v
 ```
 
-`Validate pull request` runs two checks on `ubuntu-latest`: read-only PR
-metadata validation through the published contract, and the candidate's full
-portable-contract suite, actionlint and composite-action metadata validation.
-The metadata job does not check out candidate code. The candidate job uses
-read-only permissions and disables persisted checkout credentials; it runs on
-an isolated, disposable hosted runner, never on the persistent self-hosted
-pool. This preserves pre-merge candidate evidence without exposing that pool
-to public fork code.
+`Validate pull request` runs two checks. Read-only PR metadata validation
+runs through the published `_pr-metadata.yml@refs/tags/v1` contract on the
+restricted owner self-hosted runner group (`local-docker-owner`), which admits
+only that definition and this repository's trusted-main definition; the job
+stays API-only and never checks out candidate code. The candidate's full
+portable-contract suite, actionlint and composite-action metadata validation
+run on `ubuntu-latest` with read-only permissions and persisted checkout
+credentials disabled, on an isolated, disposable hosted runner, never on the
+persistent self-hosted pool. This preserves pre-merge candidate evidence
+without exposing that pool to public fork code.
 
 After a human-reviewed merge, `Validate and move v1 compatibility tag` checks
-the exact trusted `main` revision on `ubuntu-latest`. The catalog, full Python
-contract suite, actionlint, YAML metadata and revision/diff checks must all
-succeed before `v1` can move. Only `main` push/dispatch and the existing
-merged-PR recovery path are accepted. Local Windows results must keep platform
-limitations visible, especially for symlink, Unix-mode and Docker tests.
+the exact trusted `main` revision on the restricted owner self-hosted runner
+(`local-docker-owner` group). The catalog, full Python contract suite,
+actionlint, YAML metadata and revision/diff checks must all succeed before
+`v1` can move. Only `main` push/dispatch and the existing merged-PR recovery
+path are accepted. Local Windows results must keep platform limitations
+visible, especially for symlink, Unix-mode and Docker tests.
 
 The trusted-main job provisions Python 3.14 and installs the pinned
 `requirements-ci.txt` dependencies in a run/attempt-specific virtualenv under
 `runner.temp`. It does not depend on packages installed in the runner's system
 Python or modify the system environment.
 
-This owner-repository route does not depend on InfraOps runner registration,
-access policy or capacity. Other repositories may use self-hosted runners under
-their own trust and operational contracts; this change does not alter those
-consumer workflows. InfraOps issues #160 and #480 remain owned by InfraOps and
-must be reconciled by that repository's owner with this public-repository
-policy. Any branch protection rule must use the metadata check for PRs and
-retain full trusted-main validation as a prerequisite to publishing `v1`.
+This owner-repository route depends on the InfraOps-authorized restricted
+runner group (`local-docker-owner`): the public repository is allowed, only the
+two approved workflow definitions can use its single-job runner, and the shared
+consumer pool (`local-docker`) is not reachable from this repository. Other
+repositories may use self-hosted runners under their own trust and operational
+contracts; this change does not alter those consumer workflows. InfraOps issues
+#160 and #480 remain owned by InfraOps and must be reconciled by that
+repository's owner with this public-repository policy. Any branch protection
+rule must use the metadata check for PRs and retain full trusted-main
+validation as a prerequisite to publishing `v1`.
 
 ## PR and release checkpoints
 

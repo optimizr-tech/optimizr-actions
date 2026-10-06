@@ -6,6 +6,10 @@ name: Validate and move v1 compatibility tag
 # Push remains the normal publication path. pull_request_target:closed is used
 # only as the recovery path when a merged commit contains a native GitHub skip
 # instruction that suppresses the push-triggered workflow.
+#
+# Trusted-main validation and publication run on the restricted owner runner
+# group (local-docker-owner), whose workflow policy admits only this definition
+# at refs/heads/main and _pr-metadata.yml@refs/tags/v1.
 
 on:
   push:
@@ -43,7 +47,7 @@ jobs:
       github.ref == 'refs/heads/main' &&
       (github.event_name != 'pull_request_target' ||
       github.event.pull_request.merged == true)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, local-docker]
     timeout-minutes: 5
     permissions:
       contents: read
@@ -128,7 +132,7 @@ jobs:
     name: Validate workflows and composite actions
     needs: [scope]
     if: needs.scope.outputs.publish == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, local-docker]
     timeout-minutes: 10
     permissions:
       contents: read
@@ -190,7 +194,7 @@ jobs:
     name: Move floating v1 tag
     needs: [scope, validate]
     if: needs.scope.outputs.publish == 'true' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, local-docker]
     timeout-minutes: 5
     permissions:
       contents: write
