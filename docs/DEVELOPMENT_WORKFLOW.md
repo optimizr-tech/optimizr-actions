@@ -83,6 +83,29 @@ repository's owner with this public-repository policy. Any branch protection
 rule must use the metadata check for PRs and retain full trusted-main
 validation as a prerequisite to publishing `v1`.
 
+## Owner runner prerequisites
+
+The restricted owner runner (`wsl-ci-2`, group `local-docker-owner`) is a
+persistent self-hosted Linux runner. The owner workflows rely on these tools
+being present in the runner distro, pinned and provisioned by InfraOps (role
+`persistent_runner` in `optimizr-infra-ops`):
+
+- `git`, `bash` and `python3` for the trusted-event guard and scope steps;
+- Docker (daemon reachable at the runner's default socket) for the actionlint
+  and composite-metadata container steps - both run as the runner user
+  (`--user "$(id -u):$(id -g)"`) because the 0700 checkout is not readable by
+  container root through the Docker Desktop mount;
+- `gh` CLI (pinned as `runner_gh_version` in InfraOps `dev_wsl.yml`, installed
+  from the official release package with a reviewed checksum) for the `gh api`
+  calls in the scope and tag-move steps;
+- `uv` is provisioned per job by `astral-sh/setup-uv`; no system Python
+  packages are installed by the workflows.
+
+If a prerequisite is missing the run fails closed - there is no hosted
+fallback. The 2026-10-06 incidents failed with `gh: command not found` and a
+container permission error until InfraOps fixed the environment; see
+optimizr-infra-ops#480 for the trust-boundary and runner inventory.
+
 ## PR and release checkpoints
 
 Every behavior change should include a meaningful regression test, contract
