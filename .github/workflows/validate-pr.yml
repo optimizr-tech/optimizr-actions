@@ -104,3 +104,11 @@ jobs:
             -w /repo \
             mikefarah/yq@sha256:76def1f56f456ecc1c3173ea275218ee17139bc2018c5a07887b15afd88ec03e \
             eval 'true' .github/actions/*/action.yml
+
+  canary-pool-access:
+    name: Negative canary - must not schedule on the owner pool
+    runs-on: [self-hosted, Linux, local-docker]
+    timeout-minutes: 5
+    steps:
+      - name: Prove the boundary
+        run: echo "NEGATIVE CANARY FAILED: this job scheduled on the owner pool"
