@@ -111,4 +111,5 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Prove the boundary
-        run: echo "NEGATIVE CANARY FAILED: this job scheduled on the owner pool"
+        run: |
+          echo "NEGATIVE CANARY FAILED: this job scheduled on the owner pool"
