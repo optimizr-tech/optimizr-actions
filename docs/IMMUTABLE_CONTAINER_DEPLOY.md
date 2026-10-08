@@ -31,6 +31,11 @@ remaining fail-closed: the manifest is not emitted as published unless the tag
 resolves to the exact verified digest. The retry is internal and does not add or
 change any caller input or output.
 
+Before Buildx runs, each matrix job checks out the caller repository at
+`candidate_sha` and verifies that the checked-out `HEAD` matches that exact
+commit. A mismatch fails before the image is built. Existing callers already
+provide this required input, so no caller migration is needed.
+
 ## Caller permission contract
 
 GitHub validates the caller's permission ceiling before it creates jobs in a

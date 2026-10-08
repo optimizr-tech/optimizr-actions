@@ -132,6 +132,33 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
         self.assertIn("attestations: write", documentation)
         self.assertIn("id-token: write", documentation)
 
+    def test_build_uses_and_verifies_the_exact_candidate_source_sha(self) -> None:
+        content = BUILD_WORKFLOW.read_text(encoding="utf-8")
+        build_job = content[content.index("  build:") : content.index("  aggregate:")]
+
+        checkout_start = build_job.index("      - name: Checkout source\n")
+        checkout_end = build_job.index("\n      - name:", checkout_start + 1)
+        checkout_step = build_job[checkout_start:checkout_end]
+        self.assertIn("ref: ${{ inputs.candidate_sha }}", checkout_step)
+        self.assertIn("fetch-depth: 1", checkout_step)
+        self.assertIn("persist-credentials: false", checkout_step)
+
+        verify_start = build_job.index(
+            "      - name: Verify exact candidate source\n"
+        )
+        verify_end = build_job.index("\n      - name:", verify_start + 1)
+        verify_step = build_job[verify_start:verify_end]
+        build_start = build_job.index("      - name: Build image\n")
+
+        self.assertLess(checkout_start, verify_start)
+        self.assertLess(verify_start, build_start)
+        self.assertIn('checked_out_sha="$(git rev-parse --verify HEAD)"', verify_step)
+        self.assertIn(
+            'if [[ "$checked_out_sha" != "$CANDIDATE_SHA" ]]; then',
+            verify_step,
+        )
+        self.assertIn("exit 1", verify_step)
+
     def test_build_workflow_does_not_publish_without_explicit_push(self) -> None:
         content = BUILD_WORKFLOW.read_text(encoding="utf-8")
 
