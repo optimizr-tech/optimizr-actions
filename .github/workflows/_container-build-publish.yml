@@ -284,8 +284,21 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
+          ref: ${{ inputs.candidate_sha }}
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Verify exact candidate source
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          checked_out_sha="$(git rev-parse --verify HEAD)"
+          if [[ "$checked_out_sha" != "$CANDIDATE_SHA" ]]; then
+            echo "checked-out source commit does not match candidate_sha" >&2
+            exit 1
+          fi
 
       - name: Checkout exact reusable implementation
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
