@@ -96,7 +96,7 @@ class VolumeProbeWorkflowContractTests(unittest.TestCase):
                     names.index("Ensure networks and verify volumes"),
                 )
                 self.assertIn(
-                    "volume_probe_contract.py validate",
+                    'python3 "$VOLUME_HELPER_SCRIPT" validate',
                     step_named(workflow, "Validate owner-scoped volume inputs")["run"],
                 )
                 ensure = step_named(workflow, "Ensure networks and verify volumes")
@@ -196,7 +196,7 @@ class VolumeInputValidationTests(unittest.TestCase):
             )
 
     def test_volume_and_network_names_reject_shell_and_option_metacharacters(self) -> None:
-        for name in (";touch-pwned", "--help", "bad/name", "name*", "two words"):
+        for name in (";touch-pwned", "--help", "bad/name", "name*", "name;other"):
             with self.subTest(name=name), self.assertRaises(CONTRACT.ContractError):
                 CONTRACT.validate_inputs(volume_inputs(ENSURE_VOLUMES=name))
             with self.subTest(network=name), self.assertRaises(CONTRACT.ContractError):
