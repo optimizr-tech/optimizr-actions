@@ -1,6 +1,34 @@
 # Release badge recovery
 
-`_semantic-release.yml` remains the primary badge update path. `_release-badge-recovery.yml` is a serialized fallback for a consumer `release` event or reviewed `workflow_dispatch`.
+`_semantic-release.yml` remains the primary badge update path. The badge-recovery reusable workflow is a serialized fallback for a consumer `release` event or reviewed `workflow_dispatch`.
+
+## Version compatibility and runner selection
+
+`_release-badge-recovery.yml@v1` is retained unchanged for existing callers. Its optional `runner_json` input and default are legacy behavior; do not change that default under `v1`. New callers that remain on `v1` can pass a JSON `runs-on` object with both a runner group and label, because the workflow evaluates the input with `fromJSON`. For example:
+
+```yaml
+runner_json: '{"group":"<authorized-runner-group>","labels":"<label-in-that-group>"}'
+```
+
+For a future `@v2` release, `_release-badge-recovery-v2.yml` requires `runner_group` and `runner_label`; it has no implicit runner default and routes using both fields:
+
+```yaml
+jobs:
+  recover:
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_release-badge-recovery-v2.yml@v2
+    with:
+      runner_group: "<group-authorized-for-this-repository>"
+      runner_label: "<label-present-in-that-group>"
+      tag: ${{ inputs.tag || github.event.release.tag_name }}
+```
+
+Replace both placeholders with values confirmed by the organization/repository runner administrators before adopting the reusable. GitHub requires a matching runner to satisfy both the group and label selectors. Runner-group membership and repository access define the pool boundary; labels alone do not prove isolation. The `@v2` reference is illustrative until a reviewed release publishes that major tag.
+
+Consumer migration is separate work owned by each repository. Do not dispatch badge recovery or change a caller to a runner group until its repository is authorized for that group and the group membership has been reviewed.
+
+## Existing `v1` example
+
+The following remains a compatible call shape for current `@v1` consumers:
 
 ```yaml
 name: Recover release badge
@@ -19,8 +47,9 @@ jobs:
     uses: optimizr-tech/optimizr-actions/.github/workflows/_release-badge-recovery.yml@v1
     with:
       tag: ${{ inputs.tag || github.event.release.tag_name }}
+      runner_json: '{"group":"<authorized-runner-group>","labels":"<label-in-that-group>"}'
 ```
 
 The reusable validates the branch and badge path, requires a `v`-prefixed semantic version, or selects the latest valid repository tag. Stable concurrency prevents two recovery commits from racing. The underlying composite skips no-op commits and rebases before push.
 
-Rollback by restoring the previous small caller, not by duplicating badge rendering logic.
+Rollback a future consumer migration by restoring its previous workflow reference and runner inputs; keep the badge rendering logic centralized.
