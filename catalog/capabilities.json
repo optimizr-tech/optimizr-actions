@@ -2134,6 +2134,7 @@
         "compose_up_flags": "",
         "container_name": "",
         "create_missing_volumes": "",
+        "create_missing_volumes_allowlist": "",
         "deploy_manifest_enabled": "",
         "deploy_manifest_migration_result": "",
         "deploy_manifest_retention": "",
@@ -2175,7 +2176,8 @@
         "services_build_no_cache": "",
         "services_build_optional": "",
         "services_up": "",
-        "timeout_minutes": ""
+        "timeout_minutes": "",
+        "volume_write_probes_json": ""
       },
       "kind": "workflow",
       "known_limitations": "",
@@ -2187,7 +2189,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "76be3bab8229d722f23c73312cfea0ffa3a00377f3460df87b7ec0ac903a50de",
+      "source_sha256": "13e5987514de49dc7fb37a4657f6f703e72feb7102b60d999a8100b2c00dc3b2",
       "trust_boundary": "trusted-push"
     },
     {
@@ -2202,6 +2204,7 @@
         "compose_file": "",
         "container_name": "",
         "create_missing_volumes": "",
+        "create_missing_volumes_allowlist": "",
         "deploy_manifest_enabled": "",
         "deploy_manifest_migration_result": "",
         "deploy_manifest_retention": "",
@@ -2241,7 +2244,8 @@
         "security_severity": "",
         "security_trivy_cache_scope": "",
         "security_trivy_version": "",
-        "service_name": ""
+        "service_name": "",
+        "volume_write_probes_json": ""
       },
       "kind": "workflow",
       "known_limitations": "",
@@ -2253,7 +2257,7 @@
       "runner": [
         "self-hosted-persistent"
       ],
-      "source_sha256": "2b5158fe7f7dcda9d39a1e2b7b669428eab46bf7d12bb651fe32ab84872fbca6",
+      "source_sha256": "fc1cd7c65a86ca3f4b15dfb86080548b918d10f069f6f773621f40225ceea0f4",
       "trust_boundary": "trusted-push"
     },
     {

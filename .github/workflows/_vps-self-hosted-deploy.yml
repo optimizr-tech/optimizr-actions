@@ -101,10 +101,20 @@ on:
         type: string
         default: ""
       create_missing_volumes:
-        description: Explicitly allow creating missing empty Docker volumes; keep false for production data volumes
+        description: Legacy broad opt-in to create missing required volumes; mutually exclusive with the allowlist
         required: false
         type: boolean
         default: false
+      create_missing_volumes_allowlist:
+        description: Exact whitespace-separated required volume names authorized for empty creation; default denies creation
+        required: false
+        type: string
+        default: ""
+      volume_write_probes_json:
+        description: Strict JSON array of fixed write probes using container, volume, mount_path, and numeric uid
+        required: false
+        type: string
+        default: "[]"
       run_prune:
         description: Run Docker and runner cleanup after deployment
         required: false
@@ -276,6 +286,79 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Allocate volume helper checkout path
+        id: volume-helper-path
+        if: inputs.create_missing_volumes_allowlist != '' || inputs.volume_write_probes_json != '[]'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            relative_path=".optimizr-actions-volume-helper-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${RANDOM}-${RANDOM}-${RANDOM}"
+            absolute_path="$GITHUB_WORKSPACE/$relative_path"
+            if [ ! -e "$absolute_path" ] && [ ! -L "$absolute_path" ]; then
+              printf 'path=%s\n' "$relative_path" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "::error::Could not allocate an isolated volume helper checkout path" >&2
+          exit 1
+
+      - name: Checkout volume contract helper
+        if: inputs.create_missing_volumes_allowlist != '' || inputs.volume_write_probes_json != '[]'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: ${{ steps.volume-helper-path.outputs.path }}
+          sparse-checkout: scripts/deploy/volume_probe_contract.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Stage volume contract helper
+        id: stage-volume-helper
+        if: inputs.create_missing_volumes_allowlist != '' || inputs.volume_write_probes_json != '[]'
+        shell: bash
+        env:
+          VOLUME_HELPER_RELATIVE_PATH: ${{ steps.volume-helper-path.outputs.path }}
+        run: |
+          set -euo pipefail
+          case "$VOLUME_HELPER_RELATIVE_PATH" in
+            .optimizr-actions-volume-helper-*) ;;
+            *)
+              echo "::error::Volume helper checkout path is outside its allocated namespace" >&2
+              exit 2
+              ;;
+          esac
+          source_dir="$GITHUB_WORKSPACE/$VOLUME_HELPER_RELATIVE_PATH"
+          source_script="$source_dir/scripts/deploy/volume_probe_contract.py"
+          [ -f "$source_script" ] && [ ! -L "$source_script" ] || {
+            echo "::error::Volume contract helper source is missing or unsafe" >&2
+            exit 1
+          }
+          helper_script="$(mktemp "$RUNNER_TEMP/optimizr-volume-contract.XXXXXX.py")"
+          install -m 600 -- "$source_script" "$helper_script"
+          printf 'script_path=%s\n' "$helper_script" >> "$GITHUB_OUTPUT"
+          [ ! -L "$source_dir" ] && [ -d "$source_dir" ] || {
+            echo "::error::Volume helper checkout directory is unsafe" >&2
+            exit 1
+          }
+          rm -rf -- "$source_dir"
+
+      - name: Validate owner-scoped volume inputs
+        id: validate-volume-contract
+        if: inputs.create_missing_volumes_allowlist != '' || inputs.volume_write_probes_json != '[]'
+        shell: bash
+        env:
+          VOLUME_HELPER_SCRIPT: ${{ steps.stage-volume-helper.outputs.script_path }}
+          ENSURE_NETWORKS: ${{ inputs.ensure_networks }}
+          ENSURE_VOLUMES: ${{ inputs.ensure_volumes }}
+          CREATE_MISSING_VOLUMES: ${{ inputs.create_missing_volumes }}
+          CREATE_MISSING_VOLUMES_ALLOWLIST: ${{ inputs.create_missing_volumes_allowlist }}
+          VOLUME_WRITE_PROBES_JSON: ${{ inputs.volume_write_probes_json }}
+        run: |
+          set -euo pipefail
+          python3 "$VOLUME_HELPER_SCRIPT" validate
 
       - name: Configure Docker access mode
         shell: bash
@@ -619,23 +702,39 @@ jobs:
       - name: Ensure networks and verify volumes
         if: inputs.ensure_networks != '' || inputs.ensure_volumes != ''
         shell: bash
+        env:
+          ENSURE_NETWORKS: ${{ inputs.ensure_networks }}
+          ENSURE_VOLUMES: ${{ inputs.ensure_volumes }}
+          CREATE_MISSING_VOLUMES: ${{ inputs.create_missing_volumes }}
+          VOLUME_MANIFEST: ${{ steps.validate-volume-contract.outputs.manifest_path }}
+          VOLUME_HELPER_SCRIPT: ${{ steps.stage-volume-helper.outputs.script_path }}
         run: |
           set -euo pipefail
-          for network in ${{ inputs.ensure_networks }}; do
-            docker_cmd network inspect "$network" >/dev/null 2>&1 || docker_cmd network create "$network"
-          done
-          for volume in ${{ inputs.ensure_volumes }}; do
-            if docker_cmd volume inspect "$volume" >/dev/null 2>&1; then
-              continue
-            fi
-            if [ "${{ inputs.create_missing_volumes }}" = true ]; then
-              echo "::warning::Creating explicitly authorized empty volume: $volume"
-              docker_cmd volume create "$volume" >/dev/null
-            else
-              echo "::error::Required volume $volume is missing; refusing to create an empty replacement" >&2
-              exit 1
-            fi
-          done
+          if [ -n "$VOLUME_MANIFEST" ]; then
+            python3 "$VOLUME_HELPER_SCRIPT" apply
+            exit 0
+          fi
+          if [ -n "${ENSURE_NETWORKS//[[:space:]]/}" ]; then
+            read -r -a networks <<< "$ENSURE_NETWORKS"
+            for network in "${networks[@]}"; do
+              docker_cmd network inspect "$network" >/dev/null 2>&1 || docker_cmd network create "$network"
+            done
+          fi
+          if [ -n "${ENSURE_VOLUMES//[[:space:]]/}" ]; then
+            read -r -a volumes <<< "$ENSURE_VOLUMES"
+            for volume in "${volumes[@]}"; do
+              if docker_cmd volume inspect "$volume" >/dev/null 2>&1; then
+                continue
+              fi
+              if [ "$CREATE_MISSING_VOLUMES" = true ]; then
+                echo "::warning::Creating explicitly authorized empty volume: $volume"
+                docker_cmd volume create "$volume" >/dev/null
+              else
+                echo "::error::Required volume $volume is missing; refusing to create an empty replacement" >&2
+                exit 1
+              fi
+            done
+          fi
 
       - name: Build images
         if: inputs.build_image && inputs.deployment_mode != 'prebuilt-images'
@@ -880,6 +979,8 @@ jobs:
         env:
           DOCKER_CONFIG_DIR: ${{ runner.temp }}/optimizr-ghcr-docker-config
           REGISTRY_AUTH_MODE: ${{ inputs.registry_auth_mode }}
+          VOLUME_MANIFEST: ${{ steps.validate-volume-contract.outputs.manifest_path }}
+          VOLUME_HELPER_SCRIPT: ${{ steps.stage-volume-helper.outputs.script_path }}
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
@@ -925,6 +1026,10 @@ jobs:
           if [ "${#recreate_services[@]}" -gt 0 ]; then
             echo "Recreating explicitly declared Compose services: ${recreate_services[*]}"
             compose_cmd up -d --no-deps --force-recreate --no-build "${recreate_services[@]}"
+          fi
+
+          if [ -n "$VOLUME_MANIFEST" ]; then
+            python3 "$VOLUME_HELPER_SCRIPT" probe
           fi
 
           elapsed=0
@@ -1051,3 +1156,49 @@ jobs:
           security_final_result: ${{ steps.security-final.outputs.final_result || 'not-run' }}
           security_remediation_window_state: ${{ steps.security-images-final-gate.outputs.remediation_state || 'not_applicable' }}
           retention: ${{ inputs.deploy_manifest_retention }}
+
+      - name: Clean volume contract temporary files
+        if: always()
+        shell: bash
+        env:
+          VOLUME_HELPER_SCRIPT: ${{ steps.stage-volume-helper.outputs.script_path }}
+          VOLUME_MANIFEST: ${{ steps.validate-volume-contract.outputs.manifest_path }}
+          VOLUME_HELPER_RELATIVE_PATH: ${{ steps.volume-helper-path.outputs.path }}
+        run: |
+          set -euo pipefail
+          for path in "$VOLUME_HELPER_SCRIPT" "$VOLUME_MANIFEST"; do
+            [ -n "$path" ] || continue
+            case "$path" in
+              "$RUNNER_TEMP"/*) ;;
+              *)
+                echo "::error::Refusing to clean a volume contract file outside RUNNER_TEMP" >&2
+                exit 2
+                ;;
+            esac
+            if [ -L "$path" ] || [ -f "$path" ]; then
+              rm -f -- "$path"
+            fi
+          done
+          if [ -n "$VOLUME_HELPER_RELATIVE_PATH" ]; then
+            case "$VOLUME_HELPER_RELATIVE_PATH" in
+              .optimizr-actions-volume-helper-*) ;;
+              *)
+                echo "::error::Refusing to clean an unallocated volume helper path" >&2
+                exit 2
+                ;;
+            esac
+            if [[ "$VOLUME_HELPER_RELATIVE_PATH" == */* ]]; then
+              echo "::error::Refusing to clean a nested volume helper path" >&2
+              exit 2
+            fi
+            checkout_dir="$GITHUB_WORKSPACE/$VOLUME_HELPER_RELATIVE_PATH"
+            if [ -L "$checkout_dir" ]; then
+              echo "::error::Refusing to clean a symbolic-link volume helper checkout" >&2
+              exit 2
+            elif [ -d "$checkout_dir" ]; then
+              rm -rf -- "$checkout_dir"
+            elif [ -e "$checkout_dir" ]; then
+              echo "::error::Refusing to clean an unexpected volume helper path type" >&2
+              exit 2
+            fi
+          fi

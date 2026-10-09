@@ -11,6 +11,8 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
+CONTAINER_ID = "a" * 64
+IMAGE_ID = "sha256:" + "b" * 64
 WORKFLOWS = {
     "vps": ROOT / ".github/workflows/_vps-self-hosted-deploy.yml",
     "monorepo": ROOT / ".github/workflows/_vps-monorepo-deploy.yml",
@@ -64,8 +66,16 @@ class VolumeProbeWorkflowContractTests(unittest.TestCase):
                 self.assertEqual(inputs["volume_write_probes_json"]["default"], "[]")
                 self.assertEqual(inputs["create_missing_volumes_allowlist"]["type"], "string")
                 self.assertEqual(inputs["volume_write_probes_json"]["type"], "string")
+                opt_in = "inputs.create_missing_volumes_allowlist != '' || inputs.volume_write_probes_json != '[]'"
+                for step_name in (
+                    "Allocate volume helper checkout path",
+                    "Checkout volume contract helper",
+                    "Stage volume contract helper",
+                    "Validate owner-scoped volume inputs",
+                ):
+                    self.assertEqual(step_named(workflow, step_name)["if"], opt_in)
 
-    def test_helper_checkout_uses_the_exact_reusable_workflow_revision_without_credentials(self) -> None:
+    def test_helper_checkout_uses_exact_workflow_revision_without_persisting_credentials(self) -> None:
         for name, path in WORKFLOWS.items():
             with self.subTest(workflow=name):
                 workflow = load_workflow(path)
@@ -85,12 +95,18 @@ class VolumeProbeWorkflowContractTests(unittest.TestCase):
                     names.index("Validate owner-scoped volume inputs"),
                     names.index("Ensure networks and verify volumes"),
                 )
-                self.assertIn("manifest_path", step_named(workflow, "Validate owner-scoped volume inputs")["run"])
+                self.assertIn(
+                    "volume_probe_contract.py validate",
+                    step_named(workflow, "Validate owner-scoped volume inputs")["run"],
+                )
+                ensure = step_named(workflow, "Ensure networks and verify volumes")
+                self.assertIn("manifest_path", ensure["env"]["VOLUME_MANIFEST"])
 
                 if name == "vps":
                     rollout = step_named(workflow, "Roll out and verify primary container")["run"]
-                    self.assertLess(rollout.index("compose_cmd up -d"), rollout.index("volume_contract.py probe"))
-                    self.assertLess(rollout.index("volume_contract.py probe"), rollout.index("elapsed=0"))
+                    probe_command = 'python3 "$VOLUME_HELPER_SCRIPT" probe'
+                    self.assertLess(rollout.index("compose_cmd up -d"), rollout.index(probe_command))
+                    self.assertLess(rollout.index(probe_command), rollout.index("elapsed=0"))
                 else:
                     self.assertLess(
                         names.index("Roll out services"),
@@ -99,6 +115,22 @@ class VolumeProbeWorkflowContractTests(unittest.TestCase):
                     self.assertLess(
                         names.index("Probe configured volume writes"),
                         names.index("Wait for healthcheck"),
+                    )
+
+    def test_temporary_helper_files_are_cleaned_even_after_failure(self) -> None:
+        for name, path in WORKFLOWS.items():
+            with self.subTest(workflow=name):
+                workflow = load_workflow(path)
+                cleanup = step_named(workflow, "Clean volume contract temporary files")
+                self.assertEqual(cleanup["if"], "always()")
+                self.assertIn("RUNNER_TEMP", cleanup["run"])
+                self.assertIn("VOLUME_HELPER_RELATIVE_PATH", cleanup["run"])
+                self.assertIn("Refusing to clean a nested volume helper path", cleanup["run"])
+                if name == "monorepo":
+                    names = [step.get("name", "") for step in workflow_steps(workflow)]
+                    self.assertLess(
+                        names.index("Record sanitized deployment manifest"),
+                        names.index("Clean volume contract temporary files"),
                     )
 
 
@@ -150,6 +182,16 @@ class VolumeInputValidationTests(unittest.TestCase):
                 volume_inputs(
                     ENSURE_VOLUMES="required_data",
                     VOLUME_WRITE_PROBES_JSON=json.dumps([valid_probe(volume="other_data")]),
+                )
+            )
+
+    def test_monorepo_probe_requires_a_nonempty_rollout_service_list(self) -> None:
+        with self.assertRaises(CONTRACT.ContractError):
+            CONTRACT.validate_inputs(
+                volume_inputs(
+                    ENSURE_VOLUMES="alloy_data",
+                    VOLUME_WRITE_PROBES_JSON=json.dumps([valid_probe()]),
+                    ROLLOUT_SERVICES="  ",
                 )
             )
 
@@ -247,7 +289,8 @@ class VolumeMutationTests(unittest.TestCase):
             calls.append(args)
             if args == ["volume", "inspect", "alloy_data"]:
                 count = sum(call == args for call in calls)
-                return subprocess.CompletedProcess(args, 1 if count == 1 else 0, "alloy_data", "")
+                output = "" if count == 1 else json.dumps([{"Name": "alloy_data"}])
+                return subprocess.CompletedProcess(args, 1 if count == 1 else 0, output, "")
             if args[:2] == ["volume", "ls"]:
                 return subprocess.CompletedProcess(args, 0, "", "")
             if args == ["volume", "create", "alloy_data"]:
@@ -267,6 +310,9 @@ class VolumeMutationTests(unittest.TestCase):
         def docker(args: list[str]) -> subprocess.CompletedProcess[str]:
             calls.append(args)
             if args[:2] == ["volume", "inspect"]:
+                count = sum(call == args for call in calls)
+                if count > 1:
+                    return subprocess.CompletedProcess(args, 0, json.dumps([{"Name": "data"}]), "")
                 return subprocess.CompletedProcess(args, 1, "", "missing")
             if args[:2] == ["volume", "ls"]:
                 return subprocess.CompletedProcess(args, 0, "", "")
@@ -285,10 +331,10 @@ class VolumeWriteProbeTests(unittest.TestCase):
             )
         )
         self.container = {
-            "Id": "container-123",
+            "Id": CONTAINER_ID,
             "Name": "/alloy",
             "State": {"Running": True},
-            "Image": "sha256:image-123",
+            "Image": IMAGE_ID,
             "Config": {
                 "Image": "ghcr.io/optimizr/alloy:sha-abc",
                 "Labels": {"com.docker.compose.service": "alloy"},
@@ -303,7 +349,7 @@ class VolumeWriteProbeTests(unittest.TestCase):
             ],
         }
 
-    def fake_commands(self, container: dict | None = None, image_id: str = "sha256:image-123"):
+    def fake_commands(self, container: dict | None = None, image_id: str = IMAGE_ID):
         selected = self.container if container is None else container
 
         def docker(args: list[str]) -> subprocess.CompletedProcess[str]:
@@ -316,8 +362,8 @@ class VolumeWriteProbeTests(unittest.TestCase):
             self.fail(f"unexpected Docker call: {args}")
 
         def compose(args: list[str]) -> subprocess.CompletedProcess[str]:
-            if args == ["ps", "--all", "--quiet"]:
-                return subprocess.CompletedProcess(args, 0, "container-123\n", "")
+            if args == ["ps", "--all", "--quiet", "--no-trunc"]:
+                return subprocess.CompletedProcess(args, 0, f"{CONTAINER_ID}\n", "")
             if args == ["config", "--format", "json"]:
                 config = {"services": {"alloy": {"image": "ghcr.io/optimizr/alloy:sha-abc"}}}
                 return subprocess.CompletedProcess(args, 0, json.dumps(config), "")
@@ -335,11 +381,44 @@ class VolumeWriteProbeTests(unittest.TestCase):
 
         CONTRACT.run_write_probes(self.manifest, docker_call=record_docker, compose_call=compose)
         exec_call = next(args for args in calls if args[:2] == ["exec", "--user"])
-        self.assertEqual(exec_call[2:4], ["65532", "alloy"])
+        self.assertEqual(exec_call[2:4], ["65532", CONTAINER_ID])
         self.assertIn(CONTRACT.WRITE_PROBE_SCRIPT, exec_call)
-        self.assertEqual(exec_call[3], "alloy")
+
+    def test_monorepo_probe_only_runs_for_a_service_requested_in_this_rollout(self) -> None:
+        manifest = CONTRACT.validate_inputs(
+            volume_inputs(
+                ENSURE_VOLUMES="alloy_data",
+                VOLUME_WRITE_PROBES_JSON=json.dumps([valid_probe()]),
+                ROLLOUT_SERVICES="nginx",
+            )
+        )
+        docker, compose = self.fake_commands()
+        with self.assertRaises(CONTRACT.ContractError):
+            CONTRACT.run_write_probes(manifest, docker_call=docker, compose_call=compose)
+
+    def test_probe_rejects_malformed_inspection_fields_and_oneoff_containers(self) -> None:
+        malformed_name = {**self.container, "Name": []}
+        docker, compose = self.fake_commands(container=malformed_name)
+        with self.assertRaises(CONTRACT.ContractError):
+            CONTRACT.run_write_probes(self.manifest, docker_call=docker, compose_call=compose)
+
+        oneoff = {
+            **self.container,
+            "Config": {
+                **self.container["Config"],
+                "Labels": {
+                    **self.container["Config"]["Labels"],
+                    "com.docker.compose.oneoff": "True",
+                },
+            },
+        }
+        docker, compose = self.fake_commands(container=oneoff)
+        with self.assertRaises(CONTRACT.ContractError):
+            CONTRACT.run_write_probes(self.manifest, docker_call=docker, compose_call=compose)
 
     def test_probe_script_writes_and_cleans_a_unique_file(self) -> None:
+        self.assertNotIn("chown", CONTRACT.WRITE_PROBE_SCRIPT)
+        self.assertNotIn("chmod", CONTRACT.WRITE_PROBE_SCRIPT)
         with tempfile.TemporaryDirectory() as directory:
             subprocess.run(
                 ["sh", "-eu", "-c", CONTRACT.WRITE_PROBE_SCRIPT, "sh", directory],
@@ -359,15 +438,23 @@ class VolumeWriteProbeTests(unittest.TestCase):
         docker, _compose = self.fake_commands()
 
         def compose(args: list[str]) -> subprocess.CompletedProcess[str]:
-            if args == ["ps", "--all", "--quiet"]:
-                return subprocess.CompletedProcess(args, 0, "some-other-container\n", "")
+            if args == ["ps", "--all", "--quiet", "--no-trunc"]:
+                return subprocess.CompletedProcess(args, 0, ("c" * 64) + "\n", "")
             return _compose(args)
 
         with self.assertRaises(CONTRACT.ContractError):
             CONTRACT.run_write_probes(self.manifest, docker_call=docker, compose_call=compose)
 
     def test_probe_fails_closed_when_running_container_image_differs_from_configured_image(self) -> None:
-        docker, compose = self.fake_commands(image_id="sha256:other-image")
+        docker, compose = self.fake_commands(image_id="sha256:" + "c" * 64)
+        with self.assertRaises(CONTRACT.ContractError):
+            CONTRACT.run_write_probes(self.manifest, docker_call=docker, compose_call=compose)
+
+        wrong_reference = {
+            **self.container,
+            "Config": {**self.container["Config"], "Image": "ghcr.io/optimizr/alloy:unexpected"},
+        }
+        docker, compose = self.fake_commands(container=wrong_reference)
         with self.assertRaises(CONTRACT.ContractError):
             CONTRACT.run_write_probes(self.manifest, docker_call=docker, compose_call=compose)
 
