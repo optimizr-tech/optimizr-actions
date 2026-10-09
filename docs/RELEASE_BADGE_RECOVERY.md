@@ -4,7 +4,7 @@
 
 ## Version compatibility and runner selection
 
-`_release-badge-recovery.yml@v1` is retained unchanged for existing callers. Its optional `runner_json` input and default are legacy behavior; do not change that default under `v1`. New callers that remain on `v1` can pass a JSON `runs-on` object with both a runner group and label, because the workflow evaluates the input with `fromJSON`. For example:
+`_release-badge-recovery.yml@v1` is retained unchanged for existing callers. Its optional `runner_json` input and default are legacy behavior; do not change that default under `v1`. New callers that remain on `v1` can pass a JSON `runs-on` object with both a runner group and label: GitHub's [`fromJSON` expression](https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#functions) can evaluate JSON objects. For example:
 
 ```yaml
 runner_json: '{"group":"<authorized-runner-group>","labels":"<label-in-that-group>"}'
@@ -22,7 +22,7 @@ jobs:
       tag: ${{ inputs.tag || github.event.release.tag_name }}
 ```
 
-Replace both placeholders with values confirmed by the organization/repository runner administrators before adopting the reusable. GitHub requires a matching runner to satisfy both the group and label selectors. Runner-group membership and repository access define the pool boundary; labels alone do not prove isolation. The `@v2` reference is illustrative until a reviewed release publishes that major tag.
+Replace both placeholders with values confirmed by the organization/repository runner administrators before adopting the reusable. GitHub documents that a runner must satisfy both the group and label selectors ([runner selection](https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job)). Runner-group membership and repository access define the pool boundary; labels alone do not prove isolation. The `@v2` reference is illustrative until a reviewed release publishes that major tag.
 
 Consumer migration is separate work owned by each repository. Do not dispatch badge recovery or change a caller to a runner group until its repository is authorized for that group and the group membership has been reviewed.
 
