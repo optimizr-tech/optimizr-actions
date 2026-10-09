@@ -1608,6 +1608,36 @@
     },
     {
       "category": "release",
+      "evidence": "Release badge recovery routed to an explicitly authorized runner group and label",
+      "examples": [],
+      "inputs": {
+        "badge_path": "",
+        "branch": "",
+        "runner_group": "",
+        "runner_label": "",
+        "tag": ""
+      },
+      "kind": "workflow",
+      "known_limitations": "The caller must select a runner group authorized for its repository; group membership remains an operator-controlled boundary",
+      "maturity": "stable-v1",
+      "metadata_status": "classified",
+      "outputs": {
+        "version": ""
+      },
+      "path": ".github/workflows/_release-badge-recovery-v2.yml",
+      "permissions": {
+        "contents": "none"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "4c81bbb4ecffea87f3c1a3e89a7b2ade281043094cc664047a3894db8e7cd8fa",
+      "trust_boundary": "trusted-push"
+    },
+    {
+      "category": "release",
       "evidence": "Release badge recovery with explicit v-prefixed tag or event resolution",
       "examples": [],
       "inputs": {

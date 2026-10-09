@@ -269,6 +269,12 @@
       "trust_boundary": "trusted-push",
       "evidence": "Release badge recovery with explicit v-prefixed tag or event resolution"
     },
+    ".github/workflows/_release-badge-recovery-v2.yml": {
+      "runner": ["hosted", "self-hosted-persistent", "self-hosted-ephemeral"],
+      "trust_boundary": "trusted-push",
+      "evidence": "Release badge recovery routed to an explicitly authorized runner group and label",
+      "known_limitations": "The caller must select a runner group authorized for its repository; group membership remains an operator-controlled boundary"
+    },
     ".github/workflows/_repository-validation-emergency.yml": {
       "trust_boundary": "trusted-push",
       "evidence": "Repository validation through a protected environment requiring reviewer approval",
