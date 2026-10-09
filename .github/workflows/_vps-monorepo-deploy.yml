@@ -297,7 +297,7 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in 1 2 3 4 5; do
-            relative_path=".optimizr-actions-volume-helper-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${RANDOM}-${RANDOM}-${RANDOM}"
+            relative_path=".optimizr-actions-volume-helper-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${attempt}-${RANDOM}-${RANDOM}-${RANDOM}"
             absolute_path="$GITHUB_WORKSPACE/$relative_path"
             if [ ! -e "$absolute_path" ] && [ ! -L "$absolute_path" ]; then
               printf 'path=%s\n' "$relative_path" >> "$GITHUB_OUTPUT"
