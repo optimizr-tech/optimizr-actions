@@ -115,6 +115,9 @@ entries directly; callers must not provide both inputs. It then:
 6. refuses rollout on malformed metadata, a missing digest, a pull mismatch,
    a failed security gate, or a failed health check.
 
+The optional required-volume creation and write-probe contracts for these VPS
+workflows are documented in [Deployment volume contracts](DEPLOYMENT_VOLUMES.md).
+
 The legacy build path remains available as a compatibility fallback. The
 pull-only deploy contract supports rollback by rerunning it with the previous
 successful manifest's service/image pairs; the VPS does not rebuild the

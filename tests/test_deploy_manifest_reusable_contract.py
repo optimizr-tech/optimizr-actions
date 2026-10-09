@@ -46,7 +46,8 @@ class DeployManifestReusableContractTests(unittest.TestCase):
             with self.subTest(workflow=workflow):
                 self.assertIn("create_missing_volumes:", workflow)
                 self.assertIn("default: false", workflow)
-                self.assertIn('if [ "${{ inputs.create_missing_volumes }}" = true ]; then', workflow)
+                self.assertIn('if [ "$CREATE_MISSING_VOLUMES" = true ]; then', workflow)
+                self.assertNotIn('if [ "${{ inputs.create_missing_volumes }}" = true ]; then', workflow)
                 self.assertIn(
                     'echo "::error::Required volume $volume is missing; refusing to create an empty replacement"',
                     workflow,
