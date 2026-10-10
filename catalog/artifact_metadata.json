@@ -267,7 +267,9 @@
     },
     ".github/workflows/_release-badge-recovery.yml": {
       "trust_boundary": "trusted-push",
-      "evidence": "Release badge recovery with explicit v-prefixed tag or event resolution"
+      "runner": ["self-hosted-persistent"],
+      "evidence": "Release badge recovery defaults to the local-docker runner group plus matching labels and accepts an explicit runner_json override",
+      "known_limitations": "The caller must be authorized for the local-docker group, which must exclude production runners; callers in other organizations must supply their own group and labels"
     },
     ".github/workflows/_repository-validation-emergency.yml": {
       "trust_boundary": "trusted-push",

@@ -1608,7 +1608,7 @@
     },
     {
       "category": "release",
-      "evidence": "Release badge recovery with explicit v-prefixed tag or event resolution",
+      "evidence": "Release badge recovery defaults to the local-docker runner group plus matching labels and accepts an explicit runner_json override",
       "examples": [],
       "inputs": {
         "badge_path": "",
@@ -1617,7 +1617,7 @@
         "tag": ""
       },
       "kind": "workflow",
-      "known_limitations": "",
+      "known_limitations": "The caller must be authorized for the local-docker group, which must exclude production runners; callers in other organizations must supply their own group and labels",
       "maturity": "stable-v1",
       "metadata_status": "classified",
       "outputs": {
@@ -1628,11 +1628,9 @@
         "contents": "write"
       },
       "runner": [
-        "hosted",
-        "self-hosted-persistent",
-        "self-hosted-ephemeral"
+        "self-hosted-persistent"
       ],
-      "source_sha256": "185f20702bfcb9921b0988eb76b2b055a529ef0f39d590aa9c5305fb8e4b75e2",
+      "source_sha256": "048cf48be7287b5e1aa1df61aa34cb0784b62c4de427d021e8f8a8b1f498f2a1",
       "trust_boundary": "trusted-push"
     },
     {

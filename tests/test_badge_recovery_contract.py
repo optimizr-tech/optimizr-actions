@@ -18,6 +18,31 @@ class BadgeRecoveryContractTests(unittest.TestCase):
         self.assertIn("release_badge/resolver.py", resolver)
         self.assertNotIn("git clone", text)
 
+    def test_v1_defaults_to_local_docker_and_keeps_explicit_override(self):
+        workflow = (ROOT / ".github/workflows/_release-badge-recovery.yml").read_text()
+        docs = (ROOT / "docs/RELEASE_BADGE_RECOVERY.md").read_text()
+
+        runner_input = workflow.split("      runner_json:\n", 1)[1].split(
+            "    outputs:", 1
+        )[0]
+        self.assertIn(
+            "default: '{\"group\":\"local-docker\",\"labels\":[\"self-hosted\",\"Linux\",\"X64\",\"local-docker\"]}'",
+            runner_input,
+        )
+        self.assertIn("runs-on: ${{ fromJSON(inputs.runner_json) }}", workflow)
+        self.assertIn("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", workflow)
+        self.assertIn("release-badge-resolver@v1", workflow)
+        self.assertIn("update-release-badge@v1", workflow)
+        self.assertNotIn("runner_group", workflow)
+        self.assertFalse(
+            (ROOT / ".github/workflows/_release-badge-recovery-v2.yml").exists()
+        )
+        self.assertIn("`local-docker`", docs)
+        self.assertIn("Both the group and labels must match", docs)
+        self.assertIn("other organization", docs)
+        self.assertIn("explicitly passes `runner_json`", docs)
+        self.assertNotIn("@v2", docs)
+
 
 if __name__ == "__main__":
     unittest.main()

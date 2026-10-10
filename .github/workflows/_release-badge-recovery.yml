@@ -18,10 +18,10 @@ on:
         type: string
         default: assets/badges/release.svg
       runner_json:
-        description: JSON runner labels
+        description: JSON runner selection; defaults to the authorized local-docker runner group
         required: false
         type: string
-        default: '["self-hosted","Linux","release"]'
+        default: '{"group":"local-docker","labels":["self-hosted","Linux","X64","local-docker"]}'
     outputs:
       version:
         description: Resolved semantic version
