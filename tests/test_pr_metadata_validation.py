@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import errno
 import importlib.util
+import io
 from pathlib import Path
+import socket
+import ssl
 import sys
+import time
 import unittest
+import urllib.error
 import urllib.parse
+from unittest.mock import call, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / ".github/actions/pr-metadata-validation/validate.py"
@@ -92,6 +99,255 @@ class PRMetadataValidationTests(unittest.TestCase):
         self.assertIn("state=closed", calls[0])
         self.assertIn("head=owner%3Afix%2Fissue-1", calls[0])
 
+
+class MetadataApiClientTests(unittest.TestCase):
+    def test_first_attempt_success_does_not_retry_or_sleep(self):
+        response = io.BytesIO(b'{"ok": true}')
+        with (
+            patch.object(module.urllib.request, "urlopen", return_value=response) as urlopen,
+            patch.object(time, "sleep") as sleep,
+        ):
+            client = module.MetadataApiClient()
+            payload = client.request_json("https://api.github.test/repos/o/r", "secret-token")
+
+        self.assertEqual({"ok": True}, payload)
+        self.assertEqual(1, urlopen.call_count)
+        self.assertEqual("GET", urlopen.call_args.args[0].get_method())
+        self.assertEqual(30, urlopen.call_args.kwargs["timeout"])
+        sleep.assert_not_called()
+
+    def test_transient_transport_failure_retries_with_two_then_four_seconds(self):
+        response = io.BytesIO(b'{"ok": true}')
+        with (
+            patch.object(
+                module.urllib.request,
+                "urlopen",
+                side_effect=[
+                    urllib.error.URLError(ConnectionResetError("private connection detail")),
+                    urllib.error.URLError(TimeoutError("private timeout detail")),
+                    response,
+                ],
+            ) as urlopen,
+            patch.object(time, "sleep") as sleep,
+        ):
+            payload = module.MetadataApiClient().request_json(
+                "https://api.github.test/repos/o/r?private=query",
+                "secret-token",
+            )
+
+        self.assertEqual({"ok": True}, payload)
+        self.assertEqual(3, urlopen.call_count)
+        self.assertEqual([call(2), call(4)], sleep.call_args_list)
+
+    def test_persistent_transient_failure_is_bounded_and_sanitized(self):
+        private_detail = "secret-token=do-not-print private query"
+        with (
+            patch.object(
+                module.urllib.request,
+                "urlopen",
+                side_effect=urllib.error.URLError(ConnectionResetError(private_detail)),
+            ) as urlopen,
+            patch.object(time, "sleep") as sleep,
+        ):
+            with self.assertRaises(module.MetadataRequestError) as caught:
+                module.MetadataApiClient().request_json(
+                    "https://api.github.test/repos/o/r?private=query",
+                    "secret-token",
+                )
+
+        self.assertEqual(3, urlopen.call_count)
+        self.assertEqual([call(2), call(4)], sleep.call_args_list)
+        self.assertEqual(3, caught.exception.attempts)
+        self.assertEqual("connection_reset", caught.exception.category)
+        self.assertNotIn(private_detail, str(caught.exception))
+        self.assertNotIn("secret-token", str(caught.exception))
+        self.assertNotIn("private=query", str(caught.exception))
+
+    def test_http_statuses_are_not_retried(self):
+        for status in (403, 404, 429, 500, 503):
+            with self.subTest(status=status):
+                error = urllib.error.HTTPError(
+                    "https://api.github.test/private?token=secret",
+                    status,
+                    "private response reason",
+                    {},
+                    None,
+                )
+                with (
+                    patch.object(module.urllib.request, "urlopen", side_effect=error) as urlopen,
+                    patch.object(time, "sleep") as sleep,
+                ):
+                    with self.assertRaises(module.MetadataRequestError) as caught:
+                        module.MetadataApiClient().request_json(
+                            "https://api.github.test/private?token=secret",
+                            "secret-token",
+                        )
+
+                self.assertEqual(1, urlopen.call_count)
+                sleep.assert_not_called()
+                self.assertEqual(status, caught.exception.status_code)
+                self.assertNotIn("secret", str(caught.exception))
+
+    def test_tls_and_unknown_url_errors_fail_immediately(self):
+        failures = (
+            urllib.error.URLError(ssl.SSLCertVerificationError("private certificate detail")),
+            urllib.error.URLError("private transport detail"),
+        )
+        expected_categories = ("tls_error", "transport_error")
+        for failure, expected_category in zip(failures, expected_categories, strict=True):
+            with self.subTest(failure_type=type(failure.reason).__name__):
+                with (
+                    patch.object(module.urllib.request, "urlopen", side_effect=failure) as urlopen,
+                    patch.object(time, "sleep") as sleep,
+                ):
+                    with self.assertRaises(module.MetadataRequestError) as caught:
+                        module.MetadataApiClient().request_json(
+                            "https://api.github.test/private",
+                            "secret-token",
+                        )
+
+                self.assertEqual(1, urlopen.call_count)
+                self.assertEqual(expected_category, caught.exception.category)
+                sleep.assert_not_called()
+
+    def test_only_temporary_dns_failure_is_retryable(self):
+        response = io.BytesIO(b'{"ok": true}')
+        temporary = urllib.error.URLError(
+            socket.gaierror(socket.EAI_AGAIN, "private DNS detail")
+        )
+        with (
+            patch.object(module.urllib.request, "urlopen", side_effect=[temporary, response]) as urlopen,
+            patch.object(time, "sleep") as sleep,
+        ):
+            self.assertEqual(
+                {"ok": True},
+                module.MetadataApiClient().request_json("https://api.github.test/repo", "token"),
+            )
+        self.assertEqual(2, urlopen.call_count)
+        sleep.assert_called_once_with(2)
+
+        permanent = urllib.error.URLError(
+            socket.gaierror(socket.EAI_NONAME, "private DNS detail")
+        )
+        with (
+            patch.object(module.urllib.request, "urlopen", side_effect=permanent) as urlopen,
+            patch.object(time, "sleep") as sleep,
+        ):
+            with self.assertRaises(module.MetadataRequestError) as caught:
+                module.MetadataApiClient().request_json("https://api.github.test/repo", "token")
+        self.assertEqual(1, urlopen.call_count)
+        self.assertEqual("dns_resolution", caught.exception.category)
+        sleep.assert_not_called()
+
+    def test_recognized_connection_failures_are_retryable(self):
+        failures = (
+            (urllib.error.URLError(ConnectionAbortedError("private detail")), "connection_aborted"),
+            (urllib.error.URLError(ConnectionRefusedError("private detail")), "connection_refused"),
+            (
+                urllib.error.URLError(OSError(errno.EHOSTUNREACH, "private detail")),
+                "network_unreachable",
+            ),
+            (
+                urllib.error.URLError(OSError(errno.ENETUNREACH, "private detail")),
+                "network_unreachable",
+            ),
+        )
+        for failure, expected_category in failures:
+            with self.subTest(category=expected_category, reason=type(failure.reason).__name__):
+                self.assertEqual(
+                    (expected_category, True),
+                    module._classify_transport_error(failure),
+                )
+
+    def test_invalid_json_is_not_retried(self):
+        for invalid_body, error_type in (
+            (b"not json", module.json.JSONDecodeError),
+            (b"\xff", UnicodeDecodeError),
+        ):
+            with self.subTest(error_type=error_type.__name__):
+                with (
+                    patch.object(
+                        module.urllib.request,
+                        "urlopen",
+                        return_value=io.BytesIO(invalid_body),
+                    ) as urlopen,
+                    patch.object(time, "sleep") as sleep,
+                ):
+                    with self.assertRaises(error_type):
+                        module.MetadataApiClient().request_json(
+                            "https://api.github.test/repo",
+                            "token",
+                        )
+                self.assertEqual(1, urlopen.call_count)
+                sleep.assert_not_called()
+
+    def test_retry_budget_is_shared_across_gets_and_caps_retry_timeout(self):
+        now = [0.0]
+        timeouts = []
+        calls = []
+
+        def clock():
+            return now[0]
+
+        def sleep(seconds):
+            now[0] += seconds
+
+        def urlopen(request, *, timeout):
+            calls.append(request.full_url)
+            timeouts.append(timeout)
+            if request.full_url.endswith("/first"):
+                if len([url for url in calls if url.endswith("/first")]) == 1:
+                    raise urllib.error.URLError(ConnectionResetError("reset"))
+                return io.BytesIO(b'{"ok": true}')
+            raise urllib.error.URLError(ConnectionResetError("reset"))
+
+        with patch.object(module.urllib.request, "urlopen", side_effect=urlopen):
+            client = module.MetadataApiClient(
+                retry_budget_seconds=5,
+                clock=clock,
+                sleep=sleep,
+            )
+            self.assertEqual(
+                {"ok": True},
+                client.request_json("https://api.github.test/first", "token"),
+            )
+            with self.assertRaises(module.MetadataRequestError) as caught:
+                client.request_json("https://api.github.test/second", "token")
+
+        self.assertEqual(
+            [
+                "https://api.github.test/first",
+                "https://api.github.test/first",
+                "https://api.github.test/second",
+                "https://api.github.test/second",
+            ],
+            calls,
+        )
+        self.assertEqual([30, 3, 30, 1], timeouts)
+        self.assertEqual(2, caught.exception.attempts)
+        self.assertTrue(caught.exception.budget_exhausted)
+        self.assertEqual(1, client.retry_budget_remaining)
+
+    def test_retry_budget_must_fit_backoff_and_a_retry_attempt(self):
+        with (
+            patch.object(
+                module.urllib.request,
+                "urlopen",
+                side_effect=urllib.error.URLError(ConnectionResetError("reset")),
+            ) as urlopen,
+            patch.object(time, "sleep") as sleep,
+        ):
+            with self.assertRaises(module.MetadataRequestError) as caught:
+                module.MetadataApiClient(retry_budget_seconds=2).request_json(
+                    "https://api.github.test/repo",
+                    "token",
+                )
+        self.assertEqual(1, urlopen.call_count)
+        self.assertEqual(1, caught.exception.attempts)
+        self.assertTrue(caught.exception.budget_exhausted)
+        sleep.assert_not_called()
+
+class PRMetadataValidationExtraTests(unittest.TestCase):
     def test_reused_merged_branch_fails(self):
         pr = {"state": "open", "merged": False, "merged_at": None}
         prior = [
