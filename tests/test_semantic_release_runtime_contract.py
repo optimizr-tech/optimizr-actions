@@ -7,31 +7,64 @@ DOC = ROOT / "docs/SEMANTIC_RELEASE.md"
 VALIDATOR = ROOT / "scripts/release/validate_changelog_compatibility.py"
 PACKAGE_LESS_CANARY = ROOT / ".github/workflows/semantic-release-package-less-canary.yml"
 PACKAGE_LESS_ACTION = ROOT / ".github/actions/package-less-release-validation/action.yml"
+PACKAGE_LESS_DRY_RUN = ROOT / ".github/actions/package-less-release-validation/run-semantic-release-dry-run.sh"
+ACTIONLINT_CONFIG = ROOT / ".github/actionlint.yaml"
 
 
 class SemanticReleaseRuntimeContractTests(unittest.TestCase):
     def test_package_less_action_is_shared_and_non_publishing(self):
         text = PACKAGE_LESS_ACTION.read_text(encoding="utf-8")
+        dry_run_script = PACKAGE_LESS_DRY_RUN.read_text(encoding="utf-8")
         self.assertIn("using: composite", text)
         self.assertIn("actions/setup-node@820762786026740c76f36085b0efc47a31fe5020", text)
         self.assertIn("validate_changelog_compatibility.py", text)
         self.assertIn("--package-mode package-less", text)
-        self.assertIn("npx semantic-release --dry-run", text)
-        self.assertNotIn("run: npx semantic-release\n", text)
+        self.assertIn('run: bash "$GITHUB_ACTION_PATH/run-semantic-release-dry-run.sh"', text)
+        self.assertIn("npx semantic-release --dry-run", dry_run_script)
+        self.assertNotIn("npx semantic-release\n", dry_run_script)
         self.assertNotIn("git push", text)
+        self.assertNotIn("git push", dry_run_script)
         self.assertIn("github-token:", text)
         self.assertIn('default: ""', text)
+        self.assertIn("canary-mode:", text)
+        self.assertIn('default: "false"', text)
 
         tokenless_step = text.split(
             "- name: Verify release plan without GitHub token", 1
         )[1].split("- name: Verify release plan with GitHub token", 1)[0]
         self.assertIn("if: inputs.github-token == ''", tokenless_step)
         self.assertNotIn("GITHUB_TOKEN:", tokenless_step)
+        self.assertIn('run: bash "$GITHUB_ACTION_PATH/run-semantic-release-dry-run.sh"', tokenless_step)
 
         token_step = text.split("- name: Verify release plan with GitHub token", 1)[1]
         self.assertIn("if: inputs.github-token != ''", token_step)
         self.assertIn("GITHUB_TOKEN: ${{ inputs.github-token }}", token_step)
-        self.assertIn("run: npx semantic-release --dry-run", token_step)
+        self.assertIn('run: bash "$GITHUB_ACTION_PATH/run-semantic-release-dry-run.sh"', token_step)
+
+    def test_package_less_canary_runs_release_analysis_against_local_fixture(self):
+        action = PACKAGE_LESS_ACTION.read_text(encoding="utf-8")
+        dry_run_script = PACKAGE_LESS_DRY_RUN.read_text(encoding="utf-8")
+        canary = PACKAGE_LESS_CANARY.read_text(encoding="utf-8")
+        fixture_setup = canary.split(
+            "- name: Prepare isolated package-less release repository", 1
+        )[1].split("- name: Validate package-less release plan", 1)[0]
+        action_call = canary.split("- name: Validate package-less release plan", 1)[1]
+
+        self.assertIn('git init --initial-branch=main "$PROJECT"', fixture_setup)
+        self.assertIn('git clone --bare "$PROJECT" "$LOCAL_REMOTE"', fixture_setup)
+        self.assertIn('git remote add origin "$LOCAL_REMOTE"', fixture_setup)
+        self.assertIn('git commit -m "feat: validate package-less release plan"', fixture_setup)
+        self.assertNotIn("git push", fixture_setup)
+        self.assertIn('working-directory: ${{ steps.fixture.outputs.working_directory }}', action_call)
+        self.assertIn('canary-mode: "true"', action_call)
+        self.assertNotIn("github-token:", action_call)
+        self.assertIn('if [[ -n "${GITHUB_TOKEN:-}" ]]', dry_run_script)
+        self.assertIn("npx semantic-release --dry-run --no-ci", dry_run_script)
+        self.assertIn("GITHUB_EVENT_NAME=push", dry_run_script)
+        self.assertIn("GITHUB_REF=refs/heads/main", dry_run_script)
+        self.assertIn("The next release version is", dry_run_script)
+        self.assertIn("Release note for version", dry_run_script)
+        self.assertIn('default: "false"', action.split("canary-mode:", 1)[1].split("runs:", 1)[0])
 
     def test_workflow_uses_controlled_node_and_npm_runtime(self):
         text = WORKFLOW.read_text(encoding="utf-8")
@@ -125,8 +158,11 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         self.assertIn('"$WORKFLOW_REPOSITORY" != "optimizr-tech/optimizr-actions"', identity_step)
         self.assertIn("${{ job.workflow_sha }}", identity_step)
         self.assertIn('"$WORKFLOW_SHA" =~ ^[0-9a-f]{40}$', identity_step)
+        self.assertEqual(identity_step.count("exit 2"), 2)
         self.assertIn('[[ -e "$TARGET_PATH" || -L "$TARGET_PATH" ]]', path_guard)
         self.assertIn('TARGET_PATH="$GITHUB_WORKSPACE/.optimizr-actions-release"', path_guard)
+        self.assertIn("exit 2", path_guard)
+        self.assertNotIn("rm ", path_guard)
         self.assertIn("repository: optimizr-tech/optimizr-actions", checkout_step)
         self.assertIn("ref: ${{ job.workflow_sha }}", checkout_step)
         self.assertIn("path: .optimizr-actions-release", checkout_step)
@@ -156,7 +192,9 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         self.assertNotIn("github-token:", text)
         self.assertIn("fetch-depth: 0", text)
         self.assertIn("persist-credentials: false", text)
-        self.assertIn('git checkout --force -B main "$GITHUB_SHA"', text)
+        self.assertIn("Prepare isolated package-less release repository", text)
+        self.assertIn("git clone --bare", text)
+        self.assertIn('canary-mode: "true"', text)
         self.assertNotIn("self-hosted", text)
         self.assertIn('".github/actions/package-less-release-validation/**"', text)
         self.assertIn('"tests/fixtures/package-less-release/**"', text)
@@ -170,6 +208,18 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         self.assertIn("@semantic-release/release-notes-generator", releaserc)
         self.assertNotIn("@semantic-release/github", releaserc)
         self.assertNotIn("@semantic-release/npm", releaserc)
+
+    def test_semantic_release_actionlint_exception_is_scoped_to_its_workflow(self):
+        text = ACTIONLINT_CONFIG.read_text(encoding="utf-8")
+        exception_header = "  .github/workflows/_semantic-release.yml:"
+        self.assertIn(exception_header, text)
+        workflow_exception = text.split(exception_header, 1)[1].split("\n  .github/", 1)[0]
+
+        self.assertIn("ignore:", workflow_exception)
+        self.assertIn(
+            'property "workflow_(repository|sha)" is not defined in object type .+',
+            workflow_exception,
+        )
 
     def test_default_plugins_are_not_reinstalled_over_semantic_release_runtime(self):
         text = WORKFLOW.read_text(encoding="utf-8")
