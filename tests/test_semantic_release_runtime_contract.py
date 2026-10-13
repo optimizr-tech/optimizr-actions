@@ -52,7 +52,7 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
 
         self.assertIn('git init --initial-branch=main "$PROJECT"', fixture_setup)
         self.assertIn('git clone --bare "$PROJECT" "$LOCAL_REMOTE"', fixture_setup)
-        self.assertIn('git remote add origin "$LOCAL_REMOTE"', fixture_setup)
+        self.assertIn('git -C "$PROJECT" remote add origin "file://$LOCAL_REMOTE"', fixture_setup)
         self.assertIn('git commit -m "feat: validate package-less release plan"', fixture_setup)
         self.assertNotIn("git push", fixture_setup)
         self.assertIn('working-directory: ${{ steps.fixture.outputs.working_directory }}', action_call)

@@ -52,7 +52,7 @@ jobs:
           git -C "$PROJECT" add .releaserc.json
           git -C "$PROJECT" commit -m "feat: validate package-less release plan"
           git clone --bare "$PROJECT" "$LOCAL_REMOTE"
-          git -C "$PROJECT" remote add origin "$LOCAL_REMOTE"
+          git -C "$PROJECT" remote add origin "file://$LOCAL_REMOTE"
           echo "working_directory=$PROJECT" >> "$GITHUB_OUTPUT"
 
       - name: Validate package-less release plan
