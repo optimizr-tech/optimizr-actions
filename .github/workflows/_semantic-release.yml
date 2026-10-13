@@ -79,6 +79,16 @@ on:
         required: false
         type: boolean
         default: false
+      tokenless_dry_run:
+        description: "Omit GITHUB_TOKEN from the dry-run process; configured plugins must not require GitHub API authentication"
+        required: false
+        type: boolean
+        default: false
+      simulate_default_branch_for_dry_run:
+        description: "Use a local main branch for a validation-only dry-run; no remote ref is changed"
+        required: false
+        type: boolean
+        default: false
 permissions:
   contents: write
   issues: write
@@ -116,6 +126,19 @@ jobs:
           fetch-depth: 0
           token: ${{ github.token }}
           persist-credentials: ${{ !inputs.validate_only }}
+
+      - name: Simulate default branch for validation-only dry-run
+        if: inputs.simulate_default_branch_for_dry_run
+        shell: bash
+        env:
+          VALIDATE_ONLY: ${{ inputs.validate_only }}
+        run: |
+          set -euo pipefail
+          if [[ "$VALIDATE_ONLY" != "true" ]]; then
+            echo "::error::simulate_default_branch_for_dry_run requires validate_only=true"
+            exit 2
+          fi
+          git checkout --force -B main "$GITHUB_SHA"
 
       - name: Validate package mode
         shell: bash
@@ -427,7 +450,13 @@ jobs:
           python3 "$RUNNER_TEMP/validate_changelog_compatibility.py" \
             --package-mode "$PACKAGE_MODE"
 
-      - name: Verify release plan
+      - name: Verify release plan without GitHub token
+        if: inputs.tokenless_dry_run
+        working-directory: ${{ inputs.working_directory }}
+        run: npx semantic-release --dry-run
+
+      - name: Verify release plan with GitHub token
+        if: ${{ !inputs.tokenless_dry_run }}
         working-directory: ${{ inputs.working_directory }}
         env:
           GITHUB_TOKEN: ${{ github.token }}

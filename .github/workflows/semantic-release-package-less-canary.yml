@@ -14,19 +14,20 @@ on:
 
 permissions:
   contents: read
-  issues: read
-  pull-requests: read
 
 concurrency:
   group: package-less-release-canary-${{ github.ref }}
   cancel-in-progress: true
 
-# A same-repository local `uses` call binds the reusable to the exact commit
-# containing this canary. Run the manifest-free fixture on a hosted runner
-# with a read-only token and stop after the dry-run.
+# The caller's token is read-only. The reusable's validation-only path skips
+# release/badge publishing, omits the token from semantic-release, and uses a
+# local main branch only so this package-less fixture can exercise its setup.
 jobs:
   package-less:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     name: Package-less fixture without Node manifests
+    permissions:
+      contents: read
     uses: ./.github/workflows/_semantic-release.yml
     with:
       package_mode: package-less
@@ -34,3 +35,5 @@ jobs:
       runs_on: '["ubuntu-latest"]'
       releaserc_source: local
       validate_only: true
+      tokenless_dry_run: true
+      simulate_default_branch_for_dry_run: true

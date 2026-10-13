@@ -49,6 +49,35 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         self.assertIn("validate_only:", text)
         self.assertIn("if: ${{ !inputs.validate_only }}", text)
         self.assertIn("persist-credentials: ${{ !inputs.validate_only }}", text)
+        self.assertIn("tokenless_dry_run:", text)
+        self.assertIn("simulate_default_branch_for_dry_run:", text)
+        tokenless_input = text.split("tokenless_dry_run:", 1)[1].split(
+            "simulate_default_branch_for_dry_run:", 1
+        )[0]
+        self.assertIn("type: boolean", tokenless_input)
+        self.assertIn("default: false", tokenless_input)
+        simulated_branch_input = text.split("simulate_default_branch_for_dry_run:", 1)[1].split(
+            "permissions:", 1
+        )[0]
+        self.assertIn("type: boolean", simulated_branch_input)
+        self.assertIn("default: false", simulated_branch_input)
+        tokenless_step = text.split("- name: Verify release plan without GitHub token", 1)[1].split(
+            "- name: Verify release plan with GitHub token", 1
+        )[0]
+        self.assertIn("if: inputs.tokenless_dry_run", tokenless_step)
+        self.assertNotIn("GITHUB_TOKEN", tokenless_step)
+        token_step = text.split("- name: Verify release plan with GitHub token", 1)[1].split(
+            "- name: Release", 1
+        )[0]
+        self.assertIn("if: ${{ !inputs.tokenless_dry_run }}", token_step)
+        self.assertIn("GITHUB_TOKEN: ${{ github.token }}", token_step)
+        simulated_branch_step = text.split(
+            "- name: Simulate default branch for validation-only dry-run", 1
+        )[1].split("- name: Validate package mode", 1)[0]
+        self.assertIn("if: inputs.simulate_default_branch_for_dry_run", simulated_branch_step)
+        self.assertIn('if [[ "$VALIDATE_ONLY" != "true" ]]', simulated_branch_step)
+        self.assertIn('git checkout --force -B main "$GITHUB_SHA"', simulated_branch_step)
+        self.assertNotIn("git push", simulated_branch_step)
         self.assertIn(
             "!inputs.validate_only && needs.release.result == 'success'",
             text,
@@ -91,16 +120,23 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
             text,
         )
 
-    def test_package_less_canary_uses_exact_same_commit_hosted_runner_and_read_only_token(self):
+    def test_package_less_canary_exercises_reusable_with_read_only_tokenless_validation(self):
         text = PACKAGE_LESS_CANARY.read_text(encoding="utf-8")
+        self.assertIn("permissions:\n  contents: read", text)
+        self.assertNotIn("contents: write", text)
+        self.assertNotIn("issues: write", text)
+        self.assertNotIn("pull-requests: write", text)
+        self.assertNotIn("GITHUB_TOKEN:", text)
+        self.assertIn("    permissions:\n      contents: read", text)
         self.assertIn("uses: ./.github/workflows/_semantic-release.yml", text)
         self.assertIn("package_mode: package-less", text)
         self.assertIn("working_directory: tests/fixtures/package-less-release", text)
         self.assertIn("runs_on: '[\"ubuntu-latest\"]'", text)
         self.assertIn("releaserc_source: local", text)
-        self.assertNotIn("protected_main_mode: true", text)
         self.assertIn("validate_only: true", text)
-        self.assertIn("contents: read", text)
+        self.assertIn("tokenless_dry_run: true", text)
+        self.assertIn("simulate_default_branch_for_dry_run: true", text)
+        self.assertNotIn("run:", text)
         self.assertNotIn("self-hosted", text)
         self.assertIn('"tests/fixtures/package-less-release/**"', text)
 
@@ -108,6 +144,11 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         self.assertTrue((fixture / ".releaserc.json").is_file())
         self.assertFalse((fixture / "package.json").exists())
         self.assertFalse((fixture / "package-lock.json").exists())
+        releaserc = (fixture / ".releaserc.json").read_text(encoding="utf-8")
+        self.assertIn("@semantic-release/commit-analyzer", releaserc)
+        self.assertIn("@semantic-release/release-notes-generator", releaserc)
+        self.assertNotIn("@semantic-release/github", releaserc)
+        self.assertNotIn("@semantic-release/npm", releaserc)
 
     def test_default_plugins_are_not_reinstalled_over_semantic_release_runtime(self):
         text = WORKFLOW.read_text(encoding="utf-8")
