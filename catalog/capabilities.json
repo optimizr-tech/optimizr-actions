@@ -217,6 +217,7 @@
       "evidence": "Package-less release runtime setup, changelog compatibility, and dry-run without publication",
       "examples": [],
       "inputs": {
+        "canary-mode": "",
         "github-token": "",
         "node-version": "",
         "npm-version": "",
@@ -236,7 +237,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "b66c11fb62b84dc715de6015437b1f02ae9ed899aa68b0033f16e8611247d402",
+      "source_sha256": "e65db37d117e96870661158e236c9638d0e9b21759facc164d40e614544d191a",
       "trust_boundary": "trusted-push"
     },
     {

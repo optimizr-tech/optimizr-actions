@@ -2,7 +2,7 @@ name: Package-less semantic-release validation
 description: Prepare and validate a package-less semantic-release runtime without publishing
 inputs:
   working-directory:
-    description: Existing directory inside the caller checkout containing .releaserc.json
+    description: Existing directory containing .releaserc.json
     required: true
   node-version:
     description: Controlled Node.js version for release validation
@@ -24,6 +24,10 @@ inputs:
     description: Optional token exposed only to the semantic-release dry-run process
     required: false
     default: ""
+  canary-mode:
+    description: Use a synthetic local push context for a credential-free dry-run canary
+    required: false
+    default: "false"
 runs:
   using: composite
   steps:
@@ -102,7 +106,9 @@ runs:
       if: inputs.github-token == ''
       shell: bash
       working-directory: ${{ inputs.working-directory }}
-      run: npx semantic-release --dry-run
+      env:
+        SEMANTIC_RELEASE_CANARY_MODE: ${{ inputs.canary-mode }}
+      run: bash "$GITHUB_ACTION_PATH/run-semantic-release-dry-run.sh"
 
     - name: Verify release plan with GitHub token
       if: inputs.github-token != ''
@@ -110,4 +116,5 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
-      run: npx semantic-release --dry-run
+        SEMANTIC_RELEASE_CANARY_MODE: ${{ inputs.canary-mode }}
+      run: bash "$GITHUB_ACTION_PATH/run-semantic-release-dry-run.sh"

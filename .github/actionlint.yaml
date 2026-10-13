@@ -34,3 +34,6 @@ paths:
   .github/workflows/_testsprite.yml:
     ignore:
       - 'property "workflow_(repository|sha)" is not defined in object type .+'
+  .github/workflows/_semantic-release.yml:
+    ignore:
+      - 'property "workflow_(repository|sha)" is not defined in object type .+'
