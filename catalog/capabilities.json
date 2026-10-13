@@ -213,6 +213,33 @@
       "trust_boundary": "trusted-pr"
     },
     {
+      "category": "release",
+      "evidence": "Package-less release runtime setup, changelog compatibility, and dry-run without publication",
+      "examples": [],
+      "inputs": {
+        "github-token": "",
+        "node-version": "",
+        "npm-version": "",
+        "semantic-release-extra-packages": "",
+        "semantic-release-version": "",
+        "working-directory": ""
+      },
+      "kind": "action",
+      "known_limitations": "Dry-run does not prove publishing; untrusted PR canaries must omit the optional token and use hosted runners",
+      "maturity": "stable-v1",
+      "metadata_status": "classified",
+      "outputs": {},
+      "path": ".github/actions/package-less-release-validation/action.yml",
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "b66c11fb62b84dc715de6015437b1f02ae9ed899aa68b0033f16e8611247d402",
+      "trust_boundary": "trusted-push"
+    },
+    {
       "category": "test",
       "evidence": "Node.js plus pnpm setup with dependency cache",
       "examples": [],
@@ -1873,7 +1900,7 @@
       "runner": [
         "hosted"
       ],
-      "source_sha256": "ff8b695c3b09cc5e11880c41e493aa9069f8e74e541835cc546b53a08325600b",
+      "source_sha256": "38b95bb786c5e7dc9d8c998295d04e4063d88bcfdd5c06c6dc56f2000de8f17c",
       "trust_boundary": "trusted-push"
     },
     {
