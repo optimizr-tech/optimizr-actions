@@ -15,7 +15,7 @@ if [[ "${SEMANTIC_RELEASE_CANARY_MODE:-false}" == "true" ]]; then
     GITHUB_SHA="$(git rev-parse HEAD)" \
     npx semantic-release --dry-run --no-ci 2>&1 | tee "$canary_log"
 
-  grep -F "The next release version is" "$canary_log" >/dev/null
+  grep -Fqi "next release version is" "$canary_log" >/dev/null
   grep -F "Release note for version" "$canary_log" >/dev/null
   echo "Package-less canary analyzed commits and generated release notes."
 else

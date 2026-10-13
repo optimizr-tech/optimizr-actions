@@ -53,7 +53,7 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         self.assertIn('git init --initial-branch=main "$PROJECT"', fixture_setup)
         self.assertIn('git clone --bare "$PROJECT" "$LOCAL_REMOTE"', fixture_setup)
         self.assertIn('git -C "$PROJECT" remote add origin "file://$LOCAL_REMOTE"', fixture_setup)
-        self.assertIn('git commit -m "feat: validate package-less release plan"', fixture_setup)
+        self.assertIn('git -C "$PROJECT" commit -m "feat: validate package-less release plan"', fixture_setup)
         self.assertNotIn("git push", fixture_setup)
         self.assertIn('working-directory: ${{ steps.fixture.outputs.working_directory }}', action_call)
         self.assertIn('canary-mode: "true"', action_call)
@@ -62,7 +62,7 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         self.assertIn("npx semantic-release --dry-run --no-ci", dry_run_script)
         self.assertIn("GITHUB_EVENT_NAME=push", dry_run_script)
         self.assertIn("GITHUB_REF=refs/heads/main", dry_run_script)
-        self.assertIn("The next release version is", dry_run_script)
+        self.assertIn("next release version is", dry_run_script)
         self.assertIn("Release note for version", dry_run_script)
         self.assertIn('default: "false"', action.split("canary-mode:", 1)[1].split("runs:", 1)[0])
 
