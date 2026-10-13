@@ -3,13 +3,18 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import re
+import socket
+import ssl
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass
 
 ALLOWED_TYPES = {
@@ -183,18 +188,164 @@ def validate_changed_files(files: list) -> list[ValidationFailure]:
     return failures
 
 
+class MetadataRequestError(RuntimeError):
+    """Sanitized metadata transport failure safe to include in CI logs."""
+
+    def __init__(
+        self,
+        category: str,
+        attempts: int,
+        *,
+        status_code: int | None = None,
+        budget_exhausted: bool = False,
+    ) -> None:
+        self.category = category
+        self.attempts = attempts
+        self.status_code = status_code
+        self.budget_exhausted = budget_exhausted
+        parts = [f"category={category}", f"attempts={attempts}"]
+        if status_code is not None:
+            parts.append(f"http_status={status_code}")
+        if budget_exhausted:
+            parts.append("retry_budget_exhausted=true")
+        super().__init__("metadata GET failed: " + "; ".join(parts))
+
+
+def _classify_transport_error(error: BaseException) -> tuple[str, bool]:
+    reason = error.reason if isinstance(error, urllib.error.URLError) else error
+
+    # TLS failures inherit OSError, so exclude them before checking errno.
+    if isinstance(reason, ssl.SSLError):
+        return "tls_error", False
+    if isinstance(reason, TimeoutError):
+        return "timeout", True
+    if isinstance(reason, socket.gaierror):
+        if reason.errno == socket.EAI_AGAIN:
+            return "temporary_dns", True
+        return "dns_resolution", False
+    if isinstance(reason, ConnectionResetError):
+        return "connection_reset", True
+    if isinstance(reason, ConnectionAbortedError):
+        return "connection_aborted", True
+    if isinstance(reason, ConnectionRefusedError):
+        return "connection_refused", True
+    if isinstance(reason, OSError):
+        if reason.errno in {errno.ECONNRESET, errno.ECONNABORTED}:
+            category = (
+                "connection_reset"
+                if reason.errno == errno.ECONNRESET
+                else "connection_aborted"
+            )
+            return category, True
+        if reason.errno == errno.ECONNREFUSED:
+            return "connection_refused", True
+        if reason.errno in {errno.EHOSTUNREACH, errno.ENETUNREACH}:
+            return "network_unreachable", True
+        host_down = getattr(errno, "EHOSTDOWN", None)
+        if host_down is not None and reason.errno == host_down:
+            return "network_unreachable", True
+    return "transport_error", False
+
+
+class MetadataApiClient:
+    """GET GitHub metadata with a shared, bounded retry-only time budget.
+
+    The initial request keeps the existing 30-second urllib timeout. Retries
+    and their 2/4-second waits share at most 30 seconds across this client.
+    urllib's timeout bounds blocking socket operations, not a strict
+    end-to-end wall-clock deadline.
+    """
+
+    REQUEST_TIMEOUT_SECONDS = 30
+    MAX_ATTEMPTS = 3
+    RETRY_DELAYS_SECONDS = (2, 4)
+
+    def __init__(
+        self,
+        *,
+        retry_budget_seconds: float = 30,
+        clock: Callable[[], float] | None = None,
+        sleep: Callable[[float], None] | None = None,
+    ) -> None:
+        if retry_budget_seconds < 0:
+            raise ValueError("retry budget cannot be negative")
+        self._retry_budget_seconds = float(retry_budget_seconds)
+        self._clock = clock or time.monotonic
+        self._sleep = sleep or time.sleep
+        self._retry_started_at: float | None = None
+
+    @property
+    def retry_budget_remaining(self) -> float:
+        if self._retry_started_at is None:
+            return self._retry_budget_seconds
+        elapsed = max(0.0, self._clock() - self._retry_started_at)
+        return max(0.0, self._retry_budget_seconds - elapsed)
+
+    def request_json(self, url: str, token: str) -> object:
+        request = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "User-Agent": "optimizr-pr-metadata-validation",
+            },
+        )
+        attempts = 0
+        last_category = "transport_error"
+        while True:
+            if attempts == 0:
+                timeout = self.REQUEST_TIMEOUT_SECONDS
+            else:
+                remaining = self.retry_budget_remaining
+                if remaining <= 0:
+                    raise MetadataRequestError(
+                        last_category,
+                        attempts,
+                        budget_exhausted=True,
+                    ) from None
+                timeout = min(self.REQUEST_TIMEOUT_SECONDS, remaining)
+            attempts += 1
+            try:
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    return json.load(response)
+            except urllib.error.HTTPError as exc:
+                status_code = exc.code
+                exc.close()
+                # HTTP statuses, including 403, 429, and 5xx, are not retried.
+                raise MetadataRequestError(
+                    "http_status",
+                    attempts,
+                    status_code=status_code,
+                ) from None
+            except (urllib.error.URLError, OSError) as exc:
+                category, retryable = _classify_transport_error(exc)
+                if not retryable or attempts >= self.MAX_ATTEMPTS:
+                    raise MetadataRequestError(category, attempts) from None
+
+                if self._retry_started_at is None:
+                    self._retry_started_at = self._clock()
+                last_category = category
+                delay = self.RETRY_DELAYS_SECONDS[attempts - 1]
+                if self.retry_budget_remaining <= delay:
+                    raise MetadataRequestError(
+                        category,
+                        attempts,
+                        budget_exhausted=True,
+                    ) from None
+                self._sleep(delay)
+                if self.retry_budget_remaining <= 0:
+                    raise MetadataRequestError(
+                        category,
+                        attempts,
+                        budget_exhausted=True,
+                    ) from None
+
+
 def _request_json(url: str, token: str) -> object:
-    request = urllib.request.Request(
-        url,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "optimizr-pr-metadata-validation",
-        },
-    )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.load(response)
+    # Kept as the default fetch hook for existing callers and tests. main()
+    # injects one shared client so its retry budget spans every metadata GET.
+    return MetadataApiClient().request_json(url, token)
 
 
 def _repository_api_root(api_url: str, repository: str) -> str:
@@ -202,15 +353,23 @@ def _repository_api_root(api_url: str, repository: str) -> str:
     return f"{api_url.rstrip('/')}/repos/{encoded_repo}"
 
 
-def fetch_pr_metadata(api_url: str, repository: str, pr_number: int, token: str) -> tuple[dict, list[dict]]:
+def fetch_pr_metadata(
+    api_url: str,
+    repository: str,
+    pr_number: int,
+    token: str,
+    *,
+    request_json: Callable[[str, str], object] | None = None,
+) -> tuple[dict, list[dict]]:
     root = f"{_repository_api_root(api_url, repository)}/pulls/{pr_number}"
-    pr = _request_json(root, token)
+    get_json = request_json if request_json is not None else _request_json
+    pr = get_json(root, token)
     if not isinstance(pr, dict):
         raise RuntimeError("GitHub PR response is not an object")
 
     commits: list[dict] = []
     for page in range(1, 11):
-        payload = _request_json(f"{root}/commits?per_page=100&page={page}", token)
+        payload = get_json(f"{root}/commits?per_page=100&page={page}", token)
         if not isinstance(payload, list):
             raise RuntimeError("GitHub PR commits response is not a list")
         commits.extend(item for item in payload if isinstance(item, dict))
@@ -219,11 +378,19 @@ def fetch_pr_metadata(api_url: str, repository: str, pr_number: int, token: str)
     raise RuntimeError("PR has more than 1000 commits; metadata validation is bounded")
 
 
-def fetch_pr_files(api_url: str, repository: str, pr_number: int, token: str) -> list[dict]:
+def fetch_pr_files(
+    api_url: str,
+    repository: str,
+    pr_number: int,
+    token: str,
+    *,
+    request_json: Callable[[str, str], object] | None = None,
+) -> list[dict]:
     root = f"{_repository_api_root(api_url, repository)}/pulls/{pr_number}/files"
+    get_json = request_json if request_json is not None else _request_json
     files: list[dict] = []
     for page in range(1, 11):
-        payload = _request_json(f"{root}?per_page=100&page={page}", token)
+        payload = get_json(f"{root}?per_page=100&page={page}", token)
         if not isinstance(payload, list):
             raise RuntimeError("GitHub PR files response is not a list")
         files.extend(item for item in payload if isinstance(item, dict))
@@ -238,8 +405,11 @@ def fetch_branch_history(
     head_owner: str,
     head_ref: str,
     token: str,
+    *,
+    request_json: Callable[[str, str], object] | None = None,
 ) -> list[dict]:
     root = f"{_repository_api_root(api_url, repository)}/pulls"
+    get_json = request_json if request_json is not None else _request_json
     history: list[dict] = []
     for page in range(1, 11):
         query = urllib.parse.urlencode(
@@ -250,7 +420,7 @@ def fetch_branch_history(
                 "page": page,
             }
         )
-        payload = _request_json(f"{root}?{query}", token)
+        payload = get_json(f"{root}?{query}", token)
         if not isinstance(payload, list):
             raise RuntimeError("GitHub branch history response is not a list")
         history.extend(item for item in payload if isinstance(item, dict))
@@ -323,6 +493,14 @@ def write_output(name: str, value: str) -> None:
         handle.write(f"{name}={value}\n")
 
 
+def _metadata_api_error_detail(error: BaseException) -> str:
+    if isinstance(error, MetadataRequestError):
+        return str(error)
+    if isinstance(error, (json.JSONDecodeError, UnicodeDecodeError)):
+        return "invalid_json"
+    return type(error).__name__
+
+
 def main() -> int:
     repository = os.environ.get("INPUT_REPOSITORY", "")
     token = os.environ.get("INPUT_TOKEN", "")
@@ -356,10 +534,29 @@ def main() -> int:
             emit_failure(failure)
         return 1
 
+    metadata_client = MetadataApiClient()
     try:
-        pr, commits = fetch_pr_metadata(api_url, repository, pr_number, token)
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, RuntimeError, json.JSONDecodeError) as exc:
-        emit_failure(ValidationFailure("metadata API", f"unable to fetch PR metadata: {type(exc).__name__}"))
+        pr, commits = fetch_pr_metadata(
+            api_url,
+            repository,
+            pr_number,
+            token,
+            request_json=metadata_client.request_json,
+        )
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        TimeoutError,
+        RuntimeError,
+        json.JSONDecodeError,
+        UnicodeDecodeError,
+    ) as exc:
+        emit_failure(
+            ValidationFailure(
+                "metadata API",
+                f"unable to fetch PR metadata: {_metadata_api_error_detail(exc)}",
+            )
+        )
         return 1
 
     actual_base = str(((pr.get("base") or {}).get("sha") or ""))
@@ -385,6 +582,7 @@ def main() -> int:
                     head_identity[0],
                     head_identity[1],
                     token,
+                    request_json=metadata_client.request_json,
                 )
             except (
                 urllib.error.URLError,
@@ -392,11 +590,12 @@ def main() -> int:
                 TimeoutError,
                 RuntimeError,
                 json.JSONDecodeError,
+                UnicodeDecodeError,
             ) as exc:
                 failures.append(
                     ValidationFailure(
                         "branch lifecycle",
-                        f"unable to fetch branch history: {type(exc).__name__}",
+                        f"unable to fetch branch history: {_metadata_api_error_detail(exc)}",
                     )
                 )
             else:
@@ -419,18 +618,25 @@ def main() -> int:
     }
     if scan_changed:
         try:
-            changed_files = fetch_pr_files(api_url, repository, pr_number, token)
+            changed_files = fetch_pr_files(
+                api_url,
+                repository,
+                pr_number,
+                token,
+                request_json=metadata_client.request_json,
+            )
         except (
             urllib.error.URLError,
             urllib.error.HTTPError,
             TimeoutError,
             RuntimeError,
             json.JSONDecodeError,
+            UnicodeDecodeError,
         ) as exc:
             failures.append(
                 ValidationFailure(
                     "changed files",
-                    f"unable to fetch PR files: {type(exc).__name__}",
+                    f"unable to fetch PR files: {_metadata_api_error_detail(exc)}",
                 )
             )
         else:
