@@ -142,7 +142,7 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         self.assertLess(text.index("Guard shared action checkout path"), text.index("Checkout shared package-less validation action"))
         self.assertLess(text.index("Checkout shared package-less validation action"), text.index("Validate package-less release plan"))
 
-    def test_package_less_canary_exercises_reusable_with_read_only_tokenless_validation(self):
+    def test_package_less_canary_calls_shared_action_without_write_token(self):
         text = PACKAGE_LESS_CANARY.read_text(encoding="utf-8")
         self.assertIn("permissions:\n  contents: read", text)
         self.assertNotIn("contents: write", text)
@@ -150,16 +150,15 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         self.assertNotIn("pull-requests: write", text)
         self.assertNotIn("GITHUB_TOKEN:", text)
         self.assertIn("    permissions:\n      contents: read", text)
-        self.assertIn("uses: ./.github/workflows/_semantic-release.yml", text)
-        self.assertIn("package_mode: package-less", text)
-        self.assertIn("working_directory: tests/fixtures/package-less-release", text)
-        self.assertIn("runs_on: '[\"ubuntu-latest\"]'", text)
-        self.assertIn("releaserc_source: local", text)
-        self.assertIn("validate_only: true", text)
-        self.assertIn("tokenless_dry_run: true", text)
-        self.assertIn("simulate_default_branch_for_dry_run: true", text)
-        self.assertNotIn("run:", text)
+        self.assertIn("runs-on: ubuntu-latest", text)
+        self.assertIn("uses: ./.github/actions/package-less-release-validation", text)
+        self.assertNotIn("uses: ./.github/workflows/_semantic-release.yml", text)
+        self.assertNotIn("github-token:", text)
+        self.assertIn("fetch-depth: 0", text)
+        self.assertIn("persist-credentials: false", text)
+        self.assertIn('git checkout --force -B main "$GITHUB_SHA"', text)
         self.assertNotIn("self-hosted", text)
+        self.assertIn('".github/actions/package-less-release-validation/**"', text)
         self.assertIn('"tests/fixtures/package-less-release/**"', text)
 
         fixture = ROOT / "tests/fixtures/package-less-release"
@@ -276,6 +275,11 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         self.assertIn("does not regenerate `package-lock.json`", text)
         self.assertIn("optimizr-infra-ops", text)
         self.assertIn("Rollback", text)
+        self.assertIn("job.workflow_sha", text)
+        self.assertNotIn("tokenless_dry_run", text)
+        self.assertNotIn("simulate_default_branch_for_dry_run", text)
+        self.assertIn("contents: read", text)
+        self.assertIn("persist-credentials: false", text)
 
 
 if __name__ == "__main__":
