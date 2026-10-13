@@ -6,9 +6,33 @@ WORKFLOW = ROOT / ".github/workflows/_semantic-release.yml"
 DOC = ROOT / "docs/SEMANTIC_RELEASE.md"
 VALIDATOR = ROOT / "scripts/release/validate_changelog_compatibility.py"
 PACKAGE_LESS_CANARY = ROOT / ".github/workflows/semantic-release-package-less-canary.yml"
+PACKAGE_LESS_ACTION = ROOT / ".github/actions/package-less-release-validation/action.yml"
 
 
 class SemanticReleaseRuntimeContractTests(unittest.TestCase):
+    def test_package_less_action_is_shared_and_non_publishing(self):
+        text = PACKAGE_LESS_ACTION.read_text(encoding="utf-8")
+        self.assertIn("using: composite", text)
+        self.assertIn("actions/setup-node@820762786026740c76f36085b0efc47a31fe5020", text)
+        self.assertIn("validate_changelog_compatibility.py", text)
+        self.assertIn("--package-mode package-less", text)
+        self.assertIn("npx semantic-release --dry-run", text)
+        self.assertNotIn("run: npx semantic-release\n", text)
+        self.assertNotIn("git push", text)
+        self.assertIn("github-token:", text)
+        self.assertIn('default: ""', text)
+
+        tokenless_step = text.split(
+            "- name: Verify release plan without GitHub token", 1
+        )[1].split("- name: Verify release plan with GitHub token", 1)[0]
+        self.assertIn("if: inputs.github-token == ''", tokenless_step)
+        self.assertNotIn("GITHUB_TOKEN:", tokenless_step)
+
+        token_step = text.split("- name: Verify release plan with GitHub token", 1)[1]
+        self.assertIn("if: inputs.github-token != ''", token_step)
+        self.assertIn("GITHUB_TOKEN: ${{ inputs.github-token }}", token_step)
+        self.assertIn("run: npx semantic-release --dry-run", token_step)
+
     def test_workflow_uses_controlled_node_and_npm_runtime(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("node_version:", text)

@@ -1,0 +1,113 @@
+name: Package-less semantic-release validation
+description: Prepare and validate a package-less semantic-release runtime without publishing
+inputs:
+  working-directory:
+    description: Existing directory inside the caller checkout containing .releaserc.json
+    required: true
+  node-version:
+    description: Controlled Node.js version for release validation
+    required: false
+    default: "24"
+  npm-version:
+    description: Controlled npm version for release validation
+    required: false
+    default: "12.0.2"
+  semantic-release-version:
+    description: semantic-release version installed in the ephemeral runtime
+    required: false
+    default: "25.0.5"
+  semantic-release-extra-packages:
+    description: Optional additional release runtime packages, separated by spaces
+    required: false
+    default: ""
+  github-token:
+    description: Optional token exposed only to the semantic-release dry-run process
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js without project cache
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Setup controlled npm
+      shell: bash
+      env:
+        NPM_VERSION: ${{ inputs.npm-version }}
+      run: |
+        set -euo pipefail
+        case "$NPM_VERSION" in
+          ""|*[!0-9A-Za-z._+-]*)
+            echo "::error::npm_version contains unsupported characters"
+            exit 2
+            ;;
+        esac
+        npm install --global --no-audit --no-fund "npm@${NPM_VERSION}"
+        node --version
+        npm --version
+
+    - name: Install semantic-release runtime
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        SEMANTIC_RELEASE_VERSION: ${{ inputs.semantic-release-version }}
+        SEMANTIC_RELEASE_EXTRA_PACKAGES: ${{ inputs.semantic-release-extra-packages }}
+      run: |
+        set -euo pipefail
+        if [[ ! -f .releaserc.json ]]; then
+          echo "::error::.releaserc.json not found"
+          exit 1
+        fi
+
+        mapfile -t plugin_packages < <(
+          node -e "const fs=require('fs'); const cfg=JSON.parse(fs.readFileSync('.releaserc.json','utf8')); const plugins=Array.isArray(cfg.plugins)?cfg.plugins:[]; const names=plugins.map((plugin)=>Array.isArray(plugin)?plugin[0]:plugin).filter((plugin)=>typeof plugin==='string').filter((plugin)=>!/^[./]/.test(plugin)); process.stdout.write([...new Set(names)].join('\\n'));"
+        )
+
+        install_packages=("semantic-release@${SEMANTIC_RELEASE_VERSION}")
+        for pkg in "${plugin_packages[@]}"; do
+          [[ -n "$pkg" ]] || continue
+          case "$pkg" in
+            "@semantic-release/commit-analyzer"|\
+            "@semantic-release/release-notes-generator"|\
+            "@semantic-release/npm"|\
+            "@semantic-release/github")
+              printf 'Using bundled semantic-release default plugin: %s\n' "$pkg"
+              ;;
+            *)
+              install_packages+=("$pkg")
+              ;;
+          esac
+        done
+
+        if [[ -n "${SEMANTIC_RELEASE_EXTRA_PACKAGES}" ]]; then
+          # shellcheck disable=SC2206
+          extra_packages=(${SEMANTIC_RELEASE_EXTRA_PACKAGES})
+          install_packages+=("${extra_packages[@]}")
+        fi
+
+        printf 'Installing semantic-release runtime packages:\n%s\n' "${install_packages[@]}"
+        npm install --no-save --package-lock=false --no-audit --no-fund "${install_packages[@]}"
+
+    - name: Validate package-less changelog preset compatibility
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        python3 "$GITHUB_ACTION_PATH/../../../scripts/release/validate_changelog_compatibility.py" \
+          --package-mode package-less
+
+    - name: Verify release plan without GitHub token
+      if: inputs.github-token == ''
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: npx semantic-release --dry-run
+
+    - name: Verify release plan with GitHub token
+      if: inputs.github-token != ''
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: npx semantic-release --dry-run
