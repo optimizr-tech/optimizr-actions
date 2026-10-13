@@ -20,10 +20,20 @@ on:
         type: string
         default: "12.0.2"
       install_command:
-        description: "Dependency install command"
+        description: "Node project dependency install command; skipped in package-less mode"
         required: false
         type: string
         default: "npm ci"
+      package_mode:
+        description: "node uses the caller's Node manifests; package-less installs only release tooling"
+        required: false
+        type: string
+        default: "node"
+      working_directory:
+        description: "Release project directory under the checkout; Node mode is restricted to the repository root"
+        required: false
+        type: string
+        default: "."
       semantic_release_version:
         description: "semantic-release version installed in the ephemeral runtime"
         required: false
@@ -64,6 +74,11 @@ on:
         required: false
         type: boolean
         default: false
+      validate_only:
+        description: "Run setup and the semantic-release dry-run without publishing a release or badge"
+        required: false
+        type: boolean
+        default: false
 permissions:
   contents: write
   issues: write
@@ -100,12 +115,111 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ github.token }}
+          persist-credentials: ${{ !inputs.validate_only }}
 
-      - name: Setup Node.js
+      - name: Validate package mode
+        shell: bash
+        env:
+          PACKAGE_MODE: ${{ inputs.package_mode }}
+        run: |
+          set -euo pipefail
+          case "$PACKAGE_MODE" in
+            node|package-less) ;;
+            *)
+              echo "::error::package_mode must be 'node' or 'package-less'"
+              exit 2
+              ;;
+          esac
+
+      - name: Validate release working directory
+        shell: bash
+        env:
+          PACKAGE_MODE: ${{ inputs.package_mode }}
+          RELEASE_DIRECTORY: ${{ inputs.working_directory }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import sys
+
+          raw_directory = os.environ["RELEASE_DIRECTORY"]
+          if not raw_directory or any(ord(character) < 32 for character in raw_directory):
+              print("::error::working_directory must be a non-empty path without control characters")
+              raise SystemExit(2)
+
+          configured_directory = Path(raw_directory)
+          if configured_directory.is_absolute():
+              print("::error::working_directory must be relative to the checkout")
+              raise SystemExit(2)
+
+          checkout_root = Path(os.environ["GITHUB_WORKSPACE"]).resolve(strict=True)
+          try:
+              resolved_directory = (checkout_root / configured_directory).resolve(strict=True)
+              resolved_directory.relative_to(checkout_root)
+          except (OSError, RuntimeError, ValueError):
+              print("::error::working_directory must resolve to a directory inside the checkout")
+              raise SystemExit(2)
+
+          if not resolved_directory.is_dir():
+              print("::error::working_directory must resolve to an existing directory")
+              raise SystemExit(2)
+          if os.environ["PACKAGE_MODE"] == "node" and resolved_directory != checkout_root:
+              print("::error::Node package mode requires working_directory='.'")
+              raise SystemExit(2)
+          PY
+
+      - name: Fetch changelog validator from the called workflow revision
+        if: inputs.package_mode == 'package-less'
+        shell: bash
+        env:
+          JOB_CONTEXT_JSON: ${{ toJSON(job) }}
+        run: |
+          set -euo pipefail
+          readarray -t workflow_identity < <(
+            python3 - <<'PY'
+          import json
+          import os
+
+          job_context = json.loads(os.environ["JOB_CONTEXT_JSON"])
+          print(job_context.get("workflow_repository", ""))
+          print(job_context.get("workflow_sha", ""))
+          PY
+          )
+          SOURCE_REPOSITORY="${workflow_identity[0]:-}"
+          WORKFLOW_SHA="${workflow_identity[1]:-}"
+          if [[ "$SOURCE_REPOSITORY" != "optimizr-tech/optimizr-actions" ]]; then
+            echo "::error::release validator workflow repository is not trusted"
+            exit 2
+          fi
+          if [[ ! "$WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::release validator workflow SHA is not immutable"
+            exit 2
+          fi
+
+          DESTINATION="$RUNNER_TEMP/validate_changelog_compatibility.py"
+          curl --fail --silent --show-error --location --max-redirs 3 \
+            --connect-timeout 15 --max-time 60 \
+            "https://raw.githubusercontent.com/${SOURCE_REPOSITORY}/${WORKFLOW_SHA}/scripts/release/validate_changelog_compatibility.py" \
+            --output "$DESTINATION"
+          if [[ ! -s "$DESTINATION" ]]; then
+            echo "::error::release validator download was empty"
+            exit 1
+          fi
+          echo "Fetched release validator from ${SOURCE_REPOSITORY}@${WORKFLOW_SHA}"
+
+      - name: Setup Node.js with project cache
+        if: inputs.package_mode == 'node'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0  # v6.4.0
         with:
           node-version: ${{ inputs.node_version }}
           cache: npm
+
+      - name: Setup Node.js without project cache
+        if: inputs.package_mode == 'package-less'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0  # v6.4.0
+        with:
+          node-version: ${{ inputs.node_version }}
 
       - name: Setup controlled npm
         shell: bash
@@ -124,10 +238,13 @@ jobs:
           npm --version
 
       - name: Install dependencies
+        if: inputs.package_mode == 'node'
+        working-directory: ${{ inputs.working_directory }}
         run: ${{ inputs.install_command }}
 
       - name: Resolve canonical release assets
         if: inputs.releaserc_source == 'canonical'
+        working-directory: ${{ inputs.working_directory }}
         env:
           REQUESTED_REF: ${{ inputs.actions_ref }}
           JOB_CONTEXT_JSON: ${{ toJSON(job) }}
@@ -190,9 +307,11 @@ jobs:
 
       - name: Prepare protected-main release config
         if: inputs.protected_main_mode
+        working-directory: ${{ inputs.working_directory }}
         run: python3 "$RUNNER_TEMP/prepare_protected_releaserc.py" .releaserc.json
 
       - name: Install semantic-release runtime
+        working-directory: ${{ inputs.working_directory }}
         env:
           SEMANTIC_RELEASE_VERSION: ${{ inputs.semantic_release_version }}
           SEMANTIC_RELEASE_EXTRA_PACKAGES: ${{ inputs.semantic_release_extra_packages }}
@@ -232,8 +351,10 @@ jobs:
           printf 'Installing semantic-release runtime packages:\n%s\n' "${install_packages[@]}"
           npm install --no-save --package-lock=false --no-audit --no-fund "${install_packages[@]}"
 
-      - name: Validate changelog preset compatibility
+      - name: Validate Node changelog preset compatibility
+        if: inputs.package_mode == 'node'
         shell: bash
+        working-directory: ${{ inputs.working_directory }}
         run: |
           set -euo pipefail
           node <<'NODE'
@@ -295,12 +416,26 @@ jobs:
           );
           NODE
 
+      - name: Validate package-less changelog preset compatibility
+        if: inputs.package_mode == 'package-less'
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        env:
+          PACKAGE_MODE: ${{ inputs.package_mode }}
+        run: |
+          set -euo pipefail
+          python3 "$RUNNER_TEMP/validate_changelog_compatibility.py" \
+            --package-mode "$PACKAGE_MODE"
+
       - name: Verify release plan
+        working-directory: ${{ inputs.working_directory }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: npx semantic-release --dry-run
 
       - name: Release
+        if: ${{ !inputs.validate_only }}
+        working-directory: ${{ inputs.working_directory }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: npx semantic-release
@@ -308,7 +443,7 @@ jobs:
   update-release-badge:
     name: Update release badge
     needs: release
-    if: ${{ inputs.update_release_badge && !inputs.protected_main_mode && needs.release.result == 'success' }}
+    if: ${{ inputs.update_release_badge && !inputs.protected_main_mode && !inputs.validate_only && needs.release.result == 'success' }}
     runs-on: ${{ fromJSON(inputs.runs_on) }}
     timeout-minutes: 5
     permissions:

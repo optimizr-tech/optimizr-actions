@@ -1848,13 +1848,16 @@
         "install_command": "",
         "node_version": "",
         "npm_version": "",
+        "package_mode": "",
         "protected_main_mode": "",
         "releaserc_source": "",
         "runs_on": "",
         "semantic_release_extra_packages": "",
         "semantic_release_version": "",
         "skip": "",
-        "update_release_badge": ""
+        "update_release_badge": "",
+        "validate_only": "",
+        "working_directory": ""
       },
       "kind": "workflow",
       "known_limitations": "Consume via immutable SHA per governance contract",
@@ -1870,7 +1873,7 @@
       "runner": [
         "hosted"
       ],
-      "source_sha256": "df26ad7347c8a6c63d7266bcd92f9921a76812017814c5008c00c12535cfcbff",
+      "source_sha256": "ff8b695c3b09cc5e11880c41e493aa9069f8e74e541835cc546b53a08325600b",
       "trust_boundary": "trusted-push"
     },
     {

@@ -4,6 +4,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/_semantic-release.yml"
 DOC = ROOT / "docs/SEMANTIC_RELEASE.md"
+VALIDATOR = ROOT / "scripts/release/validate_changelog_compatibility.py"
+PACKAGE_LESS_CANARY = ROOT / ".github/workflows/semantic-release-package-less-canary.yml"
 
 
 class SemanticReleaseRuntimeContractTests(unittest.TestCase):
@@ -32,10 +34,85 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         self.assertIn("npx semantic-release --dry-run", text)
         self.assertIn("run: npx semantic-release", text)
 
+    def test_package_less_mode_is_opt_in_and_never_runs_release_or_badge_in_validation_only(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("package_mode:", text)
+        self.assertIn('default: "node"', text)
+        self.assertIn("if: inputs.package_mode == 'node'", text)
+        self.assertIn("if: inputs.package_mode == 'package-less'", text)
+        install_step = text.split("- name: Install dependencies", 1)[1].split(
+            "- name: Resolve canonical release assets", 1
+        )[0]
+        self.assertIn("if: inputs.package_mode == 'node'", install_step)
+        self.assertIn("working-directory: ${{ inputs.working_directory }}", install_step)
+        self.assertIn("run: ${{ inputs.install_command }}", install_step)
+        self.assertIn("validate_only:", text)
+        self.assertIn("if: ${{ !inputs.validate_only }}", text)
+        self.assertIn("persist-credentials: ${{ !inputs.validate_only }}", text)
+        self.assertIn(
+            "!inputs.validate_only && needs.release.result == 'success'",
+            text,
+        )
+
+    def test_release_working_directory_is_confined_and_node_mode_stays_at_root(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("working_directory:", text)
+        self.assertIn('default: "."', text)
+        self.assertIn("configured_directory.is_absolute()", text)
+        self.assertIn("resolved_directory.relative_to(checkout_root)", text)
+        self.assertIn(
+            'os.environ["PACKAGE_MODE"] == "node" and resolved_directory != checkout_root',
+            text,
+        )
+        self.assertIn("working-directory: ${{ inputs.working_directory }}", text)
+
+    def test_compatibility_validator_is_fetched_from_exact_reusable_workflow_sha(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        fetch_step = text.split(
+            "- name: Fetch changelog validator from the called workflow revision", 1
+        )[1].split("- name: Setup Node.js with project cache", 1)[0]
+        self.assertIn("if: inputs.package_mode == 'package-less'", fetch_step)
+        self.assertIn('WORKFLOW_SHA="${workflow_identity[1]:-}"', fetch_step)
+        self.assertIn('SOURCE_REPOSITORY="${workflow_identity[0]:-}"', fetch_step)
+        self.assertIn('"$SOURCE_REPOSITORY" != "optimizr-tech/optimizr-actions"', fetch_step)
+        self.assertIn('"$WORKFLOW_SHA" =~ ^[0-9a-f]{40}$', fetch_step)
+        self.assertIn(
+            "https://raw.githubusercontent.com/${SOURCE_REPOSITORY}/${WORKFLOW_SHA}/scripts/release/validate_changelog_compatibility.py",
+            fetch_step,
+        )
+        self.assertIn("validate_changelog_compatibility.py", fetch_step)
+        self.assertIn("$RUNNER_TEMP/validate_changelog_compatibility.py", fetch_step)
+        self.assertIn(
+            'python3 "$RUNNER_TEMP/validate_changelog_compatibility.py"',
+            text,
+        )
+        self.assertNotIn(
+            "python3 scripts/release/validate_changelog_compatibility.py",
+            text,
+        )
+
+    def test_package_less_canary_uses_exact_same_commit_hosted_runner_and_read_only_token(self):
+        text = PACKAGE_LESS_CANARY.read_text(encoding="utf-8")
+        self.assertIn("uses: ./.github/workflows/_semantic-release.yml", text)
+        self.assertIn("package_mode: package-less", text)
+        self.assertIn("working_directory: tests/fixtures/package-less-release", text)
+        self.assertIn("runs_on: '[\"ubuntu-latest\"]'", text)
+        self.assertIn("releaserc_source: local", text)
+        self.assertNotIn("protected_main_mode: true", text)
+        self.assertIn("validate_only: true", text)
+        self.assertIn("contents: read", text)
+        self.assertNotIn("self-hosted", text)
+        self.assertIn('"tests/fixtures/package-less-release/**"', text)
+
+        fixture = ROOT / "tests/fixtures/package-less-release"
+        self.assertTrue((fixture / ".releaserc.json").is_file())
+        self.assertFalse((fixture / "package.json").exists())
+        self.assertFalse((fixture / "package-lock.json").exists())
+
     def test_default_plugins_are_not_reinstalled_over_semantic_release_runtime(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         runtime_step = text.split("- name: Install semantic-release runtime", 1)[1].split(
-            "- name: Validate changelog preset compatibility", 1
+            "- name: Validate Node changelog preset compatibility", 1
         )[0]
 
         default_plugins = (
@@ -52,14 +129,22 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
 
     def test_workflow_validates_conventional_commits_preset_writer_matrix(self):
         text = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("Validate changelog preset compatibility", text)
-        self.assertIn("conventional-changelog-conventionalcommits", text)
-        self.assertIn("conventional-changelog-writer", text)
+        validator = VALIDATOR.read_text(encoding="utf-8")
+        self.assertIn("Validate Node changelog preset compatibility", text)
+        self.assertIn("Validate package-less changelog preset compatibility", text)
+        self.assertIn('if: inputs.package_mode == \'node\'', text)
+        self.assertIn("validate_changelog_compatibility.py", text)
         self.assertIn("package-lock.json", text)
-        self.assertIn("preset 9.x + writer 8.x", text)
-        self.assertIn("preset 10.x + writer 9.x", text)
+        self.assertIn("conventional-changelog-conventionalcommits", validator)
+        self.assertIn("conventional-changelog-writer", validator)
+        self.assertIn('workspace / "package-lock.json"', validator)
+        self.assertIn("preset 9.x + writer 8.x", validator)
+        self.assertIn("preset 10.x + writer 9.x", validator)
 
-        compatibility_index = text.index("Validate changelog preset compatibility")
+        compatibility_index = min(
+            text.index("Validate Node changelog preset compatibility"),
+            text.index("Validate package-less changelog preset compatibility"),
+        )
         dry_run_index = text.index("npx semantic-release --dry-run")
         self.assertLess(compatibility_index, dry_run_index)
 
@@ -72,7 +157,7 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         self.assertIn("protected_main_mode:", text)
         self.assertIn("skip:", text)
         self.assertIn(
-            "inputs.update_release_badge && !inputs.protected_main_mode && needs.release.result == 'success'",
+            "inputs.update_release_badge && !inputs.protected_main_mode && !inputs.validate_only && needs.release.result == 'success'",
             text,
         )
         self.assertRegex(text, r"actions/checkout@[0-9a-f]{40}")
@@ -121,6 +206,8 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         text = DOC.read_text(encoding="utf-8")
         self.assertIn("Node 24", text)
         self.assertIn("npm 12.0.2", text)
+        self.assertIn("package_mode: package-less", text)
+        self.assertIn("validate_only: true", text)
         self.assertIn("unauthenticated GitHub Contents API", text)
         self.assertIn("does not use the caller's `GITHUB_TOKEN`", text)
         self.assertIn("controlled npm", text)

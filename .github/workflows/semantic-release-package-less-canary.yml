@@ -1,0 +1,36 @@
+name: Validate package-less semantic-release reusable
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/_semantic-release.yml"
+      - ".github/workflows/semantic-release-package-less-canary.yml"
+      - "scripts/release/**"
+      - "tests/fixtures/package-less-release/**"
+      - "tests/test_semantic_release_package_less.py"
+      - "tests/test_semantic_release_runtime_contract.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: package-less-release-canary-${{ github.ref }}
+  cancel-in-progress: true
+
+# A same-repository local `uses` call binds the reusable to the exact commit
+# containing this canary. Run the manifest-free fixture on a hosted runner
+# with a read-only token and stop after the dry-run.
+jobs:
+  package-less:
+    name: Package-less fixture without Node manifests
+    uses: ./.github/workflows/_semantic-release.yml
+    with:
+      package_mode: package-less
+      working_directory: tests/fixtures/package-less-release
+      runs_on: '["ubuntu-latest"]'
+      releaserc_source: local
+      validate_only: true
