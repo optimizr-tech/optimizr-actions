@@ -73,35 +73,21 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         self.assertIn("validate_only:", text)
         self.assertIn("if: ${{ !inputs.validate_only }}", text)
         self.assertIn("persist-credentials: ${{ !inputs.validate_only }}", text)
-        self.assertIn("tokenless_dry_run:", text)
-        self.assertIn("simulate_default_branch_for_dry_run:", text)
-        tokenless_input = text.split("tokenless_dry_run:", 1)[1].split(
-            "simulate_default_branch_for_dry_run:", 1
-        )[0]
-        self.assertIn("type: boolean", tokenless_input)
-        self.assertIn("default: false", tokenless_input)
-        simulated_branch_input = text.split("simulate_default_branch_for_dry_run:", 1)[1].split(
-            "permissions:", 1
-        )[0]
-        self.assertIn("type: boolean", simulated_branch_input)
-        self.assertIn("default: false", simulated_branch_input)
-        tokenless_step = text.split("- name: Verify release plan without GitHub token", 1)[1].split(
-            "- name: Verify release plan with GitHub token", 1
-        )[0]
-        self.assertIn("if: inputs.tokenless_dry_run", tokenless_step)
-        self.assertNotIn("GITHUB_TOKEN", tokenless_step)
+        self.assertNotIn("tokenless_dry_run", text)
+        self.assertNotIn("simulate_default_branch_for_dry_run", text)
+        for step_name in (
+            "Setup Node.js with project cache",
+            "Setup controlled npm",
+            "Install dependencies",
+            "Install semantic-release runtime",
+            "Verify release plan with GitHub token",
+        ):
+            step = text.split(f"- name: {step_name}", 1)[1].split("\n      - name:", 1)[0]
+            self.assertIn("if: inputs.package_mode == 'node'", step)
         token_step = text.split("- name: Verify release plan with GitHub token", 1)[1].split(
             "- name: Release", 1
         )[0]
-        self.assertIn("if: ${{ !inputs.tokenless_dry_run }}", token_step)
         self.assertIn("GITHUB_TOKEN: ${{ github.token }}", token_step)
-        simulated_branch_step = text.split(
-            "- name: Simulate default branch for validation-only dry-run", 1
-        )[1].split("- name: Validate package mode", 1)[0]
-        self.assertIn("if: inputs.simulate_default_branch_for_dry_run", simulated_branch_step)
-        self.assertIn('if [[ "$VALIDATE_ONLY" != "true" ]]', simulated_branch_step)
-        self.assertIn('git checkout --force -B main "$GITHUB_SHA"', simulated_branch_step)
-        self.assertNotIn("git push", simulated_branch_step)
         self.assertIn(
             "!inputs.validate_only && needs.release.result == 'success'",
             text,
@@ -119,30 +105,42 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         )
         self.assertIn("working-directory: ${{ inputs.working_directory }}", text)
 
-    def test_compatibility_validator_is_fetched_from_exact_reusable_workflow_sha(self):
+    def test_package_less_reusable_loads_shared_action_at_its_exact_sha(self):
         text = WORKFLOW.read_text(encoding="utf-8")
-        fetch_step = text.split(
-            "- name: Fetch changelog validator from the called workflow revision", 1
-        )[1].split("- name: Setup Node.js with project cache", 1)[0]
-        self.assertIn("if: inputs.package_mode == 'package-less'", fetch_step)
-        self.assertIn('WORKFLOW_SHA="${workflow_identity[1]:-}"', fetch_step)
-        self.assertIn('SOURCE_REPOSITORY="${workflow_identity[0]:-}"', fetch_step)
-        self.assertIn('"$SOURCE_REPOSITORY" != "optimizr-tech/optimizr-actions"', fetch_step)
-        self.assertIn('"$WORKFLOW_SHA" =~ ^[0-9a-f]{40}$', fetch_step)
+        identity_step = text.split(
+            "- name: Validate package-less workflow identity", 1
+        )[1].split("- name: Guard shared action checkout path", 1)[0]
+        path_guard = text.split(
+            "- name: Guard shared action checkout path", 1
+        )[1].split("- name: Checkout shared package-less validation action", 1)[0]
+        checkout_step = text.split(
+            "- name: Checkout shared package-less validation action", 1
+        )[1].split("- name:", 1)[0]
+        action_step = text.split(
+            "- name: Validate package-less release plan", 1
+        )[1].split("- name:", 1)[0]
+
+        self.assertIn("if: inputs.package_mode == 'package-less'", identity_step)
+        self.assertIn("${{ job.workflow_repository }}", identity_step)
+        self.assertIn('"$WORKFLOW_REPOSITORY" != "optimizr-tech/optimizr-actions"', identity_step)
+        self.assertIn("${{ job.workflow_sha }}", identity_step)
+        self.assertIn('"$WORKFLOW_SHA" =~ ^[0-9a-f]{40}$', identity_step)
+        self.assertIn('[[ -e "$TARGET_PATH" || -L "$TARGET_PATH" ]]', path_guard)
+        self.assertIn('TARGET_PATH="$GITHUB_WORKSPACE/.optimizr-actions-release"', path_guard)
+        self.assertIn("repository: optimizr-tech/optimizr-actions", checkout_step)
+        self.assertIn("ref: ${{ job.workflow_sha }}", checkout_step)
+        self.assertIn("path: .optimizr-actions-release", checkout_step)
+        self.assertIn("persist-credentials: false", checkout_step)
         self.assertIn(
-            "https://raw.githubusercontent.com/${SOURCE_REPOSITORY}/${WORKFLOW_SHA}/scripts/release/validate_changelog_compatibility.py",
-            fetch_step,
+            "uses: ./.optimizr-actions-release/.github/actions/package-less-release-validation",
+            action_step,
         )
-        self.assertIn("validate_changelog_compatibility.py", fetch_step)
-        self.assertIn("$RUNNER_TEMP/validate_changelog_compatibility.py", fetch_step)
-        self.assertIn(
-            'python3 "$RUNNER_TEMP/validate_changelog_compatibility.py"',
-            text,
-        )
-        self.assertNotIn(
-            "python3 scripts/release/validate_changelog_compatibility.py",
-            text,
-        )
+        self.assertIn("github-token: ${{ github.token }}", action_step)
+        self.assertNotIn("tokenless_dry_run:", text)
+        self.assertNotIn("simulate_default_branch_for_dry_run:", text)
+        self.assertLess(text.index("Validate package-less workflow identity"), text.index("Guard shared action checkout path"))
+        self.assertLess(text.index("Guard shared action checkout path"), text.index("Checkout shared package-less validation action"))
+        self.assertLess(text.index("Checkout shared package-less validation action"), text.index("Validate package-less release plan"))
 
     def test_package_less_canary_exercises_reusable_with_read_only_tokenless_validation(self):
         text = PACKAGE_LESS_CANARY.read_text(encoding="utf-8")
@@ -195,10 +193,12 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
     def test_workflow_validates_conventional_commits_preset_writer_matrix(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         validator = VALIDATOR.read_text(encoding="utf-8")
+        action = PACKAGE_LESS_ACTION.read_text(encoding="utf-8")
         self.assertIn("Validate Node changelog preset compatibility", text)
-        self.assertIn("Validate package-less changelog preset compatibility", text)
+        self.assertNotIn("Validate package-less changelog preset compatibility", text)
         self.assertIn('if: inputs.package_mode == \'node\'', text)
-        self.assertIn("validate_changelog_compatibility.py", text)
+        self.assertIn("Validate package-less changelog preset compatibility", action)
+        self.assertIn("validate_changelog_compatibility.py", action)
         self.assertIn("package-lock.json", text)
         self.assertIn("conventional-changelog-conventionalcommits", validator)
         self.assertIn("conventional-changelog-writer", validator)
@@ -206,10 +206,7 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         self.assertIn("preset 9.x + writer 8.x", validator)
         self.assertIn("preset 10.x + writer 9.x", validator)
 
-        compatibility_index = min(
-            text.index("Validate Node changelog preset compatibility"),
-            text.index("Validate package-less changelog preset compatibility"),
-        )
+        compatibility_index = text.index("Validate Node changelog preset compatibility")
         dry_run_index = text.index("npx semantic-release --dry-run")
         self.assertLess(compatibility_index, dry_run_index)
 

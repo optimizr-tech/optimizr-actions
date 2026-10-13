@@ -79,16 +79,6 @@ on:
         required: false
         type: boolean
         default: false
-      tokenless_dry_run:
-        description: "Omit GITHUB_TOKEN from the dry-run process; configured plugins must not require GitHub API authentication"
-        required: false
-        type: boolean
-        default: false
-      simulate_default_branch_for_dry_run:
-        description: "Use a local main branch for a validation-only dry-run; no remote ref is changed"
-        required: false
-        type: boolean
-        default: false
 permissions:
   contents: write
   issues: write
@@ -126,19 +116,6 @@ jobs:
           fetch-depth: 0
           token: ${{ github.token }}
           persist-credentials: ${{ !inputs.validate_only }}
-
-      - name: Simulate default branch for validation-only dry-run
-        if: inputs.simulate_default_branch_for_dry_run
-        shell: bash
-        env:
-          VALIDATE_ONLY: ${{ inputs.validate_only }}
-        run: |
-          set -euo pipefail
-          if [[ "$VALIDATE_ONLY" != "true" ]]; then
-            echo "::error::simulate_default_branch_for_dry_run requires validate_only=true"
-            exit 2
-          fi
-          git checkout --force -B main "$GITHUB_SHA"
 
       - name: Validate package mode
         shell: bash
@@ -192,44 +169,42 @@ jobs:
               raise SystemExit(2)
           PY
 
-      - name: Fetch changelog validator from the called workflow revision
+      - name: Validate package-less workflow identity
         if: inputs.package_mode == 'package-less'
         shell: bash
         env:
-          JOB_CONTEXT_JSON: ${{ toJSON(job) }}
+          WORKFLOW_REPOSITORY: ${{ job.workflow_repository }}
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
         run: |
           set -euo pipefail
-          readarray -t workflow_identity < <(
-            python3 - <<'PY'
-          import json
-          import os
-
-          job_context = json.loads(os.environ["JOB_CONTEXT_JSON"])
-          print(job_context.get("workflow_repository", ""))
-          print(job_context.get("workflow_sha", ""))
-          PY
-          )
-          SOURCE_REPOSITORY="${workflow_identity[0]:-}"
-          WORKFLOW_SHA="${workflow_identity[1]:-}"
-          if [[ "$SOURCE_REPOSITORY" != "optimizr-tech/optimizr-actions" ]]; then
-            echo "::error::release validator workflow repository is not trusted"
+          if [[ "$WORKFLOW_REPOSITORY" != "optimizr-tech/optimizr-actions" ]]; then
+            echo "::error::package-less release workflow repository is not trusted"
             exit 2
           fi
           if [[ ! "$WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::release validator workflow SHA is not immutable"
+            echo "::error::package-less release workflow SHA is not immutable"
             exit 2
           fi
 
-          DESTINATION="$RUNNER_TEMP/validate_changelog_compatibility.py"
-          curl --fail --silent --show-error --location --max-redirs 3 \
-            --connect-timeout 15 --max-time 60 \
-            "https://raw.githubusercontent.com/${SOURCE_REPOSITORY}/${WORKFLOW_SHA}/scripts/release/validate_changelog_compatibility.py" \
-            --output "$DESTINATION"
-          if [[ ! -s "$DESTINATION" ]]; then
-            echo "::error::release validator download was empty"
-            exit 1
+      - name: Guard shared action checkout path
+        if: inputs.package_mode == 'package-less'
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET_PATH="$GITHUB_WORKSPACE/.optimizr-actions-release"
+          if [[ -e "$TARGET_PATH" || -L "$TARGET_PATH" ]]; then
+            echo "::error::shared release action checkout path already exists"
+            exit 2
           fi
-          echo "Fetched release validator from ${SOURCE_REPOSITORY}@${WORKFLOW_SHA}"
+
+      - name: Checkout shared package-less validation action
+        if: inputs.package_mode == 'package-less'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: optimizr-tech/optimizr-actions
+          ref: ${{ job.workflow_sha }}
+          path: .optimizr-actions-release
+          persist-credentials: false
 
       - name: Setup Node.js with project cache
         if: inputs.package_mode == 'node'
@@ -238,13 +213,8 @@ jobs:
           node-version: ${{ inputs.node_version }}
           cache: npm
 
-      - name: Setup Node.js without project cache
-        if: inputs.package_mode == 'package-less'
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0  # v6.4.0
-        with:
-          node-version: ${{ inputs.node_version }}
-
       - name: Setup controlled npm
+        if: inputs.package_mode == 'node'
         shell: bash
         env:
           NPM_VERSION: ${{ inputs.npm_version }}
@@ -334,6 +304,7 @@ jobs:
         run: python3 "$RUNNER_TEMP/prepare_protected_releaserc.py" .releaserc.json
 
       - name: Install semantic-release runtime
+        if: inputs.package_mode == 'node'
         working-directory: ${{ inputs.working_directory }}
         env:
           SEMANTIC_RELEASE_VERSION: ${{ inputs.semantic_release_version }}
@@ -439,24 +410,19 @@ jobs:
           );
           NODE
 
-      - name: Validate package-less changelog preset compatibility
+      - name: Validate package-less release plan
         if: inputs.package_mode == 'package-less'
-        shell: bash
-        working-directory: ${{ inputs.working_directory }}
-        env:
-          PACKAGE_MODE: ${{ inputs.package_mode }}
-        run: |
-          set -euo pipefail
-          python3 "$RUNNER_TEMP/validate_changelog_compatibility.py" \
-            --package-mode "$PACKAGE_MODE"
-
-      - name: Verify release plan without GitHub token
-        if: inputs.tokenless_dry_run
-        working-directory: ${{ inputs.working_directory }}
-        run: npx semantic-release --dry-run
+        uses: ./.optimizr-actions-release/.github/actions/package-less-release-validation
+        with:
+          working-directory: ${{ inputs.working_directory }}
+          node-version: ${{ inputs.node_version }}
+          npm-version: ${{ inputs.npm_version }}
+          semantic-release-version: ${{ inputs.semantic_release_version }}
+          semantic-release-extra-packages: ${{ inputs.semantic_release_extra_packages }}
+          github-token: ${{ github.token }}
 
       - name: Verify release plan with GitHub token
-        if: ${{ !inputs.tokenless_dry_run }}
+        if: inputs.package_mode == 'node'
         working-directory: ${{ inputs.working_directory }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
