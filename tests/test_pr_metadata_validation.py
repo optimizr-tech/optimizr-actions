@@ -22,9 +22,127 @@ sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 
 
+def verified_dependabot_group_case(subject: str | None = None) -> tuple[dict, dict, str]:
+    subject = subject or (
+        ":arrow_up: chore(deps): bump the github-actions-minor-and-patch group with 2 updates"
+    )
+    pr = {
+        "user": {"login": "dependabot[bot]", "id": 49699333, "type": "Bot"},
+        "head": {"ref": "dependabot/github_actions/group-update"},
+    }
+    item = {
+        "author": {"login": "dependabot[bot]", "id": 49699333, "type": "Bot"},
+        "committer": {"login": "web-flow", "id": 19864447, "type": "User"},
+        "commit": {
+            "author": {
+                "email": "49699333+dependabot[bot]@users.noreply.github.com",
+            },
+            "committer": {"email": "noreply@github.com"},
+            "message": (
+                f"{subject}\n\n"
+                "Bumps the github-actions-minor-and-patch group with 2 updates: actions.\n\n"
+                "updated-dependencies:\n"
+                "- dependency-name: actions/upload-artifact\n"
+                "  dependency-version: 7.0.2\n"
+                "  dependency-group: github-actions-minor-and-patch"
+            ),
+            "verification": {"verified": True, "reason": "valid"},
+        },
+    }
+    return pr, item, subject
+
+
 class PRMetadataValidationTests(unittest.TestCase):
     def test_valid_org_subject_passes(self):
         self.assertEqual([], module.validate_subject(":shield: security(ci): isolate metadata", "title"))
+
+    def test_verified_dependabot_group_commit_can_exceed_72_characters(self):
+        pr, item, subject = verified_dependabot_group_case()
+
+        self.assertGreater(len(subject), 72)
+        self.assertEqual([], module.validate_commit_metadata(pr, item, "commit 1"))
+
+    def test_human_authored_signed_group_commit_cannot_use_length_exception(self):
+        pr, item, subject = verified_dependabot_group_case()
+        pr["user"] = {"login": "human-maintainer", "type": "User"}
+        item["author"] = {"login": "human-maintainer", "type": "User"}
+        item["committer"] = {"login": "human-maintainer", "type": "User"}
+        item["commit"]["author"]["email"] = "human@example.com"
+
+        failures = module.validate_commit_metadata(pr, item, "commit 1")
+
+        self.assertGreater(len(subject), 72)
+        self.assertTrue(any("at most 72 characters" in failure.message for failure in failures))
+
+    def test_unverified_dependabot_group_commit_cannot_use_length_exception(self):
+        pr, item, subject = verified_dependabot_group_case()
+        item["commit"]["verification"] = {"verified": False, "reason": "unsigned"}
+
+        failures = module.validate_commit_metadata(pr, item, "commit 1")
+
+        self.assertGreater(len(subject), 72)
+        self.assertTrue(any("at most 72 characters" in failure.message for failure in failures))
+
+    def test_verified_dependabot_commit_without_group_marker_cannot_use_exception(self):
+        pr, item, subject = verified_dependabot_group_case()
+        item["commit"]["message"] = subject
+
+        failures = module.validate_commit_metadata(pr, item, "commit 1")
+
+        self.assertGreater(len(subject), 72)
+        self.assertTrue(any("at most 72 characters" in failure.message for failure in failures))
+
+    def test_dependabot_group_exception_requires_both_group_markers(self):
+        for message in (
+            "Bumps the github-actions-minor-and-patch group with 2 updates:\n"
+            "- dependency-name: actions/upload-artifact",
+            "updated-dependencies:\n"
+            "- dependency-name: actions/upload-artifact\n"
+            "  dependency-group: github-actions-minor-and-patch",
+        ):
+            with self.subTest(message=message):
+                pr, item, subject = verified_dependabot_group_case()
+                item["commit"]["message"] = f"{subject}\n\n{message}"
+
+                failures = module.validate_commit_metadata(pr, item, "commit 1")
+
+                self.assertGreater(len(subject), 72)
+                self.assertTrue(
+                    any("at most 72 characters" in failure.message for failure in failures)
+                )
+
+    def test_dependabot_group_exception_binds_signed_author_email_to_bot_id(self):
+        pr, item, subject = verified_dependabot_group_case()
+        item["commit"]["author"]["email"] = (
+            "12345+dependabot[bot]@users.noreply.github.com"
+        )
+
+        failures = module.validate_commit_metadata(pr, item, "commit 1")
+
+        self.assertGreater(len(subject), 72)
+        self.assertTrue(any("at most 72 characters" in failure.message for failure in failures))
+
+    def test_verified_dependabot_group_subject_has_an_absolute_sanity_limit(self):
+        subject = (
+            ":arrow_up: chore(deps): bump the github-actions-minor-and-patch group with 2 updates "
+            + "x" * 160
+        )
+        pr, item, subject = verified_dependabot_group_case(subject)
+
+        failures = module.validate_commit_metadata(pr, item, "commit 1")
+
+        self.assertGreater(len(subject), 200)
+        self.assertTrue(any("at most 200 characters" in failure.message for failure in failures))
+
+    def test_dependabot_pull_request_title_keeps_72_character_limit(self):
+        long_title = (
+            ":arrow_up: chore(deps): bump python from 3.14.7-slim-trixie to "
+            "3.15.0rc3-slim-trixie in the docker-minor-and-patch group"
+        )
+
+        failures = module.validate_subject(long_title, "PR title")
+
+        self.assertTrue(any("at most 72 characters" in failure.message for failure in failures))
 
     def test_portuguese_or_trailing_period_fails(self):
         failures = module.validate_subject(":bug: fix(ci): corrigir validacao.", "title")

@@ -59,6 +59,15 @@ SCAN_FILE_EXTENSIONS = frozenset({
 SCAN_EXCLUDED_SUFFIXES = ("lock.yaml", "lock.json", "lock.yml")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 SKIPPED_COMMIT_PREFIXES = ("Merge ", "Revert ", "fixup!", "squash!")
+SUBJECT_MAX_LENGTH = 72
+VERIFIED_DEPENDABOT_GROUP_SUBJECT_MAX_LENGTH = 200
+DEPENDABOT_LOGIN = "dependabot[bot]"
+GITHUB_WEB_FLOW_LOGIN = "web-flow"
+DEPENDABOT_COMMIT_AUTHOR_EMAIL_RE = re.compile(
+    r"^(?P<id>\d+)\+dependabot\[bot\]@users\.noreply\.github\.com$"
+)
+DEPENDABOT_GROUP_SUMMARY_RE = re.compile(r"(?im)^Bumps the .+ group with \d+ updates?:")
+DEPENDABOT_GROUP_FIELD_RE = re.compile(r"(?im)^\s*dependency-group:\s*\S.*$")
 AI_COAUTHOR_RE = re.compile(
     r"(?im)^Co-authored-by:\s*(?:Cursor|Composer|Copilot|Claude|Codex|ChatGPT|OpenAI|GitHub Copilot)\b"
     r"|^Co-authored-by:.*<(?:cursoragent@cursor\.com|codex@openai\.com|chatgpt@openai\.com)>"
@@ -71,7 +80,12 @@ class ValidationFailure:
     message: str
 
 
-def validate_subject(subject: str, label: str) -> list[ValidationFailure]:
+def validate_subject(
+    subject: str,
+    label: str,
+    *,
+    max_length: int = SUBJECT_MAX_LENGTH,
+) -> list[ValidationFailure]:
     failures: list[ValidationFailure] = []
     try:
         subject.encode("ascii")
@@ -102,8 +116,10 @@ def validate_subject(subject: str, label: str) -> list[ValidationFailure]:
         failures.append(ValidationFailure(label, "description is shorter than 4 characters"))
     if description.endswith("."):
         failures.append(ValidationFailure(label, "remove the trailing period"))
-    if len(subject) > 72:
-        failures.append(ValidationFailure(label, f"must be at most 72 characters; got {len(subject)}"))
+    if len(subject) > max_length:
+        failures.append(
+            ValidationFailure(label, f"must be at most {max_length} characters; got {len(subject)}")
+        )
     if PORTUGUESE_DIACRITICS_RE.search(description):
         failures.append(ValidationFailure(label, "description must be English; Portuguese diacritics detected"))
 
@@ -139,6 +155,87 @@ def validate_commit_message(message: str, label: str) -> list[ValidationFailure]
             )
         ]
     return []
+
+
+def is_verified_dependabot_group_commit(pr: dict, item: dict) -> bool:
+    """Return true only for a GitHub-verified Dependabot grouped commit.
+
+    GitHub's pull-request commits endpoint attributes the observed signed
+    Dependabot commits to the bot as author and `web-flow` as committer. The
+    signed payload also uses the bot's no-reply author address. Require all of
+    those signals plus the bot-authored PR, Dependabot branch, valid signature,
+    and both generated group markers; missing or inconsistent API fields fail
+    closed.
+    """
+    if not isinstance(pr, dict) or not isinstance(item, dict):
+        return False
+
+    pr_user = pr.get("user")
+    head = pr.get("head")
+    author = item.get("author")
+    committer = item.get("committer")
+    commit = item.get("commit")
+    if not all(
+        isinstance(value, dict)
+        for value in (pr_user, head, author, committer, commit)
+    ):
+        return False
+
+    commit_author = commit.get("author")
+    commit_committer = commit.get("committer")
+    verification = commit.get("verification")
+    if not all(
+        isinstance(value, dict)
+        for value in (commit_author, commit_committer, verification)
+    ):
+        return False
+
+    bot_id = pr_user.get("id")
+    author_email = str(commit_author.get("email") or "")
+    author_email_match = DEPENDABOT_COMMIT_AUTHOR_EMAIL_RE.fullmatch(author_email)
+    commit_message = str(commit.get("message") or "")
+    _, separator, body = commit_message.partition("\n")
+    if not separator:
+        return False
+
+    return (
+        pr_user.get("login") == DEPENDABOT_LOGIN
+        and pr_user.get("type") == "Bot"
+        and type(bot_id) is int
+        and bot_id > 0
+        and author.get("login") == DEPENDABOT_LOGIN
+        and author.get("type") == "Bot"
+        and author.get("id") == bot_id
+        and str(head.get("ref") or "").startswith("dependabot/")
+        and committer.get("login") == GITHUB_WEB_FLOW_LOGIN
+        and committer.get("type") == "User"
+        and author_email_match is not None
+        and int(author_email_match.group("id")) == bot_id
+        and commit_committer.get("email") == "noreply@github.com"
+        and verification.get("verified") is True
+        and verification.get("reason") == "valid"
+        and DEPENDABOT_GROUP_SUMMARY_RE.search(body) is not None
+        and DEPENDABOT_GROUP_FIELD_RE.search(body) is not None
+    )
+
+
+def validate_commit_metadata(pr: dict, item: dict, label: str) -> list[ValidationFailure]:
+    commit = item.get("commit") if isinstance(item, dict) else None
+    if not isinstance(commit, dict):
+        commit = {}
+    message = str(commit.get("message") or "")
+    failures = validate_commit_message(message, label)
+    subject = message.splitlines()[0] if message else ""
+    if not subject or subject.startswith(SKIPPED_COMMIT_PREFIXES):
+        return failures
+
+    max_length = (
+        VERIFIED_DEPENDABOT_GROUP_SUBJECT_MAX_LENGTH
+        if is_verified_dependabot_group_commit(pr, item)
+        else SUBJECT_MAX_LENGTH
+    )
+    failures.extend(validate_subject(subject, label, max_length=max_length))
+    return failures
 
 
 def _is_scanned_source_path(path: str) -> bool:
@@ -602,13 +699,7 @@ def main() -> int:
                 failures.extend(validate_pr_lifecycle(pr, pr_number, branch_history))
 
     for index, item in enumerate(commits, start=1):
-        commit = item.get("commit") or {}
-        message = str(commit.get("message") or "")
-        failures.extend(validate_commit_message(message, f"commit {index}"))
-        subject = message.splitlines()[0] if message else ""
-        if not subject or subject.startswith(SKIPPED_COMMIT_PREFIXES):
-            continue
-        failures.extend(validate_subject(subject, f"commit {index}"))
+        failures.extend(validate_commit_metadata(pr, item, f"commit {index}"))
 
     scan_changed = os.environ.get("INPUT_SCAN_CHANGED_FILES", "").strip().lower() in {
         "1",
