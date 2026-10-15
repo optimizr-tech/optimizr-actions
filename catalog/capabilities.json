@@ -213,6 +213,34 @@
       "trust_boundary": "trusted-pr"
     },
     {
+      "category": "release",
+      "evidence": "Package-less release runtime setup, changelog compatibility, and dry-run without publication",
+      "examples": [],
+      "inputs": {
+        "canary-mode": "",
+        "github-token": "",
+        "node-version": "",
+        "npm-version": "",
+        "semantic-release-extra-packages": "",
+        "semantic-release-version": "",
+        "working-directory": ""
+      },
+      "kind": "action",
+      "known_limitations": "Dry-run does not prove publishing; untrusted PR canaries must omit the optional token and use hosted runners",
+      "maturity": "stable-v1",
+      "metadata_status": "classified",
+      "outputs": {},
+      "path": ".github/actions/package-less-release-validation/action.yml",
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "e65db37d117e96870661158e236c9638d0e9b21759facc164d40e614544d191a",
+      "trust_boundary": "trusted-push"
+    },
+    {
       "category": "test",
       "evidence": "Node.js plus pnpm setup with dependency cache",
       "examples": [],
@@ -1848,13 +1876,16 @@
         "install_command": "",
         "node_version": "",
         "npm_version": "",
+        "package_mode": "",
         "protected_main_mode": "",
         "releaserc_source": "",
         "runs_on": "",
         "semantic_release_extra_packages": "",
         "semantic_release_version": "",
         "skip": "",
-        "update_release_badge": ""
+        "update_release_badge": "",
+        "validate_only": "",
+        "working_directory": ""
       },
       "kind": "workflow",
       "known_limitations": "Consume via immutable SHA per governance contract",
@@ -1870,7 +1901,7 @@
       "runner": [
         "hosted"
       ],
-      "source_sha256": "df26ad7347c8a6c63d7266bcd92f9921a76812017814c5008c00c12535cfcbff",
+      "source_sha256": "38b95bb786c5e7dc9d8c998295d04e4063d88bcfdd5c06c6dc56f2000de8f17c",
       "trust_boundary": "trusted-push"
     },
     {

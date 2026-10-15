@@ -4,9 +4,68 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/_semantic-release.yml"
 DOC = ROOT / "docs/SEMANTIC_RELEASE.md"
+VALIDATOR = ROOT / "scripts/release/validate_changelog_compatibility.py"
+PACKAGE_LESS_CANARY = ROOT / ".github/workflows/semantic-release-package-less-canary.yml"
+PACKAGE_LESS_ACTION = ROOT / ".github/actions/package-less-release-validation/action.yml"
+PACKAGE_LESS_DRY_RUN = ROOT / ".github/actions/package-less-release-validation/run-semantic-release-dry-run.sh"
+ACTIONLINT_CONFIG = ROOT / ".github/actionlint.yaml"
 
 
 class SemanticReleaseRuntimeContractTests(unittest.TestCase):
+    def test_package_less_action_is_shared_and_non_publishing(self):
+        text = PACKAGE_LESS_ACTION.read_text(encoding="utf-8")
+        dry_run_script = PACKAGE_LESS_DRY_RUN.read_text(encoding="utf-8")
+        self.assertIn("using: composite", text)
+        self.assertIn("actions/setup-node@820762786026740c76f36085b0efc47a31fe5020", text)
+        self.assertIn("validate_changelog_compatibility.py", text)
+        self.assertIn("--package-mode package-less", text)
+        self.assertIn('run: bash "$GITHUB_ACTION_PATH/run-semantic-release-dry-run.sh"', text)
+        self.assertIn("npx semantic-release --dry-run", dry_run_script)
+        self.assertNotIn("npx semantic-release\n", dry_run_script)
+        self.assertNotIn("git push", text)
+        self.assertNotIn("git push", dry_run_script)
+        self.assertIn("github-token:", text)
+        self.assertIn('default: ""', text)
+        self.assertIn("canary-mode:", text)
+        self.assertIn('default: "false"', text)
+
+        tokenless_step = text.split(
+            "- name: Verify release plan without GitHub token", 1
+        )[1].split("- name: Verify release plan with GitHub token", 1)[0]
+        self.assertIn("if: inputs.github-token == ''", tokenless_step)
+        self.assertNotIn("GITHUB_TOKEN:", tokenless_step)
+        self.assertIn('run: bash "$GITHUB_ACTION_PATH/run-semantic-release-dry-run.sh"', tokenless_step)
+
+        token_step = text.split("- name: Verify release plan with GitHub token", 1)[1]
+        self.assertIn("if: inputs.github-token != ''", token_step)
+        self.assertIn("GITHUB_TOKEN: ${{ inputs.github-token }}", token_step)
+        self.assertIn('run: bash "$GITHUB_ACTION_PATH/run-semantic-release-dry-run.sh"', token_step)
+
+    def test_package_less_canary_runs_release_analysis_against_local_fixture(self):
+        action = PACKAGE_LESS_ACTION.read_text(encoding="utf-8")
+        dry_run_script = PACKAGE_LESS_DRY_RUN.read_text(encoding="utf-8")
+        canary = PACKAGE_LESS_CANARY.read_text(encoding="utf-8")
+        fixture_setup = canary.split(
+            "- name: Prepare isolated package-less release repository", 1
+        )[1].split("- name: Validate package-less release plan", 1)[0]
+        action_call = canary.split("- name: Validate package-less release plan", 1)[1]
+
+        self.assertIn('git init --initial-branch=main "$PROJECT"', fixture_setup)
+        self.assertIn('git clone --bare "$PROJECT" "$LOCAL_REMOTE"', fixture_setup)
+        self.assertIn('git -C "$PROJECT" remote add origin "file://$LOCAL_REMOTE"', fixture_setup)
+        self.assertIn('git -C "$PROJECT" commit -m "feat: validate package-less release plan"', fixture_setup)
+        self.assertNotIn("git push", fixture_setup)
+        self.assertIn('working-directory: ${{ steps.fixture.outputs.working_directory }}', action_call)
+        self.assertIn('canary-mode: "true"', action_call)
+        self.assertNotIn("github-token:", action_call)
+        self.assertIn('if [[ -n "${GITHUB_TOKEN:-}" ]]', dry_run_script)
+        self.assertIn("npx semantic-release --dry-run --no-ci", dry_run_script)
+        self.assertIn("GITHUB_EVENT_NAME=push", dry_run_script)
+        self.assertIn("GITHUB_REF=refs/heads/main", dry_run_script)
+        self.assertIn("next release version is", dry_run_script)
+        self.assertIn("Release note for version", dry_run_script)
+        self.assertIn('default: "false"', action.split("canary-mode:", 1)[1].split("runs:", 1)[0])
+
     def test_workflow_uses_controlled_node_and_npm_runtime(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("node_version:", text)
@@ -32,10 +91,140 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         self.assertIn("npx semantic-release --dry-run", text)
         self.assertIn("run: npx semantic-release", text)
 
+    def test_package_less_mode_is_opt_in_and_never_runs_release_or_badge_in_validation_only(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("package_mode:", text)
+        self.assertIn('default: "node"', text)
+        self.assertIn("if: inputs.package_mode == 'node'", text)
+        self.assertIn("if: inputs.package_mode == 'package-less'", text)
+        install_step = text.split("- name: Install dependencies", 1)[1].split(
+            "- name: Resolve canonical release assets", 1
+        )[0]
+        self.assertIn("if: inputs.package_mode == 'node'", install_step)
+        self.assertIn("working-directory: ${{ inputs.working_directory }}", install_step)
+        self.assertIn("run: ${{ inputs.install_command }}", install_step)
+        self.assertIn("validate_only:", text)
+        self.assertIn("if: ${{ !inputs.validate_only }}", text)
+        self.assertIn("persist-credentials: ${{ !inputs.validate_only }}", text)
+        self.assertNotIn("tokenless_dry_run", text)
+        self.assertNotIn("simulate_default_branch_for_dry_run", text)
+        for step_name in (
+            "Setup Node.js with project cache",
+            "Setup controlled npm",
+            "Install dependencies",
+            "Install semantic-release runtime",
+            "Verify release plan with GitHub token",
+        ):
+            step = text.split(f"- name: {step_name}", 1)[1].split("\n      - name:", 1)[0]
+            self.assertIn("if: inputs.package_mode == 'node'", step)
+        token_step = text.split("- name: Verify release plan with GitHub token", 1)[1].split(
+            "- name: Release", 1
+        )[0]
+        self.assertIn("GITHUB_TOKEN: ${{ github.token }}", token_step)
+        self.assertIn(
+            "!inputs.validate_only && needs.release.result == 'success'",
+            text,
+        )
+
+    def test_release_working_directory_is_confined_and_node_mode_stays_at_root(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("working_directory:", text)
+        self.assertIn('default: "."', text)
+        self.assertIn("configured_directory.is_absolute()", text)
+        self.assertIn("resolved_directory.relative_to(checkout_root)", text)
+        self.assertIn(
+            'os.environ["PACKAGE_MODE"] == "node" and resolved_directory != checkout_root',
+            text,
+        )
+        self.assertIn("working-directory: ${{ inputs.working_directory }}", text)
+
+    def test_package_less_reusable_loads_shared_action_at_its_exact_sha(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        identity_step = text.split(
+            "- name: Validate package-less workflow identity", 1
+        )[1].split("- name: Guard shared action checkout path", 1)[0]
+        path_guard = text.split(
+            "- name: Guard shared action checkout path", 1
+        )[1].split("- name: Checkout shared package-less validation action", 1)[0]
+        checkout_step = text.split(
+            "- name: Checkout shared package-less validation action", 1
+        )[1].split("- name:", 1)[0]
+        action_step = text.split(
+            "- name: Validate package-less release plan", 1
+        )[1].split("- name:", 1)[0]
+
+        self.assertIn("if: inputs.package_mode == 'package-less'", identity_step)
+        self.assertIn("${{ job.workflow_repository }}", identity_step)
+        self.assertIn('"$WORKFLOW_REPOSITORY" != "optimizr-tech/optimizr-actions"', identity_step)
+        self.assertIn("${{ job.workflow_sha }}", identity_step)
+        self.assertIn('"$WORKFLOW_SHA" =~ ^[0-9a-f]{40}$', identity_step)
+        self.assertEqual(identity_step.count("exit 2"), 2)
+        self.assertIn('[[ -e "$TARGET_PATH" || -L "$TARGET_PATH" ]]', path_guard)
+        self.assertIn('TARGET_PATH="$GITHUB_WORKSPACE/.optimizr-actions-release"', path_guard)
+        self.assertIn("exit 2", path_guard)
+        self.assertNotIn("rm ", path_guard)
+        self.assertIn("repository: optimizr-tech/optimizr-actions", checkout_step)
+        self.assertIn("ref: ${{ job.workflow_sha }}", checkout_step)
+        self.assertIn("path: .optimizr-actions-release", checkout_step)
+        self.assertIn("persist-credentials: false", checkout_step)
+        self.assertIn(
+            "uses: ./.optimizr-actions-release/.github/actions/package-less-release-validation",
+            action_step,
+        )
+        self.assertIn("github-token: ${{ github.token }}", action_step)
+        self.assertNotIn("tokenless_dry_run:", text)
+        self.assertNotIn("simulate_default_branch_for_dry_run:", text)
+        self.assertLess(text.index("Validate package-less workflow identity"), text.index("Guard shared action checkout path"))
+        self.assertLess(text.index("Guard shared action checkout path"), text.index("Checkout shared package-less validation action"))
+        self.assertLess(text.index("Checkout shared package-less validation action"), text.index("Validate package-less release plan"))
+
+    def test_package_less_canary_calls_shared_action_without_write_token(self):
+        text = PACKAGE_LESS_CANARY.read_text(encoding="utf-8")
+        self.assertIn("permissions:\n  contents: read", text)
+        self.assertNotIn("contents: write", text)
+        self.assertNotIn("issues: write", text)
+        self.assertNotIn("pull-requests: write", text)
+        self.assertNotIn("GITHUB_TOKEN:", text)
+        self.assertIn("    permissions:\n      contents: read", text)
+        self.assertIn("runs-on: ubuntu-latest", text)
+        self.assertIn("uses: ./.github/actions/package-less-release-validation", text)
+        self.assertNotIn("uses: ./.github/workflows/_semantic-release.yml", text)
+        self.assertNotIn("github-token:", text)
+        self.assertIn("fetch-depth: 0", text)
+        self.assertIn("persist-credentials: false", text)
+        self.assertIn("Prepare isolated package-less release repository", text)
+        self.assertIn("git clone --bare", text)
+        self.assertIn('canary-mode: "true"', text)
+        self.assertNotIn("self-hosted", text)
+        self.assertIn('".github/actions/package-less-release-validation/**"', text)
+        self.assertIn('"tests/fixtures/package-less-release/**"', text)
+
+        fixture = ROOT / "tests/fixtures/package-less-release"
+        self.assertTrue((fixture / ".releaserc.json").is_file())
+        self.assertFalse((fixture / "package.json").exists())
+        self.assertFalse((fixture / "package-lock.json").exists())
+        releaserc = (fixture / ".releaserc.json").read_text(encoding="utf-8")
+        self.assertIn("@semantic-release/commit-analyzer", releaserc)
+        self.assertIn("@semantic-release/release-notes-generator", releaserc)
+        self.assertNotIn("@semantic-release/github", releaserc)
+        self.assertNotIn("@semantic-release/npm", releaserc)
+
+    def test_semantic_release_actionlint_exception_is_scoped_to_its_workflow(self):
+        text = ACTIONLINT_CONFIG.read_text(encoding="utf-8")
+        exception_header = "  .github/workflows/_semantic-release.yml:"
+        self.assertIn(exception_header, text)
+        workflow_exception = text.split(exception_header, 1)[1].split("\n  .github/", 1)[0]
+
+        self.assertIn("ignore:", workflow_exception)
+        self.assertIn(
+            'property "workflow_(repository|sha)" is not defined in object type .+',
+            workflow_exception,
+        )
+
     def test_default_plugins_are_not_reinstalled_over_semantic_release_runtime(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         runtime_step = text.split("- name: Install semantic-release runtime", 1)[1].split(
-            "- name: Validate changelog preset compatibility", 1
+            "- name: Validate Node changelog preset compatibility", 1
         )[0]
 
         default_plugins = (
@@ -52,14 +241,21 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
 
     def test_workflow_validates_conventional_commits_preset_writer_matrix(self):
         text = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("Validate changelog preset compatibility", text)
-        self.assertIn("conventional-changelog-conventionalcommits", text)
-        self.assertIn("conventional-changelog-writer", text)
+        validator = VALIDATOR.read_text(encoding="utf-8")
+        action = PACKAGE_LESS_ACTION.read_text(encoding="utf-8")
+        self.assertIn("Validate Node changelog preset compatibility", text)
+        self.assertNotIn("Validate package-less changelog preset compatibility", text)
+        self.assertIn('if: inputs.package_mode == \'node\'', text)
+        self.assertIn("Validate package-less changelog preset compatibility", action)
+        self.assertIn("validate_changelog_compatibility.py", action)
         self.assertIn("package-lock.json", text)
-        self.assertIn("preset 9.x + writer 8.x", text)
-        self.assertIn("preset 10.x + writer 9.x", text)
+        self.assertIn("conventional-changelog-conventionalcommits", validator)
+        self.assertIn("conventional-changelog-writer", validator)
+        self.assertIn('workspace / "package-lock.json"', validator)
+        self.assertIn("preset 9.x + writer 8.x", validator)
+        self.assertIn("preset 10.x + writer 9.x", validator)
 
-        compatibility_index = text.index("Validate changelog preset compatibility")
+        compatibility_index = text.index("Validate Node changelog preset compatibility")
         dry_run_index = text.index("npx semantic-release --dry-run")
         self.assertLess(compatibility_index, dry_run_index)
 
@@ -72,7 +268,7 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         self.assertIn("protected_main_mode:", text)
         self.assertIn("skip:", text)
         self.assertIn(
-            "inputs.update_release_badge && !inputs.protected_main_mode && needs.release.result == 'success'",
+            "inputs.update_release_badge && !inputs.protected_main_mode && !inputs.validate_only && needs.release.result == 'success'",
             text,
         )
         self.assertRegex(text, r"actions/checkout@[0-9a-f]{40}")
@@ -121,12 +317,19 @@ class SemanticReleaseRuntimeContractTests(unittest.TestCase):
         text = DOC.read_text(encoding="utf-8")
         self.assertIn("Node 24", text)
         self.assertIn("npm 12.0.2", text)
+        self.assertIn("package_mode: package-less", text)
+        self.assertIn("validate_only: true", text)
         self.assertIn("unauthenticated GitHub Contents API", text)
         self.assertIn("does not use the caller's `GITHUB_TOKEN`", text)
         self.assertIn("controlled npm", text)
         self.assertIn("does not regenerate `package-lock.json`", text)
         self.assertIn("optimizr-infra-ops", text)
         self.assertIn("Rollback", text)
+        self.assertIn("job.workflow_sha", text)
+        self.assertNotIn("tokenless_dry_run", text)
+        self.assertNotIn("simulate_default_branch_for_dry_run", text)
+        self.assertIn("contents: read", text)
+        self.assertIn("persist-credentials: false", text)
 
 
 if __name__ == "__main__":

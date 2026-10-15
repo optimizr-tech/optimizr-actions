@@ -1,0 +1,65 @@
+name: Validate package-less semantic-release reusable
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/_semantic-release.yml"
+      - ".github/workflows/semantic-release-package-less-canary.yml"
+      - ".github/actions/package-less-release-validation/**"
+      - "scripts/release/**"
+      - "tests/fixtures/package-less-release/**"
+      - "tests/test_semantic_release_package_less.py"
+      - "tests/test_semantic_release_runtime_contract.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-less-release-canary-${{ github.ref }}
+  cancel-in-progress: true
+
+# This canary exercises package-less release analysis on a hosted runner using
+# only a temporary local Git remote. It never calls the privileged reusable.
+jobs:
+  package-less:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    name: Package-less fixture without Node manifests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout candidate revision
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prepare isolated package-less release repository
+        id: fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          SCRATCH="$(mktemp -d "$RUNNER_TEMP/package-less-release.XXXXXX")"
+          PROJECT="$SCRATCH/project"
+          LOCAL_REMOTE="$SCRATCH/origin.git"
+          git init --initial-branch=main "$PROJECT"
+          cp "$GITHUB_WORKSPACE/tests/fixtures/package-less-release/.releaserc.json" \
+            "$PROJECT/.releaserc.json"
+          git -C "$PROJECT" config user.name "package-less release canary"
+          git -C "$PROJECT" config user.email "package-less-release-canary@users.noreply.github.com"
+          git -C "$PROJECT" add .releaserc.json
+          git -C "$PROJECT" commit -m "feat: validate package-less release plan"
+          git clone --bare "$PROJECT" "$LOCAL_REMOTE"
+          git -C "$PROJECT" remote add origin "file://$LOCAL_REMOTE"
+          echo "working_directory=$PROJECT" >> "$GITHUB_OUTPUT"
+
+      - name: Validate package-less release plan
+        uses: ./.github/actions/package-less-release-validation
+        with:
+          working-directory: ${{ steps.fixture.outputs.working_directory }}
+          node-version: "24"
+          npm-version: "12.0.2"
+          semantic-release-version: "25.0.5"
+          canary-mode: "true"

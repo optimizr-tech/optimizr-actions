@@ -45,6 +45,13 @@
       "evidence": "Bounded npm/pnpm project validation results without shell interpolation",
       "examples": ["uses: optimizr-tech/optimizr-actions/.github/actions/node-project-test@v1"]
     },
+    ".github/actions/package-less-release-validation/action.yml": {
+      "category": "release",
+      "runner": ["hosted", "self-hosted-persistent", "self-hosted-ephemeral"],
+      "trust_boundary": "trusted-push",
+      "evidence": "Package-less release runtime setup, changelog compatibility, and dry-run without publication",
+      "known_limitations": "Dry-run does not prove publishing; untrusted PR canaries must omit the optional token and use hosted runners"
+    },
     ".github/actions/pnpm-setup/action.yml": {
       "runner": ["hosted"],
       "trust_boundary": "trusted-pr",

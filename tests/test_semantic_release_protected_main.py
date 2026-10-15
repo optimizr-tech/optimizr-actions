@@ -93,8 +93,11 @@ class ProtectedReleaseWorkflowTests(unittest.TestCase):
             self.workflow,
         )
         self.assertIn("$RUNNER_TEMP/prepare_protected_releaserc.py", self.workflow)
-        self.assertNotIn("${{ job.workflow_repository }}", self.workflow)
-        self.assertNotIn("${{ job.workflow_sha }}", self.workflow)
+        protected_asset_step = self.workflow.split(
+            "- name: Resolve canonical release assets", 1
+        )[1].split("- name: Prepare protected-main release config", 1)[0]
+        self.assertNotIn("${{ job.workflow_repository }}", protected_asset_step)
+        self.assertNotIn("${{ job.workflow_sha }}", protected_asset_step)
 
     def test_normal_mode_preserves_requested_actions_ref(self) -> None:
         self.assertIn("REQUESTED_REF: ${{ inputs.actions_ref }}", self.workflow)

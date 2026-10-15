@@ -1,0 +1,8 @@
+{
+  "branches": ["main"],
+  "plugins": [
+    ["@semantic-release/commit-analyzer", { "preset": false }],
+    ["@semantic-release/release-notes-generator", {}]
+  ],
+  "tagFormat": "v${version}"
+}
