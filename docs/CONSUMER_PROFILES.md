@@ -26,6 +26,7 @@ All profiles start from the repository-governance and security contracts:
 | PR validation | `_validate-pr.yml` | Trusted and untrusted PR paths with caller-level `[skip-tests]` billing guard |
 | Commit convention | `_commitlint.yml` | Conventional commit enforcement |
 | PR metadata | `_pr-metadata.yml` | PR metadata validation |
+| Candidate functional canary | `_candidate-functional-canary.yml` | Opt-in exact PR-head functional validation on an operator-proven isolated ephemeral Linux lane; no runner override or secrets |
 | Security suite | `_security-suite.yml` | Combined security gate, SAST, dependency policy and supply-chain evidence |
 | Dependency updates | `_dependabot-security-automerge.yml` | Governed Dependabot auto-merge for security PRs |
 | Authorization | `.github/actions/validation-authorization/action.yml` | Trust-boundary decision for PR-driven validation |

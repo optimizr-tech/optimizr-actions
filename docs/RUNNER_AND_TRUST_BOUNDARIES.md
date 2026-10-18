@@ -10,7 +10,7 @@ capability catalog (`catalog/capabilities.json`).
 | --- | --- | --- |
 | `hosted` | Fresh GitHub-managed VM per job; no long-lived state | Default for validation, lint, tests and gates on trusted PRs; deterministic, no secret exposure beyond scoped secrets |
 | `self-hosted-persistent` | Long-lived machine; shared Docker daemon, caches and volumes; can hold deployment state | Deploy, post-deploy verification, negative probes, postgres migration and any step that needs persistent infrastructure or docker compose state |
-| `self-hosted-ephemeral` | Self-hosted image of the validation contract on disposable runners; no shared state | Self-hosted PR validation of candidate code (directive #159): the only self-hosted mode that may execute untrusted PR code, with the same evidence |
+| `self-hosted-ephemeral` | One-shot self-hosted runner registration on an operator-proven isolated host; registration alone does not establish host/daemon isolation | Self-hosted PR validation of candidate code (directive #159): the only self-hosted mode that may execute untrusted PR code, with the same evidence |
 
 ### Hosted
 
@@ -31,11 +31,17 @@ capability catalog (`catalog/capabilities.json`).
 
 ### Self-hosted ephemeral
 
-- The same self-hosted execution surface on disposable runners: equivalent
-  evidence, no shared state, no persistent exposure.
-- The correct mode for validating untrusted PR code on self-hosted runners
-  (directive #159); metadata-only PR validation uses `metadata-pr` instead
-  (see `docs/CI_SKIP_CONTRACT.md` for the historical `[skip-tests]`
+- The one-shot runner registration processes one job and deregisters afterward;
+  this alone does not destroy or isolate the underlying host, Docker daemon,
+  disk, network, or credentials.
+- Untrusted candidate code may run only after InfraOps proves host/daemon
+  separation, clean identity and cleanup on success, failure, cancellation and
+  timeout. The candidate canary uses the operator-managed
+  `isolated-pr-canary` label; never assign it to shared WSL/`local-docker`
+  runners. See `docs/CANDIDATE_FUNCTIONAL_CANARY.md` and InfraOps #160.
+- This is the correct mode for validating untrusted PR code on self-hosted
+  runners (directive #159); metadata-only PR validation uses `metadata-pr`
+  instead (see `docs/CI_SKIP_CONTRACT.md` for the historical `[skip-tests]`
   contract, superseded by directive #159).
 
 ### Authorized persistent pull request

@@ -1,0 +1,72 @@
+name: _candidate-functional-canary
+
+on:
+  workflow_call:
+    inputs:
+      script_path:
+        description: Repository-owned functional validation entrypoint in the candidate checkout
+        required: true
+        type: string
+      args_json:
+        description: JSON array of literal arguments passed to the validation entrypoint
+        required: false
+        type: string
+        default: "[]"
+      required_paths_json:
+        description: Optional JSON array of repository-relative paths required before validation
+        required: false
+        type: string
+        default: "[]"
+      timeout_seconds:
+        description: Functional validation timeout in seconds
+        required: false
+        type: number
+        default: 1800
+      job_timeout_minutes:
+        description: Maximum job duration in minutes
+        required: false
+        type: number
+        default: 45
+      retention_days:
+        description: Retention for sanitized validation evidence
+        required: false
+        type: number
+        default: 7
+    outputs:
+      result:
+        description: passed only when the candidate functional validation succeeds
+        value: ${{ jobs.canary.outputs.result }}
+      validated_sha:
+        description: Exact pull request head SHA validated by the canary
+        value: ${{ jobs.canary.outputs.validated_sha }}
+      evidence_path:
+        description: Repository-relative path to sanitized validation evidence
+        value: ${{ jobs.canary.outputs.evidence_path }}
+      failure_kind:
+        description: Sanitized validation failure classification
+        value: ${{ jobs.canary.outputs.failure_kind }}
+permissions:
+  contents: read
+jobs:
+  canary:
+    name: Isolated PR functional canary
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.sha != ''
+    permissions:
+      contents: read
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_repository-validation.yml@v1
+    with:
+      # InfraOps assigns isolated-pr-canary only after isolation is proved; never assign it to WSL/local-docker.
+      runner_json: '["self-hosted","Linux","ephemeral","isolated-pr-canary"]'
+      script_path: ${{ inputs.script_path }}
+      args_json: ${{ inputs.args_json }}
+      required_paths_json: ${{ inputs.required_paths_json }}
+      candidate_sha: ${{ github.event.pull_request.head.sha }}
+      base_sha: ${{ github.event.pull_request.base.sha }}
+      require_trusted_ref: false
+      allow_ephemeral_pr: true
+      timeout_seconds: ${{ inputs.timeout_seconds }}
+      job_timeout_minutes: ${{ inputs.job_timeout_minutes }}
+      artifact_name: candidate-functional-canary-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+      retention_days: ${{ inputs.retention_days }}
