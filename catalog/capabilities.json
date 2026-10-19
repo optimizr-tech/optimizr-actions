@@ -1066,6 +1066,40 @@
     },
     {
       "category": "test",
+      "evidence": "Functional validation results bound to the exact pull request head SHA",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_candidate-functional-canary.yml@v1"
+      ],
+      "inputs": {
+        "args_json": "",
+        "job_timeout_minutes": "",
+        "required_paths_json": "",
+        "retention_days": "",
+        "script_path": "",
+        "timeout_seconds": ""
+      },
+      "kind": "workflow",
+      "known_limitations": "Requires InfraOps-proven host/daemon isolation and the operator-managed isolated-pr-canary label; one-shot runner registration alone is not host isolation",
+      "maturity": "stable-v1",
+      "metadata_status": "classified",
+      "outputs": {
+        "evidence_path": "",
+        "failure_kind": "",
+        "result": "",
+        "validated_sha": ""
+      },
+      "path": ".github/workflows/_candidate-functional-canary.yml",
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "f198ebce239c993761eedef37b5b702d1ff4cb21498e6976158334a8ccff2593",
+      "trust_boundary": "untrusted-pr"
+    },
+    {
+      "category": "test",
       "evidence": "Commitlint results over the PR commit range",
       "examples": [
         "uses: optimizr-tech/optimizr-actions/.github/workflows/_commitlint.yml@v1"

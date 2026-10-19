@@ -198,6 +198,14 @@
       "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_container-candidate-promote.yml@v1"],
       "known_limitations": "Caller must invoke from a protected push or workflow_dispatch and grant access to the target GHCR package; candidate provenance must expose the exact source repository and commit"
     },
+    ".github/workflows/_candidate-functional-canary.yml": {
+      "category": "test",
+      "runner": ["self-hosted-ephemeral"],
+      "trust_boundary": "untrusted-pr",
+      "evidence": "Functional validation results bound to the exact pull request head SHA",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_candidate-functional-canary.yml@v1"],
+      "known_limitations": "Requires InfraOps-proven host/daemon isolation and the operator-managed isolated-pr-canary label; one-shot runner registration alone is not host isolation"
+    },
     ".github/workflows/_dependabot-security-automerge.yml": {
       "runner": ["hosted"],
       "trust_boundary": "trusted-push",
