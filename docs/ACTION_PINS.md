@@ -17,3 +17,9 @@ revalidate any exact exceptions. A green contract test here is not consumer
 publish evidence. If a regression requires rollback, pass the previously
 validated version explicitly from the consumer while investigating; do not
 weaken the gate or move the floating `v1` tag without release validation.
+
+The Trivy binary itself is installed by `scripts/security_gate/install-trivy.sh`
+and verified against reviewed SHA-256 digests in
+`scripts/security_gate/trivy-checksums.txt` (see [TRIVY_INSTALL.md](TRIVY_INSTALL.md)).
+Add a digest there before moving the default or the organization variable to a
+new Trivy release.

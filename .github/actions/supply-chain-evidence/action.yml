@@ -24,11 +24,16 @@ runs:
   using: composite
   steps:
     - name: Install controlled Trivy
-      uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567
-      with:
-        version: ${{ inputs.trivy_version }}
-        cache: "true"
-        path: ${{ runner.temp }}/optimizr-trivy/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+      shell: bash
+      env:
+        TRIVY_VERSION: ${{ inputs.trivy_version }}
+        TRIVY_INSTALL_DIR: ${{ runner.temp }}/optimizr-trivy/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+      run: |
+        set -euo pipefail
+        action_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        bash "$action_root/scripts/security_gate/install-trivy.sh" \
+          --version "$TRIVY_VERSION" \
+          --install-dir "$TRIVY_INSTALL_DIR"
     - name: Generate immutable SBOM and provenance evidence
       shell: bash
       env:
