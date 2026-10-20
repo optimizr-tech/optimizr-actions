@@ -68,6 +68,11 @@ DEPENDABOT_COMMIT_AUTHOR_EMAIL_RE = re.compile(
 )
 DEPENDABOT_GROUP_SUMMARY_RE = re.compile(r"(?im)^Bumps the .+ group with \d+ updates?:")
 DEPENDABOT_GROUP_FIELD_RE = re.compile(r"(?im)^\s*dependency-group:\s*\S.*$")
+# Dependabot appends this generated tail to the grouped-update PR title; the
+# signed commit subject carries the same text without it.
+DEPENDABOT_GROUP_TITLE_SUFFIX_RE = re.compile(
+    r"^ (?:from \S+ to \S+ )?in the [A-Za-z0-9_.-]+ group$"
+)
 AI_COAUTHOR_RE = re.compile(
     r"(?im)^Co-authored-by:\s*(?:Cursor|Composer|Copilot|Claude|Codex|ChatGPT|OpenAI|GitHub Copilot)\b"
     r"|^Co-authored-by:.*<(?:cursoragent@cursor\.com|codex@openai\.com|chatgpt@openai\.com)>"
@@ -217,6 +222,32 @@ def is_verified_dependabot_group_commit(pr: dict, item: dict) -> bool:
         and DEPENDABOT_GROUP_SUMMARY_RE.search(body) is not None
         and DEPENDABOT_GROUP_FIELD_RE.search(body) is not None
     )
+
+
+def resolve_effective_pr_title(title: str, pr: dict, commits: list[dict]) -> str:
+    """Compact a generated Dependabot group PR title to its verified commit subject.
+
+    Only titles over the limit are touched. The title must be the subject of a
+    GitHub-verified Dependabot group commit (see
+    ``is_verified_dependabot_group_commit``) followed by nothing but the
+    generated ``[from X to Y ]in the <group> group`` tail. The compacted value
+    is still validated with the normal 72-character limit; anything else is
+    returned unchanged so the strict check applies.
+    """
+    if len(title) <= SUBJECT_MAX_LENGTH:
+        return title
+    for item in commits:
+        if not is_verified_dependabot_group_commit(pr, item):
+            continue
+        message = str(item["commit"].get("message") or "")
+        subject = message.splitlines()[0]
+        if (
+            subject
+            and title.startswith(subject)
+            and DEPENDABOT_GROUP_TITLE_SUFFIX_RE.fullmatch(title[len(subject):])
+        ):
+            return subject
+    return title
 
 
 def validate_commit_metadata(pr: dict, item: dict, label: str) -> list[ValidationFailure]:
@@ -624,7 +655,16 @@ def main() -> int:
     if not re.fullmatch(r"[0-9a-fA-F]{40}", expected_head):
         failures.append(ValidationFailure("metadata input", "head SHA must contain 40 hexadecimal characters"))
 
-    failures.extend(validate_subject(title, "PR title"))
+    # An over-length title may be a generated Dependabot group title; defer
+    # only that case until the verified commits are fetched. Every other
+    # title failure is reported immediately, and the deferred title is
+    # re-validated at the strict limit after compaction.
+    title_failures = validate_subject(title, "PR title")
+    title_deferred = bool(title_failures) and all(
+        "at most" in failure.message for failure in title_failures
+    )
+    if not title_deferred:
+        failures.extend(title_failures)
     failures.extend(validate_body(body))
     if failures:
         for failure in failures:
@@ -655,6 +695,11 @@ def main() -> int:
             )
         )
         return 1
+
+    if title_deferred:
+        failures.extend(
+            validate_subject(resolve_effective_pr_title(title, pr, commits), "PR title")
+        )
 
     actual_base = str(((pr.get("base") or {}).get("sha") or ""))
     actual_head = str(((pr.get("head") or {}).get("sha") or ""))

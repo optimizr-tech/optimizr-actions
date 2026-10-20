@@ -537,5 +537,106 @@ class PRMetadataValidationExtraTests(unittest.TestCase):
         self.assertEqual(2, len(calls))
 
 
+GENERATED_GROUP_SUBJECT = ":arrow_up: chore(deps): bump actions/create-github-app-token"
+GENERATED_GROUP_TITLE = (
+    f"{GENERATED_GROUP_SUBJECT} from 3.2.0 to 3.3.0 in the gha-minor-patch group"
+)
+
+
+class DependabotTitleCompactionTests(unittest.TestCase):
+    def case(self):
+        pr, item, subject = verified_dependabot_group_case(GENERATED_GROUP_SUBJECT)
+        item["commit"]["message"] = item["commit"]["message"].replace(
+            "dependency-group: github-actions-minor-and-patch",
+            "dependency-group: gha-minor-patch",
+        )
+        return pr, [item], subject
+
+    def test_generated_group_title_compacts_to_verified_commit_subject(self):
+        pr, commits, subject = self.case()
+
+        self.assertEqual(109, len(GENERATED_GROUP_TITLE))
+        effective = module.resolve_effective_pr_title(GENERATED_GROUP_TITLE, pr, commits)
+
+        self.assertEqual(subject, effective)
+        self.assertLessEqual(len(effective), 72)
+        self.assertEqual([], module.validate_subject(effective, "PR title"))
+
+    def test_short_titles_are_never_rewritten(self):
+        pr, commits, _ = self.case()
+        title = ":shield: security(ci): isolate metadata"
+
+        self.assertEqual(title, module.resolve_effective_pr_title(title, pr, commits))
+
+    def test_human_pr_with_long_title_is_not_compacted(self):
+        pr, commits, _ = self.case()
+        pr["user"] = {"login": "human-maintainer", "type": "User", "id": 1}
+        pr["head"] = {"ref": "feature/x"}
+
+        effective = module.resolve_effective_pr_title(GENERATED_GROUP_TITLE, pr, commits)
+
+        self.assertEqual(GENERATED_GROUP_TITLE, effective)
+        self.assertTrue(module.validate_subject(effective, "PR title"))
+
+    def test_unverified_commit_does_not_enable_compaction(self):
+        pr, commits, _ = self.case()
+        commits[0]["commit"]["verification"] = {"verified": False, "reason": "unsigned"}
+
+        effective = module.resolve_effective_pr_title(GENERATED_GROUP_TITLE, pr, commits)
+
+        self.assertEqual(GENERATED_GROUP_TITLE, effective)
+
+    def test_title_not_matching_verified_commit_subject_is_not_compacted(self):
+        pr, commits, _ = self.case()
+        title = GENERATED_GROUP_TITLE.replace("create-github-app-token", "other-action")
+
+        self.assertEqual(title, module.resolve_effective_pr_title(title, pr, commits))
+
+    def test_arbitrary_suffix_after_verified_subject_is_not_compacted(self):
+        pr, commits, _ = self.case()
+        title = f"{GENERATED_GROUP_SUBJECT} plus a hand written and much longer explanation here"
+
+        self.assertEqual(title, module.resolve_effective_pr_title(title, pr, commits))
+
+    def test_main_accepts_generated_group_title_and_still_rejects_long_human_title(self):
+        pr, commits, _ = self.case()
+        pr.update(
+            {
+                "state": "open",
+                "base": {"sha": "a" * 40},
+                "head": {**pr["head"], "sha": "b" * 40,
+                         "repo": {"full_name": "o/r"}},
+            }
+        )
+
+        def run(title, pr_value):
+            env = {
+                "INPUT_REPOSITORY": "o/r",
+                "INPUT_TOKEN": "t",
+                "INPUT_PR_TITLE": title,
+                "INPUT_PR_BODY": "Body text",
+                "INPUT_PR_NUMBER": "7",
+                "INPUT_BASE_SHA": "a" * 40,
+                "INPUT_HEAD_SHA": "b" * 40,
+            }
+            with patch.dict(module.os.environ, env, clear=True), patch.object(
+                module, "fetch_pr_metadata", return_value=(pr_value, commits)
+            ), patch.object(module, "fetch_branch_history", return_value=[]), patch.object(
+                module, "emit_failure"
+            ) as emitted:
+                return module.main(), emitted
+
+        code, emitted = run(GENERATED_GROUP_TITLE, pr)
+        self.assertEqual(0, code, emitted.call_args_list)
+
+        human = {**pr, "user": {"login": "human", "type": "User", "id": 1},
+                 "head": {**pr["head"], "ref": "feature/x"}}
+        code, emitted = run(GENERATED_GROUP_TITLE, human)
+        self.assertEqual(1, code)
+        self.assertTrue(
+            any("at most 72" in c.args[0].message for c in emitted.call_args_list)
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -32,6 +32,49 @@ PR title is always validated with the normal 72-character limit, even on a
 Dependabot PR. Signature-verification fields are read from GitHub's commit API
 response; see [REST API commit signature verification](https://docs.github.com/en/rest/commits/commits#signature-verification-object).
 
+## Dependabot group PR title compaction
+
+Dependabot names grouped-update PRs `<commit subject> from X to Y in the <group>
+group` (for example 109 characters for `actions/create-github-app-token` in
+`gha-minor-patch`), while its signed commit subject stays short. The 72-character
+limit is **not** raised and nothing is bypassed; the validator instead
+*compacts the title it checks*, in memory only:
+
+1. The title is over 72 characters and has no other title defect.
+2. The PR and one of its commits satisfy the full verified Dependabot group
+   commit check above (bot author/PR/branch, `web-flow` committer, valid
+   signature, both group markers).
+3. The title is exactly that commit's subject followed only by the generated tail
+   `[ from <X> to <Y>] in the <group> group`.
+
+When all hold, the commit subject (which must itself be at most 72 characters,
+or at most 200 under the commit rule) replaces the title for validation, and
+then the normal strict title rules run on it. If any condition fails, the original
+title is validated and a title over 72 characters fails with
+`must be at most 72 characters`. Human PRs, edited titles, unverified commits
+and arbitrary suffixes are never compacted.
+
+The PR title on GitHub is **not edited**: no write permission, no extra token
+scope and no candidate code execution are added (the job keeps
+`contents: read` and `pull-requests: read`).
+
+Failure modes: missing/inconsistent API fields or a failed metadata GET fail
+closed with the existing sanitized diagnostics; compaction never turns an API
+error into a pass.
+
+### Consumer adoption and inventory
+
+No input, output, permission or workflow change is needed: consumers that call
+`_pr-metadata.yml` (or the `pr-metadata-validation` action) at `@v1` receive the
+behavior when `v1` is moved after release validation and human approval. Callers
+found by org code search (may be incomplete): `optimizr-infra-ops`,
+`optimizr-serve`, `optimizr-payment`, `optimizr-cdn`, `optimizr-monitoring`,
+`optimizr-marketing-site`, `optimizr-corp-docs`, `optimizr-infra-nginx`,
+`optimizr-infra-certbot`, `optimizr-infra-keycloak`. Until `v1` moves, grouped
+Dependabot PRs such as InfraOps #548 keep failing the title check; rerun the check
+after the release. Dependabot configs that already shorten the commit subject
+(InfraOps #534) are required, since compaction only matches a verified subject.
+
 ## API failure and retry policy
 
 - A request gets at most three total attempts. Only recognized transient
