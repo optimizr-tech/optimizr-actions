@@ -35,6 +35,16 @@ on:
         required: false
         type: boolean
         default: false
+      publish_mode:
+        description: inline pushes from the BuildKit exporter (v1 default); export-then-push exports one OCI layout, re-authenticates, and pushes that exact digest with bounded 401 refresh
+        required: false
+        type: string
+        default: inline
+      publish_auth_retries:
+        description: Maximum registry credential refreshes after HTTP 401 in export-then-push mode (1-5)
+        required: false
+        type: number
+        default: 3
       cache_scope_prefix:
         description: Prefix for isolated BuildKit GHA cache scopes
         required: false
@@ -173,6 +183,8 @@ jobs:
           SBOM: ${{ inputs.sbom }}
           MAX_PARALLEL: ${{ inputs.max_parallel }}
           TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
+          PUBLISH_MODE: ${{ inputs.publish_mode }}
+          PUBLISH_AUTH_RETRIES: ${{ inputs.publish_auth_retries }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -195,6 +207,12 @@ jobs:
           timeout_minutes = os.environ["TIMEOUT_MINUTES"]
           if not re.fullmatch(r"[1-9][0-9]*", timeout_minutes) or not 1 <= int(timeout_minutes) <= 360:
               raise SystemExit("timeout_minutes must be an integer between 1 and 360")
+
+          if os.environ["PUBLISH_MODE"] not in {"inline", "export-then-push"}:
+              raise SystemExit("publish_mode must be one of: inline, export-then-push")
+          publish_auth_retries = os.environ["PUBLISH_AUTH_RETRIES"]
+          if not re.fullmatch(r"[1-5]", publish_auth_retries):
+              raise SystemExit("publish_auth_retries must be an integer between 1 and 5")
 
           cache_type = os.environ["CACHE_TYPE"]
           if cache_type not in {"gha", "local", "none"}:
@@ -342,8 +360,11 @@ jobs:
           CANDIDATE_SHA: ${{ env.CANDIDATE_SHA }}
         run: |
           set -euo pipefail
-          echo "CANDIDATE_IMAGE=${IMAGE_NAME}:candidate-${CANDIDATE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
-          echo "RELEASE_IMAGE=${IMAGE_NAME}:${CANDIDATE_SHA}" >> "$GITHUB_ENV"
+          {
+            echo "CANDIDATE_IMAGE=${IMAGE_NAME}:candidate-${CANDIDATE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            echo "RELEASE_IMAGE=${IMAGE_NAME}:${CANDIDATE_SHA}"
+            echo "OCI_LAYOUT_DIR=${RUNNER_TEMP}/optimizr-oci-${SERVICE_NAME}-${GITHUB_RUN_ID}"
+          } >> "$GITHUB_ENV"
 
       - name: Build image
         id: build
@@ -353,13 +374,44 @@ jobs:
           file: ${{ matrix.service.dockerfile }}
           target: ${{ matrix.service.target || '' }}
           build-args: ${{ matrix.service.build_args || '' }}
-          push: ${{ inputs.push }}
+          push: ${{ inputs.push && inputs.publish_mode == 'inline' }}
           load: ${{ !inputs.push }}
+          outputs: ${{ inputs.push && inputs.publish_mode == 'export-then-push' && format('type=oci,dest={0},tar=false', env.OCI_LAYOUT_DIR) || '' }}
           tags: ${{ env.CANDIDATE_IMAGE }}
           cache-from: ${{ inputs.cache_type == 'gha' && format('type=gha,scope={0}-{1}', inputs.cache_scope_prefix, matrix.service.name) || inputs.cache_type == 'local' && format('type=local,src={0}/{1}', inputs.local_cache_path, matrix.service.name) || '' }}
           cache-to: ${{ inputs.cache_type == 'gha' && format('type=gha,mode=max,scope={0}-{1}', inputs.cache_scope_prefix, matrix.service.name) || inputs.cache_type == 'local' && format('type=local,dest={0}/{1},mode=max', inputs.local_cache_path, matrix.service.name) || '' }}
           provenance: ${{ inputs.provenance }}
           sbom: ${{ inputs.sbom }}
+
+      - name: Refresh registry login immediately before publish
+        if: inputs.push && inputs.publish_mode == 'export-then-push'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ secrets.registry_username }}
+          password: ${{ secrets.registry_password }}
+
+      - name: Publish exported image with bounded auth refresh
+        id: publish
+        if: inputs.push && inputs.publish_mode == 'export-then-push'
+        shell: bash
+        env:
+          REGISTRY_USERNAME: ${{ secrets.registry_username }}
+          REGISTRY_PASSWORD: ${{ secrets.registry_password }}
+          CANDIDATE_IMAGE: ${{ env.CANDIDATE_IMAGE }}
+          OCI_LAYOUT_DIR: ${{ env.OCI_LAYOUT_DIR }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          PUBLISH_AUTH_RETRIES: ${{ inputs.publish_auth_retries }}
+        run: |
+          set -euo pipefail
+          python3 .optimizr-actions-source/scripts/container_release/push_oci_layout.py             --layout "$OCI_LAYOUT_DIR"             --image-ref "$CANDIDATE_IMAGE"             --expected-digest "$IMAGE_DIGEST"             --max-auth-retries "$PUBLISH_AUTH_RETRIES"
+
+      - name: Remove exported OCI layout
+        if: always() && inputs.push && inputs.publish_mode == 'export-then-push'
+        shell: bash
+        env:
+          OCI_LAYOUT_DIR: ${{ env.OCI_LAYOUT_DIR }}
+        run: rm -rf -- "$OCI_LAYOUT_DIR"
 
       - name: Verify quarantine SBOM and provenance
         id: verify-quarantine-attestations
@@ -445,7 +497,7 @@ jobs:
 
       - name: Evaluate and record image security decision
         id: security-decision
-        if: always() && steps.build.outcome == 'success'
+        if: always() && steps.build.outcome == 'success' && steps.publish.outcome != 'failure'
         shell: bash
         env:
           SECURITY_OUTCOME: ${{ inputs.push && steps.prepromotion-security.outcome || steps.prepublish-security.outcome }}
@@ -510,7 +562,7 @@ jobs:
           push-to-registry: true
 
       - name: Upload pre-promotion security evidence
-        if: always() && steps.build.outcome == 'success'
+        if: always() && steps.build.outcome == 'success' && steps.publish.outcome != 'failure'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: container-security-${{ matrix.service.name }}-${{ github.run_id }}
@@ -519,7 +571,7 @@ jobs:
           retention-days: ${{ inputs.artifact_retention_days }}
 
       - name: Write image digest fragment
-        if: always() && steps.build.outcome == 'success'
+        if: always() && steps.build.outcome == 'success' && steps.publish.outcome != 'failure'
         shell: bash
         env:
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
@@ -570,7 +622,7 @@ jobs:
           PY
 
       - name: Require pre-promotion gates
-        if: always() && steps.build.outcome == 'success'
+        if: always() && steps.build.outcome == 'success' && steps.publish.outcome != 'failure'
         shell: bash
         env:
           PUSH: ${{ inputs.push }}
@@ -589,7 +641,7 @@ jobs:
           fi
 
       - name: Upload image digest fragment
-        if: always() && steps.build.outcome == 'success'
+        if: always() && steps.build.outcome == 'success' && steps.publish.outcome != 'failure'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: container-manifest-${{ matrix.service.name }}-${{ github.run_id }}

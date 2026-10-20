@@ -163,7 +163,7 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
         content = BUILD_WORKFLOW.read_text(encoding="utf-8")
 
         self.assertIn("default: false", content[content.index("      push:") :])
-        self.assertIn("push: ${{ inputs.push }}", content)
+        self.assertIn("push: ${{ inputs.push && inputs.publish_mode == 'inline' }}", content)
         self.assertIn("if: inputs.push", content)
         self.assertIn("registry_password", content)
         self.assertIn("load: ${{ !inputs.push }}", content)

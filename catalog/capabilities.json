@@ -1147,6 +1147,8 @@
         "local_cache_path": "",
         "max_parallel": "",
         "provenance": "",
+        "publish_auth_retries": "",
+        "publish_mode": "",
         "push": "",
         "registry": "",
         "runner_json": "",
@@ -1178,7 +1180,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "b9f3aa2d4d27800823c7d162ce41c58cc0858454555e582c99b59d2bc7d7181d",
+      "source_sha256": "473ed0980b731b48678f9aefbbfa4a2f7a523977dd1e21c9c0374d99f309cf45",
       "trust_boundary": "trusted-push"
     },
     {
