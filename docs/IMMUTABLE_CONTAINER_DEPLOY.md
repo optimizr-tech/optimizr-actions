@@ -84,6 +84,14 @@ cache files: runner operations must bound and clean the directory while no
 build is using it. Callers must serialize separate workflow runs that share a
 local cache root for the same service, or give those runs isolated roots.
 
+By default (`publish_mode: inline`) BuildKit pushes the quarantine candidate
+directly from its exporter at the end of the build. Long builds on a shared
+runner queue can instead set `publish_mode: export-then-push`: the build exports
+one OCI layout, the job re-authenticates immediately before publishing, and the
+exact built digest is pushed with a bounded credential refresh on HTTP 401
+(`publish_auth_retries`). See
+[Container publish auth resilience](CONTAINER_PUBLISH_AUTH_RESILIENCE.md).
+
 Keep `max_parallel: 1` on shared or capacity-constrained runners. Raise it only
 when `runner_json` selects a pool with enough simultaneously available builders
 and CPU, memory, disk, and BuildKit capacity; local cache paths remain isolated
@@ -146,6 +154,9 @@ jobs:
       # outside the workspace; the runner owner manages cache budget/cleanup.
       # cache_type: local
       # local_cache_path: /runner-owned/buildkit-cache
+      # Opt in for long builds that hit registry 401 on the final push.
+      # publish_mode: export-then-push
+      # publish_auth_retries: 3
       # Raise only when the selected runner pool has capacity.
       max_parallel: 1
       push: true
