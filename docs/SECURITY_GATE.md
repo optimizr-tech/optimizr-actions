@@ -377,7 +377,10 @@ may share the same operating-system user, so the setup action's default
 `$HOME/.local/bin/trivy-bin` is not safe for concurrent jobs: one setup can
 replace an executable while another job is scanning and produce Linux
 `ETXTBSY` (`Text file busy`). The per-job path is added to `PATH` by
-`aquasecurity/setup-trivy` and is disposable with the runner's temporary data.
+`scripts/security_gate/install-trivy.sh` and is disposable with the runner's
+temporary data. The installer retries bounded downloads, verifies the release
+tarball with SHA-256 and reuses a verified tarball from the runner cache; see
+[TRIVY_INSTALL.md](TRIVY_INSTALL.md).
 The repository-scoped vulnerability database cache remains separately protected
 by `flock`. This is a runner provisioning concern, not a scan classification.
 The composite emits `failure_reason=missing_flock` and fails closed

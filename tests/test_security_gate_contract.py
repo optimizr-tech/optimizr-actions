@@ -103,7 +103,7 @@ class SecurityGateContractTests(unittest.TestCase):
 
     def test_every_trivy_install_is_isolated_per_job(self) -> None:
         install_path = (
-            "path: ${{ runner.temp }}/optimizr-trivy/"
+            "TRIVY_INSTALL_DIR: ${{ runner.temp }}/optimizr-trivy/"
             "${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}"
         )
 
@@ -111,6 +111,7 @@ class SecurityGateContractTests(unittest.TestCase):
             ".github/actions/security-gate/action.yml",
             ".github/actions/dependency-policy/action.yml",
             ".github/actions/supply-chain-evidence/action.yml",
+            ".github/actions/trivy-scan/action.yml",
         ):
             with self.subTest(action=action):
                 content = read(action)
@@ -120,10 +121,8 @@ class SecurityGateContractTests(unittest.TestCase):
     def test_composite_action_reports_all_and_blocks_only_actionable_findings(self) -> None:
         content = read(".github/actions/security-gate/action.yml")
 
-        self.assertIn(
-            "aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567",
-            content,
-        )
+        self.assertIn("scripts/security_gate/install-trivy.sh", content)
+        self.assertNotIn("aquasecurity/setup-trivy", content)
         self.assertIn('default: "v0.74.0"', content)
         self.assertIn('default: "true"', content)
         self.assertIn("--download-db-only", content)
