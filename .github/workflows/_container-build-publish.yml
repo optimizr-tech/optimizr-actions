@@ -360,9 +360,11 @@ jobs:
           CANDIDATE_SHA: ${{ env.CANDIDATE_SHA }}
         run: |
           set -euo pipefail
-          echo "CANDIDATE_IMAGE=${IMAGE_NAME}:candidate-${CANDIDATE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
-          echo "RELEASE_IMAGE=${IMAGE_NAME}:${CANDIDATE_SHA}" >> "$GITHUB_ENV"
-          echo "OCI_LAYOUT_DIR=${RUNNER_TEMP}/optimizr-oci-${SERVICE_NAME}-${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
+          {
+            echo "CANDIDATE_IMAGE=${IMAGE_NAME}:candidate-${CANDIDATE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            echo "RELEASE_IMAGE=${IMAGE_NAME}:${CANDIDATE_SHA}"
+            echo "OCI_LAYOUT_DIR=${RUNNER_TEMP}/optimizr-oci-${SERVICE_NAME}-${GITHUB_RUN_ID}"
+          } >> "$GITHUB_ENV"
 
       - name: Build image
         id: build
