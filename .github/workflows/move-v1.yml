@@ -28,6 +28,24 @@ on:
     types: [closed]
     branches: [main]
   workflow_dispatch:
+    inputs:
+      runner_mode:
+        description: Use hosted recovery only after confirming the restricted local-docker owner group is unavailable
+        type: choice
+        options:
+          - local-docker
+          - github-hosted-recovery
+        default: local-docker
+        required: true
+      confirm_local_docker_owner_offline:
+        description: I verified the latest owner-runner inventory or queue-watch evidence
+        type: boolean
+        default: false
+        required: false
+      outage_evidence_url:
+        description: InfraOps queue-watch run or organization runner-inventory URL for the outage
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -47,7 +65,7 @@ jobs:
       github.ref == 'refs/heads/main' &&
       (github.event_name != 'pull_request_target' ||
       github.event.pull_request.merged == true)
-    runs-on: [self-hosted, Linux, local-docker]
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.runner_mode == 'github-hosted-recovery' && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","local-docker"]') }}
     timeout-minutes: 5
     permissions:
       contents: read
@@ -55,6 +73,7 @@ jobs:
     outputs:
       publish: ${{ steps.scope.outputs.publish }}
       target_sha: ${{ steps.scope.outputs.target_sha }}
+      runner_mode: ${{ steps.scope.outputs.runner_mode }}
     steps:
       - name: Validate trusted main event
         env:
@@ -62,12 +81,52 @@ jobs:
           EVENT_REF: ${{ github.ref }}
           PR_MERGED: ${{ github.event.pull_request.merged }}
           PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          RUNNER_MODE: ${{ github.event.inputs.runner_mode || 'local-docker' }}
+          CONFIRM_OWNER_OFFLINE: ${{ github.event.inputs.confirm_local_docker_owner_offline || 'false' }}
+          OUTAGE_EVIDENCE_URL: ${{ github.event.inputs.outage_evidence_url || '' }}
         run: |
           python3 - <<'PY'
           import os
+          import re
+          from urllib.parse import urlsplit
+
           if os.environ["EVENT_REF"] != "refs/heads/main":
               raise SystemExit("contract validation requires refs/heads/main")
           event = os.environ["EVENT_NAME"]
+          runner_mode = os.environ["RUNNER_MODE"]
+          if runner_mode not in {"local-docker", "github-hosted-recovery"}:
+              raise SystemExit("unsupported runner mode")
+          if runner_mode == "github-hosted-recovery":
+              if event != "workflow_dispatch":
+                  raise SystemExit("hosted recovery requires a manual workflow_dispatch")
+              if os.environ["CONFIRM_OWNER_OFFLINE"] != "true":
+                  raise SystemExit("hosted recovery requires explicit owner-runner outage confirmation")
+              evidence = urlsplit(os.environ["OUTAGE_EVIDENCE_URL"])
+              queue_watch_link = re.fullmatch(
+                  r"/optimizr-tech/optimizr-infra-ops/actions/runs/[0-9]+/?",
+                  evidence.path,
+              )
+              runner_inventory_link = (
+                  evidence.path
+                  in {
+                      "/organizations/optimizr-tech/settings/actions/runners",
+                      "/organizations/optimizr-tech/settings/actions/runners/",
+                  }
+              )
+              if (
+                  evidence.scheme != "https"
+                  or evidence.netloc != "github.com"
+                  or not (queue_watch_link or runner_inventory_link)
+                  or evidence.query
+                  or evidence.fragment
+              ):
+                  raise SystemExit("hosted recovery requires a link to InfraOps queue-watch or runner-inventory evidence")
+              print(f"Manual owner-runner outage evidence: {os.environ['OUTAGE_EVIDENCE_URL']}")
+          elif event == "workflow_dispatch" and (
+              os.environ["CONFIRM_OWNER_OFFLINE"] == "true"
+              or os.environ["OUTAGE_EVIDENCE_URL"]
+          ):
+              raise SystemExit("select github-hosted-recovery when supplying outage confirmation")
           if event not in {"push", "workflow_dispatch"}:
               if (event != "pull_request_target"
                   or os.environ["PR_MERGED"] != "true"
@@ -83,6 +142,7 @@ jobs:
           EVENT_SHA: ${{ github.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           MERGED_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          RUNNER_MODE: ${{ github.event.inputs.runner_mode || 'local-docker' }}
         run: |
           set -euo pipefail
 
@@ -124,15 +184,19 @@ jobs:
             exit 1
           fi
 
-          echo "publish=$publish" >> "$GITHUB_OUTPUT"
-          echo "target_sha=$target_sha" >> "$GITHUB_OUTPUT"
+          runner_mode="$RUNNER_MODE"
+          {
+            echo "publish=$publish"
+            echo "target_sha=$target_sha"
+            echo "runner_mode=$runner_mode"
+          } >> "$GITHUB_OUTPUT"
           echo "Resolved candidate: publish=$publish target_sha=$target_sha"
 
   validate:
     name: Validate workflows and composite actions
     needs: [scope]
     if: needs.scope.outputs.publish == 'true'
-    runs-on: [self-hosted, Linux, local-docker]
+    runs-on: ${{ needs.scope.outputs.runner_mode == 'github-hosted-recovery' && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","local-docker"]') }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -200,7 +264,7 @@ jobs:
     name: Move floating v1 tag
     needs: [scope, validate]
     if: needs.scope.outputs.publish == 'true' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    runs-on: [self-hosted, Linux, local-docker]
+    runs-on: ${{ needs.scope.outputs.runner_mode == 'github-hosted-recovery' && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","local-docker"]') }}
     timeout-minutes: 5
     permissions:
       contents: write
