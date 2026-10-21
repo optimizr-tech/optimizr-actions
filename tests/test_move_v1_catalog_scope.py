@@ -3,6 +3,7 @@ import os
 import re
 import textwrap
 import unittest
+from urllib.parse import urlsplit
 from unittest.mock import patch
 
 
@@ -20,8 +21,10 @@ class MoveV1CatalogScopeTests(unittest.TestCase):
         self.assertIn('      - "catalog/**"', self.workflow)
         self.assertIn('      - "tests/**"', self.workflow)
         self.assertIn('      - "requirements-ci.txt"', self.workflow)
+        self.assertEqual(self.workflow.count("runs-on:"), 3)
         self.assertEqual(
-            self.workflow.count("runs-on: [self-hosted, Linux, local-docker]"), 3
+            self.workflow.count("fromJSON('[\"self-hosted\",\"Linux\",\"local-docker\"]')"),
+            3,
         )
         self.assertNotIn("runs-on: ubuntu-latest", self.workflow)
 
@@ -80,13 +83,16 @@ class MoveV1CatalogScopeTests(unittest.TestCase):
         for event, ref, merged, base_ref, allowed in cases:
             with self.subTest(event=event, ref=ref, merged=merged, base_ref=base_ref):
                 env = {"EVENT_NAME": event, "EVENT_REF": ref,
-                       "PR_MERGED": merged, "PR_BASE_REF": base_ref}
+                       "PR_MERGED": merged, "PR_BASE_REF": base_ref,
+                       "RUNNER_MODE": "local-docker",
+                       "CONFIRM_OWNER_OFFLINE": "false",
+                       "OUTAGE_EVIDENCE_URL": ""}
                 with patch.dict(os.environ, env, clear=True):
                     if allowed:
-                        exec(guard, {})
+                        exec(guard, {"os": os, "re": re, "urlsplit": urlsplit})
                     else:
                         with self.assertRaises(SystemExit):
-                            exec(guard, {})
+                            exec(guard, {"os": os, "re": re, "urlsplit": urlsplit})
 
     def test_container_steps_run_as_the_runner_user(self) -> None:
         # 2026-10-06 (run 37504666776): the self-hosted checkout is mode 0700
