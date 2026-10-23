@@ -78,8 +78,12 @@ class ContainerPublishAuthResilienceContractTests(unittest.TestCase):
         names = re.findall(r"^      - name: (.+)$", job, re.MULTILINE)
         refresh = "Refresh registry login immediately before publish"
         publish = "Publish exported image with bounded auth refresh"
+        refresh_retry = "Retry registry login refresh after a failed attempt"
         self.assertEqual(names.index("Build image") + 1, names.index(refresh))
-        self.assertEqual(names.index(refresh) + 1, names.index(publish))
+        # Only the bounded transient-network login retry may sit between the
+        # refresh and the publish; it runs solely when the refresh failed.
+        self.assertEqual(names.index(refresh) + 1, names.index(refresh_retry))
+        self.assertEqual(names.index(refresh_retry) + 1, names.index(publish))
         self.assertLess(names.index(publish), names.index("Verify quarantine SBOM and provenance"))
 
         refresh_step = _step(job, refresh)

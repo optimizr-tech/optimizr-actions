@@ -10,6 +10,14 @@ inputs:
     description: Path for the sanitized service-to-digest JSON manifest
     required: false
     default: ""
+  network_retry_attempts:
+    description: Maximum attempts per image pull that fails with a transient DNS/egress signature (1-5; 1 disables retry)
+    required: false
+    default: "3"
+  network_retry_backoff_seconds:
+    description: Exponential backoff base in seconds between transient pull retries (0-30)
+    required: false
+    default: "5"
 
 outputs:
   prebuilt_images_json:
@@ -28,14 +36,29 @@ runs:
       env:
         INPUT_COMPOSE_FILE: ${{ inputs.compose_file }}
         INPUT_EVIDENCE_PATH: ${{ inputs.evidence_path }}
+        NETWORK_RETRY_ATTEMPTS: ${{ inputs.network_retry_attempts }}
+        NETWORK_RETRY_BACKOFF_SECONDS: ${{ inputs.network_retry_backoff_seconds }}
       run: |
         set -euo pipefail
         EVIDENCE_PATH="$INPUT_EVIDENCE_PATH" python3 - "$INPUT_COMPOSE_FILE" <<'PY'
         import json
         import os
         from pathlib import Path
+        import re
         import subprocess
         import sys
+
+        retry_attempts = os.environ["NETWORK_RETRY_ATTEMPTS"]
+        retry_backoff = os.environ["NETWORK_RETRY_BACKOFF_SECONDS"]
+        if not re.fullmatch(r"[1-5]", retry_attempts):
+            raise SystemExit("network_retry_attempts must be an integer between 1 and 5")
+        if not re.fullmatch(r"[0-9]|[12][0-9]|30", retry_backoff):
+            raise SystemExit("network_retry_backoff_seconds must be an integer between 0 and 30")
+        retry_network = (
+            Path(os.environ["GITHUB_ACTION_PATH"]) / "../../../scripts/container_release/retry_network.py"
+        ).resolve()
+        if not retry_network.is_file():
+            raise SystemExit("bundled retry_network.py helper is missing from the action checkout")
 
         workspace = Path(os.environ["GITHUB_WORKSPACE"]).resolve()
         compose = Path(sys.argv[1])
@@ -66,7 +89,18 @@ runs:
             image = definition.get("image") if isinstance(definition, dict) else None
             if not isinstance(image, str) or not image:
                 raise SystemExit(f"service {service} must declare an image")
-            subprocess.run(["docker", "pull", image], check=True)
+            pulled = subprocess.run(
+                [
+                    sys.executable, str(retry_network),
+                    "--label", f"docker pull {service}",
+                    "--attempts", retry_attempts,
+                    "--backoff-seconds", retry_backoff,
+                    "--", "docker", "pull", image,
+                ],
+                check=False,
+            )
+            if pulled.returncode != 0:
+                raise SystemExit(f"could not pull the image for service {service}; see the classified error above")
             raw = subprocess.check_output(
                 ["docker", "image", "inspect", "--format", "{{json .RepoDigests}}", image],
                 text=True,

@@ -536,7 +536,9 @@
       ],
       "inputs": {
         "compose_file": "",
-        "evidence_path": ""
+        "evidence_path": "",
+        "network_retry_attempts": "",
+        "network_retry_backoff_seconds": ""
       },
       "kind": "action",
       "known_limitations": "Requires Docker Compose and registry pull access for every declared service image",
@@ -553,7 +555,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "b1c766cbf85599bdca6b9e6b18ac8555f3d89b4894f342e9faf23e97eefccd3c",
+      "source_sha256": "a4e97a67988c1afeb57ab16e4c0b89ccdfa13a50dc096688841827d212ca44bc",
       "trust_boundary": "trusted-push"
     },
     {
@@ -1146,6 +1148,8 @@
         "image_namespace": "",
         "local_cache_path": "",
         "max_parallel": "",
+        "network_retry_attempts": "",
+        "network_retry_backoff_seconds": "",
         "provenance": "",
         "publish_auth_retries": "",
         "publish_mode": "",
@@ -1180,7 +1184,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "473ed0980b731b48678f9aefbbfa4a2f7a523977dd1e21c9c0374d99f309cf45",
+      "source_sha256": "b006355f89bc3bda4898b4ae23a1521b59bce4319d26e214b2b2317e7a6ff95e",
       "trust_boundary": "trusted-push"
     },
     {
@@ -1194,6 +1198,8 @@
         "candidate_digest": "",
         "candidate_sha": "",
         "image_repository": "",
+        "network_retry_attempts": "",
+        "network_retry_backoff_seconds": "",
         "runner_json": "",
         "security_db_max_age_hours": "",
         "security_exceptions_file": "",
@@ -1217,7 +1223,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "307e0373decd6112be13eab333ad36bf92b1c61d3b1a02ea57996e8f90bf2123",
+      "source_sha256": "6fca8957c17673b79fe79033fcbe31296943804bc042b28b882d8f96be26da73",
       "trust_boundary": "trusted-push"
     },
     {
