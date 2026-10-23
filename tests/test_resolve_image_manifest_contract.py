@@ -26,7 +26,9 @@ class ResolveImageManifestContractTests(unittest.TestCase):
             if needle == "actions cannot be executed through a shell":
                 continue
             self.assertIn(needle, content)
-        self.assertIn('subprocess.run(["docker", "pull", image], check=True)', content)
+        self.assertIn('"--", "docker", "pull", image,', content)
+        self.assertIn("retry_network.py", content)
+        self.assertIn("if pulled.returncode != 0:", content)
         self.assertIn('subprocess.check_output(', content)
         self.assertNotIn("shell=True", content)
         self.assertNotIn(":latest", content)
