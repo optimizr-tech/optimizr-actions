@@ -74,6 +74,7 @@ runs:
 
         node_required=false
         npm_required=false
+        python_required=false
         while IFS= read -r ecosystem; do
           case "$ecosystem" in
             node-npm)
@@ -83,6 +84,9 @@ runs:
             node-pnpm|node-yarn)
               node_required=true
               ;;
+            python-uv|python-poetry)
+              python_required=true
+              ;;
           esac
         done < "$ecosystems_file"
 
@@ -90,6 +94,7 @@ runs:
           echo "ecosystems_file=$ecosystems_file"
           echo "node_required=$node_required"
           echo "npm_required=$npm_required"
+          echo "python_required=$python_required"
         } >> "$GITHUB_OUTPUT"
 
         mkdir -p "$GITHUB_WORKSPACE/$EVIDENCE_DIR"
@@ -193,6 +198,7 @@ runs:
           --install-dir "$TRIVY_INSTALL_DIR"
 
     - name: Setup uv
+      if: steps.ecosystems.outputs.python_required == 'true'
       uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
       with:
         python-version: "3.12"
