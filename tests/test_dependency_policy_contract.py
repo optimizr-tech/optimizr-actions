@@ -5,6 +5,30 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DependencyPolicyContractTests(unittest.TestCase):
+    def test_setup_uv_is_skipped_for_consumers_without_python_ecosystems(self):
+        action = (
+            ROOT / ".github/actions/dependency-policy/action.yml"
+        ).read_text()
+        detect = action.split("    - name: Detect dependency ecosystems", 1)[1].split(
+            "    - name: Install controlled Trivy", 1
+        )[0]
+        self.assertIn("python_required=false", detect)
+        self.assertIn("node-npm)", detect)
+        self.assertIn("node-pnpm|node-yarn)", detect)
+        self.assertIn("python-uv|python-poetry)", detect)
+        self.assertEqual(detect.count("python_required=true"), 1)
+        self.assertIn('echo "python_required=$python_required"', detect)
+        self.assertIn('} >> "$GITHUB_OUTPUT"', detect)
+
+        setup_uv = action.split("    - name: Setup uv", 1)[1].split(
+            "    - name: Validate lockfile synchronization", 1
+        )[0]
+        self.assertIn(
+            "if: steps.ecosystems.outputs.python_required == 'true'",
+            setup_uv,
+        )
+        self.assertIn("uses: astral-sh/setup-uv@", setup_uv)
+
     def test_action_scans_vulnerabilities_and_licenses_and_fails_closed(self):
         text = (ROOT / ".github/actions/dependency-policy/action.yml").read_text()
         self.assertIn("--scanners vuln,license", text)
