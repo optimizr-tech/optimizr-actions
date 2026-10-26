@@ -43,21 +43,27 @@ class PullRequestValidationWorkflowTests(unittest.TestCase):
             with self.subTest(field=field):
                 self.assertIn(f"      {field}:", metadata_job)
 
-    def test_candidate_contracts_run_on_hosted_runner_without_persisted_credentials(self) -> None:
+    def test_candidate_code_is_not_run_by_the_pull_request_workflow(self) -> None:
         content = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("validate-candidate:\n", content)
-        candidate_job = content.split("  validate-candidate:\n", 1)[1]
-        self.assertIn("name: Validate portable action contracts", candidate_job)
-        self.assertIn("runs-on: ubuntu-latest", candidate_job)
-        self.assertIn("actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0", candidate_job)
-        self.assertIn("persist-credentials: false", candidate_job)
-        self.assertIn("python3 -m unittest discover -v", candidate_job)
-        self.assertIn("python3 -m compileall -q scripts tests", candidate_job)
-        self.assertIn("git diff --check", candidate_job)
-        self.assertIn("rhysd/actionlint@sha256:", candidate_job)
-        self.assertIn("mikefarah/yq@sha256:", candidate_job)
-        self.assertNotIn("self-hosted", candidate_job)
+        jobs = content.split("jobs:\n", 1)[1]
+        job_names = [
+            line.strip()[:-1]
+            for line in jobs.splitlines()
+            if line.startswith("  ") and not line.startswith("    ") and line.rstrip().endswith(":")
+        ]
+        self.assertEqual(["validate"], job_names)
+        self.assertNotIn("validate-candidate:", content)
+        self.assertNotIn("runs-on:", content)
+        self.assertNotIn("actions/checkout", content)
+        self.assertNotIn("python3 -m unittest discover -v", content)
         self.assertNotIn("secrets:", content)
+
+        move_v1 = (ROOT / ".github/workflows/move-v1.yml").read_text(encoding="utf-8")
+        scope_job = move_v1.split("  scope:\n", 1)[1].split("  validate:\n", 1)[0]
+        validate_job = move_v1.split("  validate:\n", 1)[1].split("  move-v1:\n", 1)[0]
+        self.assertIn("|| 'local-docker'", scope_job)
+        self.assertIn("python3 -m unittest discover -v", validate_job)
+        self.assertIn("needs: [scope, validate]", move_v1)
 
 
 if __name__ == "__main__":
