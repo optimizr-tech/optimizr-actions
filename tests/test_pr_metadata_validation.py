@@ -52,6 +52,28 @@ def verified_dependabot_group_case(subject: str | None = None) -> tuple[dict, di
     return pr, item, subject
 
 
+def verified_dependabot_npm_group_case() -> tuple[dict, dict, str]:
+    subject = (
+        ":arrow_up: chore(deps): bump the admin-minor-and-patch group across "
+        "1 directory with 27 updates"
+    )
+    pr, item, _ = verified_dependabot_group_case(subject)
+    pr["head"]["ref"] = (
+        "dependabot/npm_and_yarn/frontend/apps/admin/"
+        "admin-minor-and-patch-699e44dd5a"
+    )
+    item["commit"]["message"] = (
+        f"{subject}\n\n"
+        "Bumps the admin-minor-and-patch group with 27 updates in the "
+        "/frontend/apps/admin directory:\n\n"
+        "updated-dependencies:\n"
+        "- dependency-name: vite\n"
+        "  dependency-version: 8.3.4\n"
+        "  dependency-group: admin-minor-and-patch"
+    )
+    return pr, item, subject
+
+
 class PRMetadataValidationTests(unittest.TestCase):
     def test_valid_org_subject_passes(self):
         self.assertEqual([], module.validate_subject(":shield: security(ci): isolate metadata", "title"))
@@ -61,6 +83,20 @@ class PRMetadataValidationTests(unittest.TestCase):
 
         self.assertGreater(len(subject), 72)
         self.assertEqual([], module.validate_commit_metadata(pr, item, "commit 1"))
+
+    def test_verified_dependabot_npm_group_commit_with_directory_summary_passes(self):
+        pr, item, subject = verified_dependabot_npm_group_case()
+
+        self.assertGreater(len(subject), 72)
+        self.assertTrue(module.is_verified_dependabot_group_commit(pr, item))
+        self.assertEqual([], module.validate_commit_metadata(pr, item, "commit 1"))
+        self.assertEqual(subject, module.resolve_effective_pr_title(subject, pr, [item]))
+        self.assertTrue(
+            any(
+                "at most 72 characters" in failure.message
+                for failure in module.validate_subject(subject, "PR title")
+            )
+        )
 
     def test_human_authored_signed_group_commit_cannot_use_length_exception(self):
         pr, item, subject = verified_dependabot_group_case()

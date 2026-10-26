@@ -22,8 +22,9 @@ individual commit shows all of the following:
 - GitHub maps the signed commit's committer to `web-flow`, its signed author
   email uses the Dependabot bot's GitHub no-reply address, and the API reports
   `verification.verified: true` with `verification.reason: valid`;
-- the commit message contains both the generated group summary and the
-  `dependency-group` field.
+- the commit message contains both the generated group summary (including the
+  path-qualified form emitted by npm/yarn groups, `in the <directory> directory`)
+  and the `dependency-group` field.
 
 The exception is per commit and capped at 200 characters. Every other subject
 rule still applies, including ASCII, conventional format, language, and

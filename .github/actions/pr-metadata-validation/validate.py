@@ -66,7 +66,9 @@ GITHUB_WEB_FLOW_LOGIN = "web-flow"
 DEPENDABOT_COMMIT_AUTHOR_EMAIL_RE = re.compile(
     r"^(?P<id>\d+)\+dependabot\[bot\]@users\.noreply\.github\.com$"
 )
-DEPENDABOT_GROUP_SUMMARY_RE = re.compile(r"(?im)^Bumps the .+ group with \d+ updates?:")
+DEPENDABOT_GROUP_SUMMARY_RE = re.compile(
+    r"(?im)^Bumps the .+ group with \d+ updates?(?: in the .+ directory)?:"
+)
 DEPENDABOT_GROUP_FIELD_RE = re.compile(r"(?im)^\s*dependency-group:\s*\S.*$")
 # Dependabot appends this generated tail to the grouped-update PR title; the
 # signed commit subject carries the same text without it.
