@@ -8,14 +8,19 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "validate-pr.yml"
+METADATA_WORKFLOW = ROOT / ".github" / "workflows" / "_pr-metadata.yml"
 
 
 class PullRequestValidationWorkflowTests(unittest.TestCase):
     def test_pr_metadata_validation_uses_authorized_self_hosted_runner_with_read_only_permissions(self) -> None:
         content = WORKFLOW.read_text(encoding="utf-8")
 
-        self.assertIn("pull_request:", content)
-        self.assertNotIn("pull_request_target", content)
+        self.assertIn("  pull_request_target:", content)
+        self.assertNotIn("  pull_request:", content)
+        self.assertIn(
+            "    types: [opened, edited, synchronize, reopened]",
+            content,
+        )
         self.assertIn(
             'runner_json: \'["self-hosted","Linux","local-docker"]\'', content
         )
@@ -23,6 +28,18 @@ class PullRequestValidationWorkflowTests(unittest.TestCase):
         self.assertIn("permissions:\n  contents: read", content)
         self.assertIn("pull-requests: read", content)
         self.assertNotIn("contents: write", content)
+
+    def test_persistent_metadata_contract_accepts_trusted_target_event_only(self) -> None:
+        content = METADATA_WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn(
+            'if os.environ["EVENT_NAME"] not in {"pull_request", "pull_request_target"}:',
+            content,
+        )
+        self.assertIn(
+            'if os.environ["EVENT_NAME"] != "pull_request" or "ephemeral" not in labels:',
+            content,
+        )
 
     def test_metadata_job_never_checks_out_or_executes_candidate_code(self) -> None:
         content = WORKFLOW.read_text(encoding="utf-8")

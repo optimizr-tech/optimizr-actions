@@ -1,7 +1,10 @@
 name: Validate pull request
 
 on:
-  pull_request:
+  # Metadata-only validation must come from the trusted base branch. A
+  # pull_request workflow is controlled by the candidate and can be changed
+  # to execute arbitrary code on the persistent self-hosted runner.
+  pull_request_target:
     branches: [main]
     types: [opened, edited, synchronize, reopened]
 
@@ -13,8 +16,10 @@ concurrency:
   group: validate-pr-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
-# PRs stay metadata-only. Validate candidate code locally before merge; the
-# trusted-main move-v1 workflow runs the full suite before publishing v1.
+# PRs stay metadata-only. pull_request_target loads this caller from trusted
+# main; the reusable workflow reads PR metadata through the API and never
+# checks out or executes candidate code. Validate candidate code locally before
+# merge; move-v1 validates trusted main before publishing v1.
 jobs:
   # Metadata validation runs on the restricted owner runner group
   # (local-docker-owner). The published contract stays API-only: read-only

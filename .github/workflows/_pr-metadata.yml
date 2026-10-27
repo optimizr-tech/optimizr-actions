@@ -64,8 +64,8 @@ jobs:
               if "Linux" not in labels:
                   raise SystemExit("self-hosted metadata validation requires Linux")
               if mode == "metadata-pr":
-                  if os.environ["EVENT_NAME"] != "pull_request":
-                      raise SystemExit("metadata-pr requires a pull_request event")
+                  if os.environ["EVENT_NAME"] not in {"pull_request", "pull_request_target"}:
+                      raise SystemExit("metadata-pr requires a pull_request or pull_request_target event")
               elif mode == "ephemeral-pr":
                   if os.environ["EVENT_NAME"] != "pull_request" or "ephemeral" not in labels:
                       raise SystemExit("ephemeral-pr requires pull_request and an ephemeral runner label")
