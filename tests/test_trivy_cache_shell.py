@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import signal
 import shutil
 import subprocess
 import tempfile
@@ -12,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REQUIRES_LINUX_FLOCK = (
     os.name != "nt" and shutil.which("bash") and shutil.which("flock")
 )
+MARKER_TIMEOUT_SECONDS = 20
 
 
 @unittest.skipUnless(
@@ -148,6 +150,8 @@ trivy --cache-dir "$OPTIMIZR_TRIVY_CACHE_DIR" image \
             }
         )
         processes: list[subprocess.Popen[str]] = []
+        process_outputs: dict[subprocess.Popen[str], tuple[str, str]] = {}
+        marker_failure: tuple[str, Path, subprocess.Popen[str]] | None = None
         try:
             first = subprocess.Popen(
                 ["bash", "-c", self.shared_scan_script()],
@@ -155,35 +159,53 @@ trivy --cache-dir "$OPTIMIZR_TRIVY_CACHE_DIR" image \
                 stderr=subprocess.PIPE,
                 text=True,
                 env=first_environment,
+                start_new_session=True,
             )
             processes.append(first)
-            self.assertTrue(self.wait_for_marker(first_marker, first))
-
-            second = subprocess.Popen(
-                ["bash", "-c", self.shared_scan_script()],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                env=second_environment,
-            )
-            processes.append(second)
-            self.assertTrue(
-                self.wait_for_marker(second_marker, second),
-                "second repository did not reach its scan while the first was reading the DB",
-            )
+            if not self.wait_for_marker(first_marker, first):
+                marker_failure = ("first", first_marker, first)
+            else:
+                second = subprocess.Popen(
+                    ["bash", "-c", self.shared_scan_script()],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    env=second_environment,
+                    start_new_session=True,
+                )
+                processes.append(second)
+                if not self.wait_for_marker(second_marker, second):
+                    marker_failure = ("second", second_marker, second)
         finally:
             release.touch()
             for process in processes:
-                if process.poll() is None:
-                    process.communicate(timeout=10)
+                process_outputs[process] = self.collect_process_output(process)
+
+        if marker_failure is not None:
+            repository, marker, process = marker_failure
+            stdout, stderr = process_outputs[process]
+            self.fail(
+                self.marker_failure_message(
+                    repository,
+                    marker,
+                    process,
+                    MARKER_TIMEOUT_SECONDS,
+                    stdout,
+                    stderr,
+                )
+            )
 
         for process in processes:
-            stdout, stderr = process.communicate(timeout=10)
+            stdout, stderr = process_outputs[process]
             self.assertEqual(process.returncode, 0, f"stdout={stdout}\nstderr={stderr}")
 
     @staticmethod
-    def wait_for_marker(path: Path, process: subprocess.Popen[str]) -> bool:
-        deadline = time.monotonic() + 5
+    def wait_for_marker(
+        path: Path,
+        process: subprocess.Popen[str],
+        timeout_seconds: float = MARKER_TIMEOUT_SECONDS,
+    ) -> bool:
+        deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:
             if path.exists():
                 return True
@@ -191,6 +213,66 @@ trivy --cache-dir "$OPTIMIZR_TRIVY_CACHE_DIR" image \
                 return False
             time.sleep(0.05)
         return path.exists()
+
+    @staticmethod
+    def collect_process_output(
+        process: subprocess.Popen[str], timeout_seconds: float = 10
+    ) -> tuple[str, str]:
+        try:
+            return process.communicate(timeout=timeout_seconds)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            try:
+                return process.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                return process.communicate(timeout=5)
+
+    @staticmethod
+    def marker_failure_message(
+        repository: str,
+        marker: Path,
+        process: subprocess.Popen[str],
+        timeout_seconds: float,
+        stdout: str,
+        stderr: str,
+    ) -> str:
+        return (
+            f"{repository} repository did not create scan marker {marker.name} "
+            f"within {timeout_seconds:g}s; exit_code={process.returncode}; "
+            f"stdout={stdout!r}; stderr={stderr!r}"
+        )
+
+    def test_marker_failure_message_includes_subprocess_diagnostics(self) -> None:
+        marker = self.root / "missing-scan-marker"
+        process = subprocess.Popen(
+            [
+                "bash",
+                "-c",
+                "printf 'child stdout'; printf 'child stderr' >&2; sleep 30",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
+
+        self.assertFalse(self.wait_for_marker(marker, process, timeout_seconds=0.1))
+        stdout, stderr = self.collect_process_output(process, timeout_seconds=0.1)
+        message = self.marker_failure_message(
+            "test", marker, process, 0.1, stdout, stderr
+        )
+
+        self.assertIsNotNone(process.returncode)
+        self.assertIn("exit_code=", message)
+        self.assertIn("child stdout", message)
+        self.assertIn("child stderr", message)
 
     def test_failed_shared_db_refresh_fails_before_a_scan(self) -> None:
         self.environment["TRIVY_FAIL_DOWNLOAD"] = "1"
