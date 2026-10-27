@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+import subprocess
+import sys
 import unittest
+
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -12,6 +17,34 @@ METADATA_WORKFLOW = ROOT / ".github" / "workflows" / "_pr-metadata.yml"
 
 
 class PullRequestValidationWorkflowTests(unittest.TestCase):
+    @staticmethod
+    def runner_contract_script() -> str:
+        workflow = yaml.safe_load(METADATA_WORKFLOW.read_text(encoding="utf-8"))
+        runner_step = next(
+            step
+            for step in workflow["jobs"]["metadata"]["steps"]
+            if step["name"] == "Validate metadata runner trust contract"
+        )
+        run_script = runner_step["run"]
+        marker = "python3 - <<'PY'\n"
+        return run_script.split(marker, 1)[1].rsplit("\nPY", 1)[0]
+
+    def run_runner_contract(
+        self, event_name: str, mode: str, labels: list[str]
+    ) -> subprocess.CompletedProcess[str]:
+        environment = {
+            "RUNNER_JSON": json.dumps(labels),
+            "SELF_HOSTED_MODE": mode,
+            "EVENT_NAME": event_name,
+        }
+        return subprocess.run(
+            [sys.executable, "-c", self.runner_contract_script()],
+            capture_output=True,
+            check=False,
+            env=environment,
+            text=True,
+        )
+
     def test_pr_metadata_validation_uses_authorized_self_hosted_runner_with_read_only_permissions(self) -> None:
         content = WORKFLOW.read_text(encoding="utf-8")
 
@@ -29,17 +62,41 @@ class PullRequestValidationWorkflowTests(unittest.TestCase):
         self.assertIn("pull-requests: read", content)
         self.assertNotIn("contents: write", content)
 
-    def test_persistent_metadata_contract_accepts_trusted_target_event_only(self) -> None:
-        content = METADATA_WORKFLOW.read_text(encoding="utf-8")
+    def test_persistent_metadata_contract_accepts_pull_request_events_only(self) -> None:
+        persistent = ["self-hosted", "Linux", "local-docker"]
+        for event_name in ("pull_request", "pull_request_target"):
+            with self.subTest(event_name=event_name):
+                accepted = self.run_runner_contract(
+                    event_name, "metadata-pr", persistent
+                )
+                self.assertEqual(0, accepted.returncode, accepted.stderr)
 
-        self.assertIn(
-            'if os.environ["EVENT_NAME"] not in {"pull_request", "pull_request_target"}:',
-            content,
-        )
-        self.assertIn(
-            'if os.environ["EVENT_NAME"] != "pull_request" or "ephemeral" not in labels:',
-            content,
-        )
+        for event_name in ("push", "workflow_dispatch"):
+            with self.subTest(event_name=event_name):
+                rejected = self.run_runner_contract(
+                    event_name, "metadata-pr", persistent
+                )
+                self.assertNotEqual(0, rejected.returncode)
+                self.assertIn(
+                    "metadata-pr requires a pull_request or pull_request_target event",
+                    rejected.stderr,
+                )
+
+    def test_ephemeral_metadata_contract_accepts_pull_request_only(self) -> None:
+        ephemeral = ["self-hosted", "Linux", "local-docker", "ephemeral"]
+        accepted = self.run_runner_contract("pull_request", "ephemeral-pr", ephemeral)
+        self.assertEqual(0, accepted.returncode, accepted.stderr)
+
+        for event_name, labels in (
+            ("pull_request_target", ephemeral),
+            ("push", ephemeral),
+            ("pull_request", ["self-hosted", "Linux", "local-docker"]),
+        ):
+            with self.subTest(event_name=event_name, labels=labels):
+                rejected = self.run_runner_contract(
+                    event_name, "ephemeral-pr", labels
+                )
+                self.assertNotEqual(0, rejected.returncode)
 
     def test_metadata_job_never_checks_out_or_executes_candidate_code(self) -> None:
         content = WORKFLOW.read_text(encoding="utf-8")
@@ -47,7 +104,7 @@ class PullRequestValidationWorkflowTests(unittest.TestCase):
             "  validate-candidate:\n", 1
         )[0]
         self.assertIn(
-            "uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@v1",
+            "uses: ./.github/workflows/_pr-metadata.yml",
             metadata_job,
         )
         for forbidden in (
