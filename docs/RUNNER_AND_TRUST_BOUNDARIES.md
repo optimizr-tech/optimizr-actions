@@ -90,7 +90,7 @@ Notable restrictions recorded in the catalog:
 | Artifact | Runner | Boundary | Why |
 | --- | --- | --- | --- |
 | `_semantic-release.yml` | hosted | trusted-push | Release orchestration must run on managed runners |
-| `_dependabot-security-automerge.yml` | hosted | trusted-push | Dependabot-triggered native auto-merge |
+| `_dependabot-security-automerge.yml` | hosted default; explicit group-scoped self-hosted metadata | trusted-push | API-only native auto-merge from a trusted base caller; write token, no candidate checkout; separate group authorization required |
 | `_quality-gate.yml` | hosted | trusted-pr | Gate over PR evaluation on managed runners |
 | `pnpm-setup` action | hosted | trusted-pr | Node package-manager bootstrap |
 | `_vps-self-hosted-deploy.yml`, `_vps-monorepo-deploy.yml` | self-hosted-persistent | trusted-push | Deploy requires persistent infrastructure state |
