@@ -104,9 +104,10 @@ class PullRequestValidationWorkflowTests(unittest.TestCase):
             "  validate-candidate:\n", 1
         )[0]
         self.assertIn(
-            "uses: ./.github/workflows/_pr-metadata.yml",
+            "uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@v1",
             metadata_job,
         )
+        self.assertNotIn("uses: ./.github/workflows/_pr-metadata.yml", metadata_job)
         for forbidden in (
             "actions/checkout", "steps:", "run:", "docker ",
             "python3 -m unittest", "secrets:", "workflow_dispatch:",
