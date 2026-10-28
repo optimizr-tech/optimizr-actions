@@ -125,6 +125,35 @@ class ContainerPublishAuthResilienceContractTests(unittest.TestCase):
                 self.assertIn(guarded, _step(job, name))
         self.assertNotIn("if: always() && steps.build.outcome == 'success'\n", job)
 
+    def test_security_evidence_upload_must_succeed_before_tag_promotion(self) -> None:
+        job = _build_job()
+        names = re.findall(r"^      - name: (.+)$", job, re.MULTILINE)
+        evidence = _step(job, "Upload pre-promotion security evidence")
+        promote = _step(job, "Promote verified image by digest")
+
+        self.assertLess(
+            names.index("Upload pre-promotion security evidence"),
+            names.index("Promote verified image by digest"),
+        )
+        self.assertIn("id: security-evidence", evidence)
+        self.assertIn(
+            "if-no-files-found: ${{ inputs.push && 'error' || 'warn' }}",
+            evidence,
+        )
+        self.assertIn("path: artifacts/security-gate", evidence)
+        self.assertIn(
+            "retention-days: ${{ inputs.artifact_retention_days }}",
+            evidence,
+        )
+        self.assertIn("success()", promote)
+        self.assertIn("steps.security-evidence.outcome == 'success'", promote)
+        gates = _step(job, "Require pre-promotion gates")
+        self.assertIn(
+            "SECURITY_EVIDENCE_OUTCOME: ${{ steps.security-evidence.outcome }}",
+            gates,
+        )
+        self.assertIn('[ "$SECURITY_EVIDENCE_OUTCOME" != success ]', gates)
+
     def test_quarantine_verification_still_gates_promotion_in_both_modes(self) -> None:
         job = _build_job()
         verify = _step(job, "Verify quarantine SBOM and provenance")

@@ -584,10 +584,22 @@ jobs:
           SECURITY_EVIDENCE_PATH: artifacts/security-gate/publisher-security-decision.json
         run: python3 .optimizr-actions-source/scripts/container_release/remediation_window_contract.py record
 
+      - name: Upload pre-promotion security evidence
+        id: security-evidence
+        if: always() && steps.build.outcome == 'success' && steps.publish.outcome != 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: container-security-${{ matrix.service.name }}-${{ github.run_id }}
+          path: artifacts/security-gate
+          if-no-files-found: ${{ inputs.push && 'error' || 'warn' }}
+          retention-days: ${{ inputs.artifact_retention_days }}
+
       - name: Promote verified image by digest
         id: promote
         if: >-
+          success() &&
           inputs.push &&
+          steps.security-evidence.outcome == 'success' &&
           steps.verify-quarantine-attestations.outcome == 'success' &&
           steps.security-decision.outputs.allowed == 'true'
         shell: bash
@@ -620,15 +632,6 @@ jobs:
           subject-name: ${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
-
-      - name: Upload pre-promotion security evidence
-        if: always() && steps.build.outcome == 'success' && steps.publish.outcome != 'failure'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: container-security-${{ matrix.service.name }}-${{ github.run_id }}
-          path: artifacts/security-gate
-          if-no-files-found: warn
-          retention-days: ${{ inputs.artifact_retention_days }}
 
       - name: Write image digest fragment
         if: always() && steps.build.outcome == 'success' && steps.publish.outcome != 'failure'
@@ -687,6 +690,7 @@ jobs:
         env:
           PUSH: ${{ inputs.push }}
           SECURITY_ALLOWED: ${{ steps.security-decision.outputs.allowed }}
+          SECURITY_EVIDENCE_OUTCOME: ${{ steps.security-evidence.outcome }}
           ATTESTATION_OUTCOME: ${{ inputs.push && steps.verify-quarantine-attestations.outcome || 'success' }}
           PROMOTE_OUTCOME: ${{ inputs.push && steps.promote.outcome || 'success' }}
         run: |
@@ -695,8 +699,8 @@ jobs:
             echo "::error::exact image security gate failed before publication/promotion" >&2
             exit 1
           fi
-          if [ "$PUSH" = true ] && { [ "$ATTESTATION_OUTCOME" != success ] || [ "$PROMOTE_OUTCOME" != success ]; }; then
-            echo "::error::SBOM/provenance verification or digest promotion failed" >&2
+          if [ "$PUSH" = true ] && { [ "$SECURITY_EVIDENCE_OUTCOME" != success ] || [ "$ATTESTATION_OUTCOME" != success ] || [ "$PROMOTE_OUTCOME" != success ]; }; then
+            echo "::error::required security evidence upload, SBOM/provenance verification, or digest promotion failed" >&2
             exit 1
           fi
 

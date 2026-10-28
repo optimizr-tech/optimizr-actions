@@ -13,9 +13,12 @@ first creates a unique, digest-addressed quarantine candidate. The exact
 candidate is scanned with the canonical Trivy security gate and its BuildKit
 attestation index plus SBOM and provenance predicates are verified against the
 candidate digest before `imagetools create` promotes that same digest to the SHA
-tags. A candidate that fails either check cannot be promoted. The published SHA
-tags are convenience references; production must
-consume the manifest's `image@sha256:...` values.
+tags. Before promotion, the reusable uploads the publisher's security-gate
+evidence artifact. With `push: true`, missing evidence files or an unsuccessful
+upload blocks tag promotion; the manifest and deployment therefore cannot be
+emitted as successful. A candidate that fails either security verification
+cannot be promoted. The published SHA tags are convenience references;
+production must consume the manifest's `image@sha256:...` values.
 
 Each service definition may include `security_exceptions_file`, a repository-
 relative path to that service's reviewed Optimizr exception policy. The reusable
