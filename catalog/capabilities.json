@@ -1231,10 +1231,12 @@
       "evidence": "Dependabot security automerge decisions bounded by minor/patch policy",
       "examples": [],
       "inputs": {
-        "allow_minor": ""
+        "allow_minor": "",
+        "runner_json": "",
+        "self_hosted_mode": ""
       },
       "kind": "workflow",
-      "known_limitations": "Auto-merge requires repository automation permissions",
+      "known_limitations": "Hosted default retained; self-hosted requires an explicitly authorized group, metadata-pr and pull_request_target; write token; no candidate code or updater execution",
       "maturity": "stable-v1",
       "metadata_status": "classified",
       "outputs": {},
@@ -1244,9 +1246,11 @@
         "pull-requests": "write"
       },
       "runner": [
-        "hosted"
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
       ],
-      "source_sha256": "ea52b33a4d96b3ec4b27a9074e013132351b301585c198dfa5921bedf76bde75",
+      "source_sha256": "c46471f256c1d8fcbfe6ccb5b0532459264c0644618f5219b46b867729288adf",
       "trust_boundary": "trusted-push"
     },
     {

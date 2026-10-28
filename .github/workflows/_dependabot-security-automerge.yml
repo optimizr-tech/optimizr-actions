@@ -3,6 +3,16 @@ name: _dependabot-security-automerge
 on:
   workflow_call:
     inputs:
+      runner_json:
+        description: Hosted compatibility selector or authorized self-hosted group and labels object
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      self_hosted_mode:
+        description: none for hosted; metadata-pr for API-only automation from the trusted base workflow
+        required: false
+        type: string
+        default: none
       allow_minor:
         description: Enable native auto-merge for semver-minor Dependabot updates
         required: false
@@ -19,9 +29,39 @@ jobs:
     if: >-
       github.event.pull_request.user.login == 'dependabot[bot]' &&
       github.event.pull_request.base.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
     timeout-minutes: 5
     steps:
+      - name: Validate auto-merge runner trust contract
+        shell: bash
+        env:
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          SELF_HOSTED_MODE: ${{ inputs.self_hosted_mode }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          selector = json.loads(os.environ["RUNNER_JSON"])
+          mode = os.environ["SELF_HOSTED_MODE"]
+          if isinstance(selector, list) and selector == ["ubuntu-latest"]:
+              if mode != "none":
+                  raise SystemExit("hosted auto-merge requires mode=none")
+          else:
+              if not isinstance(selector, dict) or set(selector) != {"group", "labels"}:
+                  raise SystemExit("self-hosted auto-merge requires a group and labels object")
+              group, labels = selector["group"], selector["labels"]
+              if not isinstance(group, str) or not group.strip() or group != group.strip():
+                  raise SystemExit("runner group must be a non-empty name without surrounding whitespace")
+              if not isinstance(labels, list) or not labels or any(
+                  not isinstance(v, str) or not v.strip() or v != v.strip() for v in labels
+              ):
+                  raise SystemExit("runner labels must be a non-empty JSON string array")
+              if not {"self-hosted", "Linux"}.issubset(labels):
+                  raise SystemExit("self-hosted auto-merge requires self-hosted and Linux labels")
+              if mode != "metadata-pr" or os.environ["EVENT_NAME"] != "pull_request_target":
+                  raise SystemExit("self-hosted auto-merge requires metadata-pr and pull_request_target")
+          PY
+
       - name: Fetch verified Dependabot metadata
         id: metadata
         uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98  # v3.1.0
