@@ -27,9 +27,10 @@ jobs:
   # contract before doing any work.
   validate:
     name: Validate PR metadata
-    # Resolve this trusted caller's local contract; the floating v1 can lag
-    # behind main and reject pull_request_target before metadata validation.
-    uses: ./.github/workflows/_pr-metadata.yml
+    # Match the exact reusable ref authorized by local-docker-owner. The v1
+    # contract now supports pull_request_target; a local main ref is not in
+    # that group's workflow allowlist, even when its runner is online.
+    uses: optimizr-tech/optimizr-actions/.github/workflows/_pr-metadata.yml@v1
     with:
       runner_json: '["self-hosted","Linux","local-docker"]'
       self_hosted_mode: metadata-pr
