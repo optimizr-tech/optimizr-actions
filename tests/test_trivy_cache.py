@@ -31,6 +31,33 @@ from scripts.security_gate.cache import (
 
 
 class TrivyCacheTests(unittest.TestCase):
+    def test_parse_timestamp_accepts_iso_fraction_precision_and_offsets(self) -> None:
+        fractions = {
+            0: ("", 0),
+            3: (".387", 387000),
+            6: (".387253", 387253),
+            9: (".387253273", 387253),
+        }
+        suffix_offsets = (
+            ("", 0),
+            ("Z", 0),
+            ("+05:30", 330),
+            ("-05:30", -330),
+        )
+        for precision, (fraction, microsecond) in fractions.items():
+            for suffix, offset_minutes in suffix_offsets:
+                with self.subTest(precision=precision, suffix=suffix):
+                    parsed_offset = timezone(timedelta(minutes=offset_minutes))
+                    expected = datetime(
+                        2026, 10, 29, 18, 46, 44, microsecond, tzinfo=parsed_offset
+                    ).astimezone(timezone.utc)
+                    self.assertEqual(
+                        cache_module._parse_timestamp(
+                            f"2026-10-29T18:46:44{fraction}{suffix}"
+                        ),
+                        expected,
+                    )
+
     def test_cache_is_namespaced_by_repository_and_trivy_version(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             cache_home = Path(temporary)
