@@ -44,7 +44,7 @@ on:
         description: repository keeps isolated caches; shared is for trusted jobs on persistent runners
         type: string
         required: false
-        default: repository
+        default: shared
       dependency_working_directory:
         description: Confined project directory for dependency policy
         type: string
