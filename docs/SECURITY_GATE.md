@@ -75,7 +75,13 @@ cache. A short version-specific setup lock coordinates cache preparation and
 refresh decisions, then is released before scans. DB refreshes take an
 exclusive version-specific DB lock; scans hold that lock in shared/read mode
 and pass `--skip-db-update`, so different repositories can scan concurrently
-without racing DB writes. A stale or malformed shared DB is rebuilt under the
+without racing DB writes.
+
+Trivy DownloadedAt timestamps may contain nanosecond fractions; the cache
+parser truncates them to Python's six-digit microsecond precision and
+normalizes timezone offsets to UTC before evaluating database freshness.
+
+A stale or malformed shared DB is rebuilt under the
 exclusive lock. Existing repository-scoped DBs are not moved or deleted when a
 caller opts in. Shared version retention checks both setup and DB locks before
 removing an old DB; tiny version lock files are left in place deliberately to

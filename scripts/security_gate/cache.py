@@ -17,6 +17,7 @@ from pathlib import Path
 _VERSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$")
 _CACHE_DIR_RE = re.compile(r"^trivy-v([A-Za-z0-9][A-Za-z0-9._-]{0,31})$")
 _CACHE_SCOPES = {"repository", "shared"}
+_EXCESS_FRACTIONAL_SECONDS_RE = re.compile(r"(\.\d{6})\d+")
 
 
 class CacheError(ValueError):
@@ -154,6 +155,10 @@ def _parse_timestamp(value: object) -> datetime:
     if not isinstance(value, str) or not value.strip():
         raise ValueError("timestamp must be a non-empty string")
     normalized = value.strip()
+    # Trivy can emit nanosecond timestamps; Python 3.10 accepts six digits.
+    normalized = _EXCESS_FRACTIONAL_SECONDS_RE.sub(
+        lambda match: match.group(1), normalized, count=1
+    )
     if normalized.endswith("Z"):
         normalized = normalized[:-1] + "+00:00"
     parsed = datetime.fromisoformat(normalized)
