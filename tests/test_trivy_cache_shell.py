@@ -47,6 +47,9 @@ if [[ "$args" == *--download-db-only* ]]; then
     echo download-failed >> "$TRIVY_LOG"
     exit 17
   fi
+  # Trivy's downloader removes its destination before extracting the DB.
+  # When cache_dir/db is a symlink, this unlinks only the repository-local link.
+  rm -rf "$cache_dir/db"
   mkdir -p "$cache_dir/db"
   printf 'test-db' > "$cache_dir/db/trivy.db"
   downloaded_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -283,6 +286,22 @@ trivy --cache-dir "$OPTIMIZR_TRIVY_CACHE_DIR" image \
         self.assertEqual(
             self.trivy_log.read_text(encoding="utf-8").splitlines(),
             ["download-failed"],
+        )
+
+
+class TrivyCacheShellContractTests(unittest.TestCase):
+    def test_shared_database_refresh_targets_the_real_shared_cache_path(self) -> None:
+        script = (ROOT / "scripts" / "security_gate" / "trivy-cache.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            'trivy --cache-dir "$shared_cache_dir" image --download-db-only',
+            script,
+        )
+        self.assertNotIn(
+            'trivy --cache-dir "$OPTIMIZR_TRIVY_CACHE_DIR" image --download-db-only',
+            script,
         )
 
 
