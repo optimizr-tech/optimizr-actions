@@ -104,6 +104,11 @@ with:
   registry_auth_mode: anonymous
 ```
 
+The default is 15 minutes. Consumers with a known slow image setup may set
+`build_timeout_minutes` in `with:`; it accepts integer values between 1 and
+360 minutes. When `build_image` is false, the existing 10-minute job timeout
+remains in effect.
+
 Private base images require an explicit protected credential. Callers must use
 `registry_auth_mode: explicit`, set the registry hostname, pass read-only
 `registry_username`/`registry_password` secrets, and run only on a trusted
