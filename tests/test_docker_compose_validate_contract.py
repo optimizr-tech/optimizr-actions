@@ -73,6 +73,31 @@ class DockerComposeValidateContractTests(unittest.TestCase):
         self.assertIn("BUILD_IMAGE: ${{ inputs.build_image }}", self.text)
         self.assertIn("build_image requires direct Docker access", self.text)
 
+    def test_build_timeout_is_configurable_bounded_and_preserves_defaults(self) -> None:
+        timeout_start = self.text.index("      build_timeout_minutes:")
+        timeout_input = self.text[timeout_start:].split("      build_image:", 1)[0]
+        self.assertIn("type: number", timeout_input)
+        self.assertIn("default: 15", timeout_input)
+        self.assertIn("integer between 1 and 360", timeout_input)
+        normalized_workflow = " ".join(self.text.split())
+        self.assertIn(
+            "timeout-minutes: >- ${{ inputs.build_image && inputs.build_timeout_minutes > 0 && inputs.build_timeout_minutes <= 360 && !contains(format('{0}', inputs.build_timeout_minutes), '.') && inputs.build_timeout_minutes || inputs.build_image && 15 || 10 }}",
+            normalized_workflow,
+        )
+        self.assertIn("Validate Docker build timeout", self.text)
+        self.assertIn(
+            "build_timeout_minutes must be an integer between 1 and 360", self.text
+        )
+        self.assertLess(
+            self.text.index("Validate Docker build timeout"),
+            self.text.index("- name: Checkout"),
+        )
+
+        profile = " ".join(PROFILE_DOC.read_text(encoding="utf-8").split())
+        self.assertIn("build_timeout_minutes", profile)
+        self.assertIn("default is 15 minutes", profile)
+        self.assertIn("between 1 and 360 minutes", profile)
+
     def test_buildx_registry_auth_is_explicit_and_docker_config_is_isolated(self) -> None:
         for needle in (
             "registry_auth_mode:",

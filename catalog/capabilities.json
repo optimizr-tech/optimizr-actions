@@ -1296,6 +1296,7 @@
       ],
       "inputs": {
         "build_image": "",
+        "build_timeout_minutes": "",
         "compose_env": "",
         "compose_files": "",
         "compose_stacks": "",
@@ -1319,7 +1320,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "459f678354709f52ac57b9cf85b988555c698553c6eea63865cda8ca758efb34",
+      "source_sha256": "cfc317f0c669e5d6fe94ad330f0f799559cf561c7351805d7982d158e462042e",
       "trust_boundary": "trusted-pr"
     },
     {

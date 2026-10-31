@@ -51,6 +51,12 @@ on:
         required: false
         type: string
         default: "scripts/**/*.sh"
+      build_timeout_minutes:
+        description: >-
+          Optional image sanity-build timeout in minutes (integer between 1 and 360; default 15)
+        required: false
+        type: number
+        default: 15
       build_image:
         description: "Build da imagem Docker como sanity check final"
         required: false
@@ -83,7 +89,11 @@ jobs:
   validate:
     if: ${{ !inputs.skip }}
     runs-on: ${{ fromJSON(inputs.runner_json) }}
-    timeout-minutes: ${{ inputs.build_image && 15 || 10 }}
+    timeout-minutes: >-
+      ${{ inputs.build_image && inputs.build_timeout_minutes > 0 &&
+      inputs.build_timeout_minutes <= 360 &&
+      !contains(format('{0}', inputs.build_timeout_minutes), '.') &&
+      inputs.build_timeout_minutes || inputs.build_image && 15 || 10 }}
     permissions:
       contents: read
       actions: write
@@ -120,6 +130,19 @@ jobs:
           else:
               raise SystemExit("self-hosted validation requires mode trusted-main or ephemeral-pr")
           PY
+
+      - name: Validate Docker build timeout
+        if: inputs.build_image
+        shell: bash
+        env:
+          BUILD_TIMEOUT_MINUTES: ${{ inputs.build_timeout_minutes }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$BUILD_TIMEOUT_MINUTES" =~ ^[1-9][0-9]*$ ]] ||
+             (( BUILD_TIMEOUT_MINUTES > 360 )); then
+            echo "::error::build_timeout_minutes must be an integer between 1 and 360" >&2
+            exit 2
+          fi
 
       - name: Prepare isolated Docker registry authentication
         if: inputs.build_image
