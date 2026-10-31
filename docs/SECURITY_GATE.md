@@ -61,15 +61,23 @@ system `python3`; consumers do not need to add a separate Python setup step.
 
 ### Trivy cache lifecycle
 
-All Trivy-based composites use `scripts/security_gate/cache.py` and default to
-`cache_scope: repository`, preserving the existing repository-isolated cache
-and automatic Trivy DB refresh behavior. The optional `cache_scope: shared`
-reuses only the versioned vulnerability database on the same persistent runner
-cache home; each repository keeps its own scan-result cache. It is intended for
-trusted jobs on persistent self-hosted runners, not ephemeral hosted runners.
-Reusable workflows forcibly use repository scope for
-`self_hosted_mode=ephemeral-pr`, even if a caller requests `shared`.
+All Trivy-based composites and reusable workflows default to
+`cache_scope: shared`. It reuses only the versioned Trivy vulnerability database
+within the same persistent runner cache home; scan-result caches remain
+repository-scoped. Callers that require a separate database cache can explicitly
+set `cache_scope: repository`.
 
+Shared scope is intended for trusted jobs on persistent self-hosted runners. It
+does not reuse data across runner hosts. A shared cache on an ephemeral hosted
+runner disappears with that job. Reusable workflows force repository scope when
+`self_hosted_mode=ephemeral-pr`, even if a caller requests `shared`. Untrusted
+pull request code must not run on persistent runners.
+
+Compatibility and rollback: no inputs or outputs are removed. The default
+changes only when callers omit the scope; callers explicitly using `repository`
+keep their existing behavior. Set `repository` in the caller to restore the
+previous database isolation. This change does not migrate or delete existing
+repository-scoped databases, and this PR does not move the public `v1` tag.
 In shared mode, each repository holds an exclusive lock for its scan-result
 cache. A short version-specific setup lock coordinates cache preparation and
 refresh decisions, then is released before scans. DB refreshes take an

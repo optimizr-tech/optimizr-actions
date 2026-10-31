@@ -13,7 +13,7 @@ def read(path: str) -> str:
 
 
 class SecurityGateContractTests(unittest.TestCase):
-    def test_shared_trivy_database_is_opt_in_and_forwarded_by_workflows(self) -> None:
+    def test_shared_trivy_database_is_default_and_forwarded_by_workflows(self) -> None:
         actions = (
             ".github/actions/security-gate/action.yml",
             ".github/actions/dependency-policy/action.yml",
@@ -24,10 +24,14 @@ class SecurityGateContractTests(unittest.TestCase):
             with self.subTest(action=action):
                 content = read(action)
                 self.assertIn("  cache_scope:", content)
-                self.assertIn("default: repository", content)
+                self.assertIn("default: shared", content)
                 self.assertIn("CACHE_SCOPE: ${{ inputs.cache_scope }}", content)
                 self.assertIn('source "$action_root/scripts/security_gate/trivy-cache.sh"', content)
                 self.assertIn("trivy_cache_setup", content)
+
+        cache_contract = read("scripts/security_gate/cache.py")
+        self.assertIn('_CACHE_SCOPES = {"repository", "shared"}', cache_contract)
+        self.assertIn('choices=sorted(_CACHE_SCOPES)', cache_contract)
 
         helper = read("scripts/security_gate/trivy-cache.sh")
         self.assertIn('--cache-scope "$cache_scope"', helper)
@@ -48,7 +52,7 @@ class SecurityGateContractTests(unittest.TestCase):
             with self.subTest(workflow=workflow):
                 content = read(workflow)
                 self.assertIn("trivy_cache_scope:", content)
-                self.assertIn("default: repository", content)
+                self.assertIn("default: shared", content)
                 self.assertIn(
                     "cache_scope: ${{ inputs.self_hosted_mode == 'ephemeral-pr' && 'repository' || inputs.trivy_cache_scope }}",
                     content,
@@ -63,20 +67,21 @@ class SecurityGateContractTests(unittest.TestCase):
             with self.subTest(workflow=workflow):
                 content = read(workflow)
                 self.assertIn("security_trivy_cache_scope:", content)
-                self.assertIn("default: repository", content)
+                self.assertIn("default: shared", content)
                 self.assertIn(
                     "cache_scope: ${{ inputs.security_trivy_cache_scope }}", content
                 )
 
         security_suite = read(".github/workflows/_security-suite.yml")
         self.assertIn("trivy_cache_scope:", security_suite)
-        self.assertIn("default: repository", security_suite)
+        self.assertIn("default: shared", security_suite)
         self.assertIn(
             "trivy_cache_scope: ${{ inputs.self_hosted_mode == 'ephemeral-pr' && 'repository' || inputs.trivy_cache_scope }}",
             security_suite,
         )
         validation_gate = read(".github/workflows/_validation-gate.yml")
         self.assertIn("trivy_cache_scope:", validation_gate)
+        self.assertIn("default: shared", validation_gate)
         self.assertIn("trivy_cache_scope: ${{ inputs.trivy_cache_scope }}", validation_gate)
 
     def test_trivy_actions_use_governed_versioned_cache_helper(self) -> None:

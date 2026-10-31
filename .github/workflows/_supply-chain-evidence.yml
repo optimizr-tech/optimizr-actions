@@ -25,7 +25,7 @@ on:
         description: repository keeps isolated caches; shared reuses the versioned vulnerability DB on a persistent runner
         required: false
         type: string
-        default: repository
+        default: shared
       artifact_name:
         description: Evidence artifact name
         required: false

@@ -25,7 +25,7 @@ inputs:
   cache_scope:
     description: "repository preserves isolated caches; shared reuses the versioned vulnerability DB on the same persistent cache home while keeping scan caches isolated"
     required: false
-    default: repository
+    default: shared
 
 runs:
   using: composite
