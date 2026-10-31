@@ -111,7 +111,9 @@ trivy_cache_setup() {
         --max-age-hours "$max_age_hours")"
       if [[ "$database_fresh" != true ]]; then
         python3 "$cache_tool" invalidate-shared-db --trivy-version "$trivy_version"
-        trivy --cache-dir "$OPTIMIZR_TRIVY_CACHE_DIR" image --download-db-only
+        # Trivy replaces cache_dir/db while extracting the DB. Give it the real
+        # shared cache root so it cannot unlink the per-repository DB symlink.
+        trivy --cache-dir "$shared_cache_dir" image --download-db-only
       fi
       database_fresh="$(python3 "$cache_tool" database-fresh \
         --database "$shared_cache_dir/db" \
