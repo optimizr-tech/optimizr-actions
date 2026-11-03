@@ -1,0 +1,148 @@
+name: Security evidence bundle
+description: Bind a reusable security gate's raw evidence to the checked caller and producer commits
+inputs:
+  repository:
+    description: Caller repository in owner/name form
+    required: true
+  run_id:
+    description: Caller workflow run identifier
+    required: true
+  run_attempt:
+    description: Caller workflow run attempt
+    required: true
+  producer_repository:
+    description: Repository containing the reusable workflow
+    required: true
+  producer_ref:
+    description: Ref used to invoke the reusable workflow
+    required: true
+  producer_sha:
+    description: Resolved commit containing the reusable workflow
+    required: true
+  producer_file:
+    description: Reusable workflow file path
+    required: true
+  source_sha:
+    description: Commit checked out from the caller
+    required: true
+  expected_source_sha:
+    description: Expected caller github.sha
+    required: true
+  conclusion:
+    description: Current reusable gate job conclusion
+    required: true
+  artifact_name:
+    description: Name of the artifact that will contain this evidence bundle
+    required: true
+  evidence_directory:
+    description: Directory containing the gate's raw evidence
+    required: true
+outputs:
+  result:
+    description: passed only when the gate succeeded and raw evidence exists
+    value: ${{ steps.bundle.outputs.result }}
+  conclusion:
+    description: Reusable gate job conclusion
+    value: ${{ steps.bundle.outputs.conclusion }}
+  repository:
+    description: Caller repository
+    value: ${{ steps.bundle.outputs.repository }}
+  run_id:
+    description: Caller workflow run identifier
+    value: ${{ steps.bundle.outputs.run_id }}
+  run_attempt:
+    description: Caller workflow run attempt
+    value: ${{ steps.bundle.outputs.run_attempt }}
+  producer:
+    description: Reusable workflow repository, file, and commit
+    value: ${{ steps.bundle.outputs.producer }}
+  producer_ref:
+    description: Invocation ref for the reusable workflow
+    value: ${{ steps.bundle.outputs.producer_ref }}
+  producer_sha:
+    description: Resolved reusable workflow commit
+    value: ${{ steps.bundle.outputs.producer_sha }}
+  source_sha:
+    description: Exact checked caller commit
+    value: ${{ steps.bundle.outputs.source_sha }}
+  evidence_path:
+    description: Relative path to the evidence bundle
+    value: ${{ steps.bundle.outputs.evidence_path }}
+  evidence_sha256:
+    description: SHA-256 of the raw evidence manifest
+    value: ${{ steps.bundle.outputs.evidence_sha256 }}
+  evidence_manifest_path:
+    description: Manifest file path inside the uploaded artifact
+    value: ${{ steps.bundle.outputs.evidence_manifest_path }}
+  evidence_artifact_name:
+    description: Uploaded artifact name
+    value: ${{ steps.bundle.outputs.evidence_artifact_name }}
+  evidence_present:
+    description: Whether the bundle contains raw evidence files
+    value: ${{ steps.bundle.outputs.evidence_present }}
+  evidence_record:
+    description: Compact JSON identity record for the bundle
+    value: ${{ steps.bundle.outputs.evidence_record }}
+runs:
+  using: composite
+  steps:
+    - id: bundle
+      shell: bash
+      env:
+        REPOSITORY: ${{ inputs.repository }}
+        RUN_ID: ${{ inputs.run_id }}
+        RUN_ATTEMPT: ${{ inputs.run_attempt }}
+        PRODUCER_REPOSITORY: ${{ inputs.producer_repository }}
+        PRODUCER_REF: ${{ inputs.producer_ref }}
+        PRODUCER_SHA: ${{ inputs.producer_sha }}
+        PRODUCER_FILE: ${{ inputs.producer_file }}
+        SOURCE_SHA: ${{ inputs.source_sha }}
+        EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+        JOB_CONCLUSION: ${{ inputs.conclusion }}
+        ARTIFACT_NAME: ${{ inputs.artifact_name }}
+        EVIDENCE_DIRECTORY: ${{ inputs.evidence_directory }}
+      run: |
+        set -euo pipefail
+        producer_root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        producer_actual_sha="$(git -C "$producer_root" rev-parse HEAD)"
+        source_actual_sha="$(git rev-parse HEAD)"
+        test "$producer_actual_sha" = "$PRODUCER_SHA"
+        test "$source_actual_sha" = "$SOURCE_SHA"
+        test "$source_actual_sha" = "$EXPECTED_SOURCE_SHA"
+        python3 - "$producer_root" "$PRODUCER_FILE" <<'PY'
+        import sys
+        from pathlib import Path, PurePosixPath
+
+        root = Path(sys.argv[1]).resolve()
+        relative = PurePosixPath(sys.argv[2])
+        if (
+            relative.is_absolute()
+            or "\\" in sys.argv[2]
+            or ".." in relative.parts
+            or sys.argv[2].startswith("~")
+        ):
+            raise SystemExit("producer_file must be a safe repository-relative path")
+        candidate = (root / Path(*relative.parts)).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError as exc:
+            raise SystemExit("producer_file escapes the reusable workflow checkout") from exc
+        if not candidate.is_file():
+            raise SystemExit("reusable workflow source file is missing")
+        PY
+        python3 "$producer_root/scripts/security_evidence.py" bundle \
+          --repository "$REPOSITORY" \
+          --run-id "$RUN_ID" \
+          --run-attempt "$RUN_ATTEMPT" \
+          --producer-repository "$PRODUCER_REPOSITORY" \
+          --producer-ref "$PRODUCER_REF" \
+          --producer-sha "$PRODUCER_SHA" \
+          --producer-file "$PRODUCER_FILE" \
+          --source-sha "$SOURCE_SHA" \
+          --expected-source-sha "$EXPECTED_SOURCE_SHA" \
+          --artifact-name "$ARTIFACT_NAME" \
+          --evidence-path . \
+          --manifest-path "$EVIDENCE_DIRECTORY/evidence-manifest.json" \
+          --github-output "$GITHUB_OUTPUT" \
+          --evidence-directory "$EVIDENCE_DIRECTORY" \
+          --job-conclusion "$JOB_CONCLUSION"

@@ -84,11 +84,12 @@ class ValidationGateContractTests(unittest.TestCase):
         )
         self.assertIn("      exceptions_file: ${{ inputs.exceptions_file }}", security_suite)
 
-    def test_security_suite_exports_success_result(self):
+    def test_security_suite_exports_result_from_shared_evidence_helper(self):
         text = (ROOT / ".github/workflows/_security-suite.yml").read_text()
         self.assertIn("jobs.summary.outputs.result", text)
         self.assertIn("steps.summary.outputs.result", text)
-        self.assertIn('echo "result=passed" >> "$GITHUB_OUTPUT"', text)
+        self.assertIn("scripts/security_evidence.py suite", text)
+        self.assertIn('--github-output "$GITHUB_OUTPUT"', text)
 
 
 if __name__ == "__main__":

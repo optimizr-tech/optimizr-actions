@@ -32,6 +32,25 @@ on:
         required: false
         type: number
         default: 30
+    outputs:
+      result:
+        description: Gate result, failed closed when evidence is unavailable
+        value: ${{ jobs.sast.outputs.result }}
+      evidence_record:
+        description: Compact JSON identity record for the evidence bundle
+        value: ${{ jobs.sast.outputs.evidence_record }}
+      evidence_sha256:
+        description: SHA-256 of the raw evidence manifest
+        value: ${{ jobs.sast.outputs.evidence_sha256 }}
+      evidence_artifact_name:
+        description: Uploaded evidence artifact name
+        value: ${{ jobs.sast.outputs.evidence_artifact_name }}
+      evidence_artifact_id:
+        description: Uploaded evidence artifact identifier
+        value: ${{ jobs.sast.outputs.evidence_artifact_id }}
+      evidence_artifact_digest:
+        description: Uploaded artifact archive SHA-256
+        value: ${{ jobs.sast.outputs.evidence_artifact_digest }}
 permissions:
   contents: read
 jobs:
@@ -39,6 +58,13 @@ jobs:
     name: Controlled SAST
     runs-on: ${{ fromJSON(inputs.runner_json) }}
     timeout-minutes: 30
+    outputs:
+      result: ${{ steps.bundle.outputs.result }}
+      evidence_record: ${{ steps.bundle.outputs.evidence_record }}
+      evidence_sha256: ${{ steps.bundle.outputs.evidence_sha256 }}
+      evidence_artifact_name: ${{ steps.bundle.outputs.evidence_artifact_name }}
+      evidence_artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      evidence_artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
     steps:
       - name: Validate runner trust contract
         shell: bash
@@ -96,8 +122,17 @@ jobs:
       - name: Checkout exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          ref: ${{ github.sha }}
           clean: true
           fetch-depth: 0
+          persist-credentials: false
+      - name: Checkout reusable evidence helper
+        id: checkout_evidence
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .optimizr-actions-source
           persist-credentials: false
       - name: Verify checkout integrity
         uses: optimizr-tech/optimizr-actions/.github/actions/checkout-integrity@v1
@@ -108,7 +143,25 @@ jobs:
         with:
           profile: ${{ inputs.profile }}
           baseline_file: ${{ inputs.baseline_file }}
+      - name: Write SHA-bound evidence bundle
+        id: bundle
+        if: ${{ always() && steps.checkout_evidence.outcome == 'success' }}
+        uses: ./.optimizr-actions-source/.github/actions/security-evidence-bundle
+        with:
+          repository: ${{ github.repository }}
+          run_id: ${{ github.run_id }}
+          run_attempt: ${{ github.run_attempt }}
+          producer_repository: ${{ job.workflow_repository }}
+          producer_ref: ${{ job.workflow_ref }}
+          producer_sha: ${{ job.workflow_sha }}
+          producer_file: ${{ job.workflow_file_path }}
+          source_sha: ${{ github.sha }}
+          expected_source_sha: ${{ github.sha }}
+          conclusion: ${{ job.status }}
+          artifact_name: ${{ inputs.artifact_name }}
+          evidence_directory: artifacts/sast-gate
       - name: Upload SAST evidence
+        id: upload
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:

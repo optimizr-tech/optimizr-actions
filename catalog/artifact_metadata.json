@@ -116,6 +116,13 @@
       "evidence": "Full Trivy finding report with actionable security failure classification",
       "examples": ["uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@v1"]
     },
+    ".github/actions/security-evidence-bundle/action.yml": {
+      "category": "security",
+      "trust_boundary": "trusted-pr",
+      "evidence": "SHA-256 indexed raw security evidence bound to caller and reusable workflow commits",
+      "examples": ["uses: ./.optimizr-actions-source/.github/actions/security-evidence-bundle"],
+      "known_limitations": "Requires the exact caller checkout at the workspace root and an exact producer checkout beside it; callers download and verify the artifact independently"
+    },
     ".github/actions/security-rebuild/action.yml": {
       "trust_boundary": "trusted-push",
       "evidence": "Bounded Compose image pull and rebuild evidence for security remediation",

@@ -5,6 +5,22 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class NodeProjectContractTests(unittest.TestCase):
+    def test_project_timeout_is_bounded_and_keeps_the_existing_default(self):
+        text = (ROOT / ".github/workflows/_node-project-test.yml").read_text()
+        docs = (ROOT / "docs/NODE_PROJECT_TEST.md").read_text()
+
+        self.assertRegex(
+            text,
+            r"timeout_minutes:\n\s+description: [^\n]+\n"
+            r"\s+required: false\n\s+type: number\n\s+default: 30",
+        )
+        self.assertIn("TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}", text)
+        self.assertIn('timeout_minutes = int(os.environ["TIMEOUT_MINUTES"])', text)
+        self.assertIn("if not 30 <= timeout_minutes <= 45:", text)
+        self.assertIn("timeout-minutes: ${{ inputs.timeout_minutes }}", text)
+        self.assertIn("defaults to 30", docs)
+        self.assertIn("30 through 45", docs)
+
     def test_reusable_validates_matrix_and_uses_pinned_actions(self):
         text = (ROOT / ".github/workflows/_node-project-test.yml").read_text()
         self.assertIn("fromJSON(needs.prepare.outputs.matrix)", text)
