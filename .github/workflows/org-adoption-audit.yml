@@ -25,29 +25,62 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [ -n "$ORG_AUDIT_REPOSITORIES" ] || {
+          [ -n "${ORG_AUDIT_REPOSITORIES//[[:space:],]/}" ] || {
             echo "::error::ORG_AUDIT_REPOSITORIES is not configured" >&2
             exit 1
           }
-          [ -n "$ORG_AUDIT_TOKEN" ] || {
+          [ -n "${ORG_AUDIT_TOKEN//[[:space:]]/}" ] || {
             echo "::error::ORG_AUDIT_TOKEN is not configured" >&2
             exit 1
           }
       - name: Audit selected repositories through the contents API
+        id: audit
         run: |
           python3 scripts/org_audit/combined.py \
             --repositories-env ORG_AUDIT_REPOSITORIES \
             --token-env ORG_AUDIT_TOKEN \
             --output-dir public-report \
             --public
+      - name: Validate generated public audit reports
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s public-report/report.json || {
+            echo "::error::public audit JSON report was not produced" >&2
+            exit 1
+          }
+          test -s public-report/report.md || {
+            echo "::error::public audit Markdown report was not produced" >&2
+            exit 1
+          }
       - name: Upload redacted public report
+        id: upload_public_report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: organization-adoption-public-report
-          path: public-report
+          path: |
+            public-report/report.json
+            public-report/report.md
           if-no-files-found: error
           retention-days: 30
+      - name: Verify public audit artifact upload
+        if: always()
+        shell: bash
+        env:
+          ARTIFACT_ID: ${{ steps.upload_public_report.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.upload_public_report.outputs.artifact-digest }}
+        run: |
+          set -euo pipefail
+          test -n "$ARTIFACT_ID" || {
+            echo "::error::public audit artifact was not produced" >&2
+            exit 1
+          }
+          test -n "$ARTIFACT_DIGEST" || {
+            echo "::error::public audit artifact digest was not produced" >&2
+            exit 1
+          }
 
   private-issue-report:
     name: Update private central audit issue
@@ -70,19 +103,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [ -n "$ORG_AUDIT_REPOSITORIES" ] || {
+          [ -n "${ORG_AUDIT_REPOSITORIES//[[:space:],]/}" ] || {
             echo "::error::ORG_AUDIT_REPOSITORIES is not configured" >&2
             exit 1
           }
-          [ -n "$ORG_AUDIT_TOKEN" ] || {
+          [ -n "${ORG_AUDIT_TOKEN//[[:space:]]/}" ] || {
             echo "::error::ORG_AUDIT_TOKEN is not configured" >&2
             exit 1
           }
-          [ -n "$ORG_AUDIT_ISSUE_REF" ] || {
+          [ -n "${ORG_AUDIT_ISSUE_REF//[[:space:]]/}" ] || {
             echo "::error::ORG_AUDIT_ISSUE_REF is not configured" >&2
             exit 1
           }
-          [ -n "$ORG_AUDIT_ISSUE_TOKEN" ] || {
+          [ -n "${ORG_AUDIT_ISSUE_TOKEN//[[:space:]]/}" ] || {
             echo "::error::ORG_AUDIT_ISSUE_TOKEN is not configured" >&2
             exit 1
           }
