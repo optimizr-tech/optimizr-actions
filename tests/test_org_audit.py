@@ -1,7 +1,12 @@
 import json
+import os
 from pathlib import Path
 import sys
+import tempfile
 import unittest
+from contextlib import redirect_stderr
+from io import StringIO
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -11,6 +16,7 @@ from org_audit.audit import (
     _has_event,
     _has_governed_internal_ref,
     audit_workflows,
+    main as audit_main,
     public_alias,
     render_markdown,
     render_json,
@@ -19,10 +25,100 @@ from org_audit.audit import (
 from org_audit.combined import (
     _canonical_present,
     _has_governed_internal_ref as combined_has_governed_internal_ref,
+    main as combined_main,
 )
 
 
 class OrgAuditTests(unittest.TestCase):
+    def test_audit_clis_reject_empty_allowlist_and_blank_token_before_audit(self):
+        cases = (
+            {"AUDIT_REPOSITORIES": ""},
+            {"AUDIT_REPOSITORIES": "  , \n "},
+            {"AUDIT_TOKEN": ""},
+            {"AUDIT_TOKEN": " \t "},
+        )
+        for cli, module in (
+            (audit_main, "org_audit.audit"),
+            (combined_main, "org_audit.combined"),
+        ):
+            for override in cases:
+                with self.subTest(cli=module, override=override), tempfile.TemporaryDirectory() as temp_dir:
+                    environment = {
+                        "AUDIT_REPOSITORIES": "optimizr-tech/optimizr-actions",
+                        "AUDIT_TOKEN": "test-token",
+                    }
+                    environment.update(override)
+                    output_dir = Path(temp_dir) / "report"
+                    error = StringIO()
+                    with (
+                        patch.dict(os.environ, environment, clear=True),
+                        patch(f"{module}._audit_selected", return_value=[]) as audit,
+                        redirect_stderr(error),
+                    ):
+                        result = cli(
+                            [
+                                "--repositories-env",
+                                "AUDIT_REPOSITORIES",
+                                "--token-env",
+                                "AUDIT_TOKEN",
+                                "--output-dir",
+                                str(output_dir),
+                                "--public",
+                            ]
+                        )
+
+                    self.assertEqual(result, 2, error.getvalue())
+                    audit.assert_not_called()
+                    self.assertFalse(output_dir.exists())
+
+    def test_audit_clis_require_requested_issue_configuration_before_audit(self):
+        cases = (
+            {"AUDIT_ISSUE_REF": ""},
+            {"AUDIT_ISSUE_REF": " \t "},
+            {"AUDIT_ISSUE_TOKEN": ""},
+            {"AUDIT_ISSUE_TOKEN": " \t "},
+        )
+        for cli, module in (
+            (audit_main, "org_audit.audit"),
+            (combined_main, "org_audit.combined"),
+        ):
+            for override in cases:
+                with self.subTest(cli=module, override=override), tempfile.TemporaryDirectory() as temp_dir:
+                    output_dir = Path(temp_dir) / "report"
+                    error = StringIO()
+                    environment = {
+                        "AUDIT_REPOSITORIES": "optimizr-tech/optimizr-actions",
+                        "AUDIT_TOKEN": "test-token",
+                        "AUDIT_ISSUE_REF": "optimizr-tech/private#167",
+                        "AUDIT_ISSUE_TOKEN": "test-issue-token",
+                    }
+                    environment.update(override)
+                    with (
+                        patch.dict(os.environ, environment, clear=True),
+                        patch(f"{module}._audit_selected", return_value=[]) as audit,
+                        patch(f"{module}._update_issue") as update_issue,
+                        redirect_stderr(error),
+                    ):
+                        result = cli(
+                            [
+                                "--repositories-env",
+                                "AUDIT_REPOSITORIES",
+                                "--token-env",
+                                "AUDIT_TOKEN",
+                                "--output-dir",
+                                str(output_dir),
+                                "--issue-ref-env",
+                                "AUDIT_ISSUE_REF",
+                                "--issue-token-env",
+                                "AUDIT_ISSUE_TOKEN",
+                            ]
+                        )
+
+                    self.assertEqual(result, 2, error.getvalue())
+                    audit.assert_not_called()
+                    update_issue.assert_not_called()
+                    self.assertFalse(output_dir.exists())
+
     def test_governed_internal_ref_requires_a_complete_ref_token(self):
         artifact = ".github/workflows/_validate-pr.yml"
         prefix = f"uses: optimizr-tech/optimizr-actions/{artifact}@"

@@ -68,6 +68,10 @@ Required secrets:
 - `ORG_AUDIT_ISSUE_REF`: `owner/private-repo#123`;
 - `ORG_AUDIT_ISSUE_TOKEN`: issue-write access only to the private report repository.
 
-All four values are required for a successful scheduled or manual run. Store them as organization or repository Actions secrets according to the owner-approved trust boundary, never print them in logs, and rotate the tokens without changing the allowlist format. The private report job does not silently skip when the issue reference is absent.
+All four values are required for a successful scheduled or manual run. A human owner must choose the approved organization or repository secret scope, populate the allowlist and tokens, and grant only the documented repository and issue permissions. This code change does not configure secrets or validate their live availability. Never print secret values in logs; rotate the tokens without changing the allowlist format.
+
+The workflow rejects blank or whitespace-only configuration before making API calls. The combined CLI independently rejects an empty normalized repository list, blank tokens, and a missing issue reference/token when an issue update was requested. It also fails if either public report file is absent or empty, if the upload action finds no files, or if the uploaded artifact ID or digest is missing. The private issue job is gated on the public job succeeding, so any of those failures prevents the issue update.
+
+Keep issue #167 open until a human-authorized `workflow_dispatch` run completes, the sanitized public artifact is downloadable, and the private issue shows the corresponding run link. A local test or configured secret alone is not operational recovery evidence.
 
 The auditor never edits consumer repositories, enables Dependabot settings, creates pull requests, merges changes or receives production secrets.

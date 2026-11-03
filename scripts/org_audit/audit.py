@@ -396,6 +396,13 @@ def _repositories_from_env(name: str) -> list[str]:
     return repositories
 
 
+def _required_env_text(name: str, label: str) -> str:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        raise AuditError(f"{label} is missing")
+    return value
+
+
 def _audit_selected(repositories: Sequence[str], token: str) -> list[Finding]:
     findings: list[Finding] = []
     for repository in repositories:
@@ -435,9 +442,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         repositories = _repositories_from_env(args.repositories_env)
-        token = os.environ.get(args.token_env, "")
-        if not token:
-            raise AuditError("audit token is missing")
+        token = _required_env_text(args.token_env, "audit token")
+        issue_ref = ""
+        issue_token = ""
+        if args.issue_ref_env:
+            if args.public:
+                raise AuditError("public report must not update the private central issue")
+            issue_ref = _required_env_text(args.issue_ref_env, "issue reference")
+            if not args.issue_token_env:
+                raise AuditError("issue update token environment name is missing")
+            issue_token = _required_env_text(args.issue_token_env, "issue update token")
         findings = _audit_selected(repositories, token)
         output = Path(args.output_dir)
         output.mkdir(parents=True, exist_ok=True)
@@ -445,15 +459,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         run_url = os.environ.get(args.run_url_env, "") if args.run_url_env else ""
         markdown = render_markdown(findings, public=args.public, run_url=run_url)
         (output / "report.md").write_text(markdown, encoding="utf-8")
-        if args.issue_ref_env:
-            issue_ref = os.environ.get(args.issue_ref_env, "")
-            issue_token = os.environ.get(args.issue_token_env, "") if args.issue_token_env else ""
-            if issue_ref:
-                if args.public:
-                    raise AuditError("public report must not update the private central issue")
-                if not issue_token:
-                    raise AuditError("issue update token is missing")
-                _update_issue(issue_ref, issue_token, markdown)
+        if issue_ref:
+            _update_issue(issue_ref, issue_token, markdown)
         print(f"Audit completed: repositories={len(repositories)} findings={len(findings)} public={args.public}")
         return 0
     except (AuditError, OSError, UnicodeDecodeError, ValueError) as exc:
