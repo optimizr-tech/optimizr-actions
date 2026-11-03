@@ -588,6 +588,57 @@
     },
     {
       "category": "security",
+      "evidence": "SHA-256 indexed raw security evidence bound to caller and reusable workflow commits",
+      "examples": [
+        "uses: ./.optimizr-actions-source/.github/actions/security-evidence-bundle"
+      ],
+      "inputs": {
+        "artifact_name": "",
+        "conclusion": "",
+        "evidence_directory": "",
+        "expected_source_sha": "",
+        "producer_file": "",
+        "producer_ref": "",
+        "producer_repository": "",
+        "producer_sha": "",
+        "repository": "",
+        "run_attempt": "",
+        "run_id": "",
+        "source_sha": ""
+      },
+      "kind": "action",
+      "known_limitations": "Requires the exact caller checkout at the workspace root and an exact producer checkout beside it; callers download and verify the artifact independently",
+      "maturity": "stable-v1",
+      "metadata_status": "classified",
+      "outputs": {
+        "conclusion": "",
+        "evidence_artifact_name": "",
+        "evidence_manifest_path": "",
+        "evidence_path": "",
+        "evidence_present": "",
+        "evidence_record": "",
+        "evidence_sha256": "",
+        "producer": "",
+        "producer_ref": "",
+        "producer_sha": "",
+        "repository": "",
+        "result": "",
+        "run_attempt": "",
+        "run_id": "",
+        "source_sha": ""
+      },
+      "path": ".github/actions/security-evidence-bundle/action.yml",
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "fbcb05b197d9c5c6f07f35c986e81527c55f510a1a6452541d74b66f161d24cf",
+      "trust_boundary": "trusted-pr"
+    },
+    {
+      "category": "security",
       "evidence": "Full Trivy finding report with actionable security failure classification",
       "examples": [
         "uses: optimizr-tech/optimizr-actions/.github/actions/security-gate@v1"
@@ -1275,7 +1326,14 @@
       "known_limitations": "",
       "maturity": "stable-v1",
       "metadata_status": "classified",
-      "outputs": {},
+      "outputs": {
+        "evidence_artifact_digest": "",
+        "evidence_artifact_id": "",
+        "evidence_artifact_name": "",
+        "evidence_record": "",
+        "evidence_sha256": "",
+        "result": ""
+      },
       "path": ".github/workflows/_dependency-policy.yml",
       "permissions": {
         "contents": "read"
@@ -1285,7 +1343,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "99f66e0765038ed828556f6b7c7af3f10d00a34afa61e8adc29ae76c80f26f6f",
+      "source_sha256": "16e94638557117f803cd459a86564ea6e50af9d88d2847ea51cc8e5a453239a0",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1814,7 +1872,14 @@
       "known_limitations": "",
       "maturity": "stable-v1",
       "metadata_status": "classified",
-      "outputs": {},
+      "outputs": {
+        "evidence_artifact_digest": "",
+        "evidence_artifact_id": "",
+        "evidence_artifact_name": "",
+        "evidence_record": "",
+        "evidence_sha256": "",
+        "result": ""
+      },
       "path": ".github/workflows/_sast-gate.yml",
       "permissions": {
         "contents": "read"
@@ -1824,7 +1889,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "7d86917b50c51ea73dc85a8a4ecac8de4cad7edda09fbe9fe966eb3620942de9",
+      "source_sha256": "3957a0f912649e8f61759649e49f0dc8971529ac7e0c1f51568b8307b1b87541",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1858,7 +1923,14 @@
       "known_limitations": "",
       "maturity": "stable-v1",
       "metadata_status": "classified",
-      "outputs": {},
+      "outputs": {
+        "evidence_artifact_digest": "",
+        "evidence_artifact_id": "",
+        "evidence_artifact_name": "",
+        "evidence_record": "",
+        "evidence_sha256": "",
+        "result": ""
+      },
       "path": ".github/workflows/_security-gate.yml",
       "permissions": {
         "contents": "read"
@@ -1868,7 +1940,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "4674ea240ce9af0f9c7ce0ddcc8d48fb0ed1abb25c36e78e258b04bbdbd5f30c",
+      "source_sha256": "416ab44ba2d3cc6583026baf8309121e29e04dec33f0d1c9d858f6f1de815e90",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1899,8 +1971,21 @@
       "maturity": "stable-v1",
       "metadata_status": "classified",
       "outputs": {
+        "conclusion": "",
+        "evidence_artifact_digest": "",
+        "evidence_artifact_id": "",
+        "evidence_artifact_name": "",
+        "evidence_manifest_path": "",
         "evidence_path": "",
-        "result": ""
+        "evidence_sha256": "",
+        "producer": "",
+        "producer_ref": "",
+        "producer_sha": "",
+        "repository": "",
+        "result": "",
+        "run_attempt": "",
+        "run_id": "",
+        "source_sha": ""
       },
       "path": ".github/workflows/_security-suite.yml",
       "permissions": {
@@ -1911,7 +1996,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "25410979951f946f772a48b7cf0648e83c3432383e8f5dcfcacdddca826e5926",
+      "source_sha256": "110ef56c47cbb3a751c0c96c1fb34a1aed7c70c33ede31fdcc822867dbcb7d96",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1969,7 +2054,14 @@
       "known_limitations": "",
       "maturity": "stable-v1",
       "metadata_status": "classified",
-      "outputs": {},
+      "outputs": {
+        "evidence_artifact_digest": "",
+        "evidence_artifact_id": "",
+        "evidence_artifact_name": "",
+        "evidence_record": "",
+        "evidence_sha256": "",
+        "result": ""
+      },
       "path": ".github/workflows/_static-lint.yml",
       "permissions": {
         "contents": "read"
@@ -1979,7 +2071,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "feb28669b4b0b6ce9828c8865ce36f3bccec1a75dd65b1c3f2599261baa752ee",
+      "source_sha256": "4b63821fa405b994bc11c4e8c457c9bd04afb1833778db634081186619dd8fbb",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -2030,7 +2122,14 @@
       "known_limitations": "",
       "maturity": "stable-v1",
       "metadata_status": "classified",
-      "outputs": {},
+      "outputs": {
+        "evidence_artifact_digest": "",
+        "evidence_artifact_id": "",
+        "evidence_artifact_name": "",
+        "evidence_record": "",
+        "evidence_sha256": "",
+        "result": ""
+      },
       "path": ".github/workflows/_supply-chain-evidence.yml",
       "permissions": {
         "contents": "read"
@@ -2040,7 +2139,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "474e45cb3b00c217c8eafcc4d8b16c104ab7fd9e38282c89d0e538c1b4d36ae2",
+      "source_sha256": "a569239ee8d4506ee2bfbb2ac27efe0adef0fa5432d0401489e5708e16945557",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -2096,7 +2195,23 @@
       "known_limitations": "",
       "maturity": "stable-v1",
       "metadata_status": "classified",
-      "outputs": {},
+      "outputs": {
+        "conclusion": "",
+        "evidence_artifact_digest": "",
+        "evidence_artifact_id": "",
+        "evidence_artifact_name": "",
+        "evidence_manifest_path": "",
+        "evidence_path": "",
+        "evidence_sha256": "",
+        "producer": "",
+        "producer_ref": "",
+        "producer_sha": "",
+        "repository": "",
+        "result": "",
+        "run_attempt": "",
+        "run_id": "",
+        "source_sha": ""
+      },
       "path": ".github/workflows/_trivy-scan.yml",
       "permissions": {
         "actions": "write",
@@ -2107,7 +2222,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "61c2d5d01f23940bc173c74d3479a583442f5fd7ccbd704a65960ab73ea5533c",
+      "source_sha256": "8d1ac6d9cc2969e054288d1530e2aad876cb1d6dca9ad179e67686850d7d1269",
       "trust_boundary": "trusted-pr"
     },
     {

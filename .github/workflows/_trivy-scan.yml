@@ -48,6 +48,52 @@ on:
         required: false
         type: boolean
         default: false
+    outputs:
+      result:
+        description: passed only when the scan succeeds and its report is present
+        value: ${{ inputs.skip && 'skipped' || jobs.scan.outputs.result }}
+      conclusion:
+        description: Trivy execution conclusion; skipped when the caller opts out
+        value: ${{ inputs.skip && 'skipped' || jobs.scan.outputs.conclusion }}
+      repository:
+        description: Caller repository bound into the evidence manifest
+        value: ${{ jobs.scan.outputs.repository }}
+      run_id:
+        description: GitHub Actions run ID bound into the evidence manifest
+        value: ${{ jobs.scan.outputs.run_id }}
+      run_attempt:
+        description: GitHub Actions run attempt bound into the evidence manifest
+        value: ${{ jobs.scan.outputs.run_attempt }}
+      producer:
+        description: Reusable workflow path and immutable producer SHA
+        value: ${{ jobs.scan.outputs.producer }}
+      producer_ref:
+        description: Workflow source ref resolved for this reusable run
+        value: ${{ jobs.scan.outputs.producer_ref }}
+      producer_sha:
+        description: Immutable SHA of the reusable workflow source
+        value: ${{ jobs.scan.outputs.producer_sha }}
+      source_sha:
+        description: Exact caller checkout SHA verified before scanning
+        value: ${{ jobs.scan.outputs.source_sha }}
+      evidence_path:
+        description: Raw Trivy report path inside the artifact
+        value: ${{ jobs.scan.outputs.evidence_path }}
+      evidence_sha256:
+        description: SHA-256 of the raw Trivy report bytes
+        value: ${{ jobs.scan.outputs.evidence_sha256 }}
+      evidence_manifest_path:
+        description: Evidence identity sidecar path inside the artifact
+        value: ${{ jobs.scan.outputs.evidence_manifest_path }}
+      evidence_artifact_name:
+        description: Uploaded artifact name
+        value: ${{ jobs.scan.outputs.evidence_artifact_name }}
+      evidence_artifact_id:
+        description: GitHub Actions artifact ID, empty when upload is disabled or fails
+        value: ${{ jobs.scan.outputs.evidence_artifact_id }}
+      evidence_artifact_digest:
+        description: SHA-256 digest of the uploaded artifact archive
+        value: ${{ jobs.scan.outputs.evidence_artifact_digest }}
 permissions:
   contents: read
   actions: write
@@ -56,6 +102,22 @@ jobs:
     if: ${{ !inputs.skip }}
     runs-on: ${{ fromJSON(inputs.runner_json) }}
     timeout-minutes: 15
+    outputs:
+      result: ${{ steps.evidence.outputs.result }}
+      conclusion: ${{ steps.evidence.outputs.conclusion }}
+      repository: ${{ steps.evidence.outputs.repository }}
+      run_id: ${{ steps.evidence.outputs.run_id }}
+      run_attempt: ${{ steps.evidence.outputs.run_attempt }}
+      producer: ${{ steps.evidence.outputs.producer }}
+      producer_ref: ${{ steps.evidence.outputs.producer_ref }}
+      producer_sha: ${{ steps.evidence.outputs.producer_sha }}
+      source_sha: ${{ steps.evidence.outputs.source_sha }}
+      evidence_path: ${{ steps.evidence.outputs.evidence_path }}
+      evidence_sha256: ${{ steps.evidence.outputs.evidence_sha256 }}
+      evidence_manifest_path: ${{ steps.evidence.outputs.evidence_manifest_path }}
+      evidence_artifact_name: ${{ steps.evidence.outputs.evidence_artifact_name }}
+      evidence_artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      evidence_artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
     steps:
       - name: Validate runner trust contract
         shell: bash
@@ -88,10 +150,21 @@ jobs:
               raise SystemExit("self-hosted validation requires mode trusted-main or ephemeral-pr")
           PY
       - name: Checkout
+        id: checkout_caller
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Checkout reusable evidence helper
+        id: checkout_evidence
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .optimizr-actions-source
           persist-credentials: false
       - name: Run Trivy vulnerability scanner
+        id: trivy
         uses: optimizr-tech/optimizr-actions/.github/actions/trivy-scan@v1
         with:
           scan_type: ${{ inputs.scan_type }}
@@ -100,10 +173,52 @@ jobs:
           exit_code: ${{ inputs.exit_code }}
           trivy_version: v0.74.0
           cache_scope: ${{ inputs.self_hosted_mode == 'ephemeral-pr' && 'repository' || inputs.trivy_cache_scope }}
+      - name: Bind raw report to caller and producer identities
+        id: evidence
+        if: ${{ always() && steps.checkout_caller.outcome == 'success' && steps.checkout_evidence.outcome == 'success' }}
+        shell: bash
+        env:
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          PRODUCER_REPOSITORY: ${{ job.workflow_repository }}
+          PRODUCER_REF: ${{ job.workflow_ref }}
+          PRODUCER_SHA: ${{ job.workflow_sha }}
+          PRODUCER_FILE: ${{ job.workflow_file_path }}
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+          SCAN_OUTCOME: ${{ steps.trivy.outcome }}
+          SCAN_TYPE: ${{ inputs.scan_type }}
+        run: |
+          set -euo pipefail
+          source_sha="$(git rev-parse HEAD)"
+          producer_source_sha="$(git -C .optimizr-actions-source rev-parse HEAD)"
+          test "$producer_source_sha" = "$PRODUCER_SHA"
+          test -f ".optimizr-actions-source/$PRODUCER_FILE"
+          python3 .optimizr-actions-source/scripts/security_evidence.py trivy \
+            --repository "$REPOSITORY" \
+            --run-id "$RUN_ID" \
+            --run-attempt "$RUN_ATTEMPT" \
+            --producer-repository "$PRODUCER_REPOSITORY" \
+            --producer-ref "$PRODUCER_REF" \
+            --producer-sha "$PRODUCER_SHA" \
+            --producer-file "$PRODUCER_FILE" \
+            --source-sha "$source_sha" \
+            --expected-source-sha "$EXPECTED_SOURCE_SHA" \
+            --artifact-name trivy-security-results \
+            --evidence-path trivy-results.txt \
+            --manifest-path artifacts/trivy-evidence/manifest.json \
+            --github-output "$GITHUB_OUTPUT" \
+            --report-path trivy-results.txt \
+            --scan-type "$SCAN_TYPE" \
+            --scan-outcome "$SCAN_OUTCOME"
       - name: Upload Trivy scan results as artifact
-        if: always() && inputs.upload_artifact
+        id: upload
+        if: ${{ always() && inputs.upload_artifact && steps.evidence.outputs.evidence_manifest_path != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: trivy-security-results
-          path: trivy-results.txt
+          path: |
+            trivy-results.txt
+            artifacts/trivy-evidence/manifest.json
+          if-no-files-found: error
           retention-days: 30

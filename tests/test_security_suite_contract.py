@@ -37,8 +37,10 @@ class SecuritySuiteContractTests(unittest.TestCase):
         self.assertIn("exceptions_file:", self.text)
         self.assertIn("exceptions_file: ${{ inputs.exceptions_file }}", self.text)
 
-    def test_summary_always_uploads_sanitized_evidence(self):
+    def test_summary_uploads_after_runner_trust_gate_and_avoids_stale_artifacts(self):
         self.assertIn("if: always()", self.text)
+        self.assertIn("needs.profile.result == 'success'", self.text)
+        self.assertIn("steps.summary.outputs.evidence_manifest_path != ''", self.text)
         self.assertIn("artifacts/security-suite/summary.json", self.text)
         self.assertIn("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a", self.text)
         self.assertNotIn("github.event.client_payload", self.text)

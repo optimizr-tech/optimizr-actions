@@ -34,6 +34,27 @@ paths:
   .github/workflows/_testsprite.yml:
     ignore:
       - 'property "workflow_(repository|sha)" is not defined in object type .+'
+  .github/workflows/_security-suite.yml:
+    ignore:
+      - 'property "workflow_(repository|ref|sha|file_path)" is not defined in object type .+'
+  .github/workflows/_static-lint.yml:
+    ignore:
+      - 'property "workflow_(repository|ref|sha|file_path)" is not defined in object type .+'
+  .github/workflows/_security-gate.yml:
+    ignore:
+      - 'property "workflow_(repository|ref|sha|file_path)" is not defined in object type .+'
+  .github/workflows/_dependency-policy.yml:
+    ignore:
+      - 'property "workflow_(repository|ref|sha|file_path)" is not defined in object type .+'
+  .github/workflows/_sast-gate.yml:
+    ignore:
+      - 'property "workflow_(repository|ref|sha|file_path)" is not defined in object type .+'
+  .github/workflows/_supply-chain-evidence.yml:
+    ignore:
+      - 'property "workflow_(repository|ref|sha|file_path)" is not defined in object type .+'
+  .github/workflows/_trivy-scan.yml:
+    ignore:
+      - 'property "workflow_(repository|ref|sha|file_path)" is not defined in object type .+'
   .github/workflows/_semantic-release.yml:
     ignore:
       - 'property "workflow_(repository|sha)" is not defined in object type .+'
