@@ -93,9 +93,14 @@ For image scans, `source_sha` records the caller checkout used by the
 workflow; it does not prove which source revision produced a prebuilt image
 reference.
 
-If the initial profile job fails its runner-trust check, the summary job is
-skipped before checking out caller content. Failures in child security gates
-still produce the aggregate failure summary and artifact.
+If the initial profile job fails its runner-trust check, the workflow writes a
+status-only failure summary and uploads it without checking out caller content.
+The summary records `source_checked: false`, leaves the `source_sha` output and
+manifest path empty, and identifies the failed trust check. The same fallback
+is used if either identity checkout fails, so the legacy `result` and
+`evidence_path` outputs and summary artifact remain available without claiming
+that an unverified caller revision was scanned. Failures in child security
+gates still produce the full aggregate failure summary and artifact.
 
 The standalone `_trivy-scan.yml` exposes the same run, producer, checkout,
 and artifact identity fields, plus the raw report path and SHA-256. Its

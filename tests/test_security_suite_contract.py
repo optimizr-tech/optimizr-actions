@@ -40,10 +40,46 @@ class SecuritySuiteContractTests(unittest.TestCase):
     def test_summary_uploads_after_runner_trust_gate_and_avoids_stale_artifacts(self):
         self.assertIn("if: always()", self.text)
         self.assertIn("needs.profile.result == 'success'", self.text)
-        self.assertIn("steps.summary.outputs.evidence_manifest_path != ''", self.text)
+        self.assertIn(
+            "steps.summary.outputs.evidence_path != '' || steps.trust_failure_summary.outputs.evidence_path != ''",
+            self.text,
+        )
         self.assertIn("artifacts/security-suite/summary.json", self.text)
         self.assertIn("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a", self.text)
         self.assertNotIn("github.event.client_payload", self.text)
+
+    def test_profile_trust_failure_keeps_status_artifact_without_caller_checkout(self):
+        summary = self.text.split("  summary:\n", 1)[1]
+        job_header, steps = summary.split("    steps:\n", 1)
+        self.assertIn("    if: always()", job_header)
+        self.assertIn(
+            "result: ${{ steps.summary.outputs.result || steps.trust_failure_summary.outputs.result }}",
+            job_header,
+        )
+        self.assertIn(
+            "evidence_path: ${{ steps.summary.outputs.evidence_path || steps.trust_failure_summary.outputs.evidence_path }}",
+            job_header,
+        )
+
+        caller_checkout = steps.split("- name: Checkout caller at the exact triggering SHA", 1)[1].split(
+            "- name: Checkout reusable evidence helper", 1
+        )[0]
+        self.assertIn("if: ${{ needs.profile.result == 'success' }}", caller_checkout)
+
+        fallback = steps.split("- name: Write status-only summary when runner trust fails", 1)[1].split(
+            "- name: Upload suite summary", 1
+        )[0]
+        self.assertIn("needs.profile.result != 'success'", fallback)
+        self.assertNotIn("actions/checkout@", fallback)
+        self.assertIn('"source_checked": False', fallback)
+        self.assertIn('"result": "failed"', fallback)
+        self.assertIn('\"result\": \"failed\"', fallback)
+        self.assertIn('"evidence_path": str(summary_path)', fallback)
+        self.assertIn(
+            "steps.summary.outputs.evidence_path != '' || steps.trust_failure_summary.outputs.evidence_path != ''",
+            steps,
+        )
+
 
     def test_suite_enforces_runner_trust_before_children(self):
         self.assertIn("self_hosted_mode:", self.text)

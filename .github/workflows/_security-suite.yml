@@ -303,34 +303,36 @@ jobs:
   summary:
     name: Security suite summary
     needs: [profile, static-lint, filesystem-security, dependency-policy, sast, supply-chain]
-    if: always() && needs.profile.result == 'success'
+    if: always()
     runs-on: ${{ fromJSON(inputs.runner_json) }}
     timeout-minutes: 5
     outputs:
-      result: ${{ steps.summary.outputs.result }}
-      conclusion: ${{ steps.summary.outputs.conclusion }}
-      repository: ${{ steps.summary.outputs.repository }}
-      run_id: ${{ steps.summary.outputs.run_id }}
-      run_attempt: ${{ steps.summary.outputs.run_attempt }}
-      producer: ${{ steps.summary.outputs.producer }}
-      producer_ref: ${{ steps.summary.outputs.producer_ref }}
-      producer_sha: ${{ steps.summary.outputs.producer_sha }}
-      source_sha: ${{ steps.summary.outputs.source_sha }}
-      evidence_path: ${{ steps.summary.outputs.evidence_path }}
-      evidence_sha256: ${{ steps.summary.outputs.evidence_sha256 }}
+      result: ${{ steps.summary.outputs.result || steps.trust_failure_summary.outputs.result }}
+      conclusion: ${{ steps.summary.outputs.conclusion || steps.trust_failure_summary.outputs.conclusion }}
+      repository: ${{ steps.summary.outputs.repository || steps.trust_failure_summary.outputs.repository }}
+      run_id: ${{ steps.summary.outputs.run_id || steps.trust_failure_summary.outputs.run_id }}
+      run_attempt: ${{ steps.summary.outputs.run_attempt || steps.trust_failure_summary.outputs.run_attempt }}
+      producer: ${{ steps.summary.outputs.producer || steps.trust_failure_summary.outputs.producer }}
+      producer_ref: ${{ steps.summary.outputs.producer_ref || steps.trust_failure_summary.outputs.producer_ref }}
+      producer_sha: ${{ steps.summary.outputs.producer_sha || steps.trust_failure_summary.outputs.producer_sha }}
+      source_sha: ${{ steps.summary.outputs.source_sha || steps.trust_failure_summary.outputs.source_sha }}
+      evidence_path: ${{ steps.summary.outputs.evidence_path || steps.trust_failure_summary.outputs.evidence_path }}
+      evidence_sha256: ${{ steps.summary.outputs.evidence_sha256 || steps.trust_failure_summary.outputs.evidence_sha256 }}
       evidence_manifest_path: ${{ steps.summary.outputs.evidence_manifest_path }}
-      evidence_artifact_name: ${{ steps.summary.outputs.evidence_artifact_name }}
+      evidence_artifact_name: ${{ steps.summary.outputs.evidence_artifact_name || steps.trust_failure_summary.outputs.evidence_artifact_name }}
       evidence_artifact_id: ${{ steps.upload.outputs.artifact-id }}
       evidence_artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
     steps:
       - name: Checkout caller at the exact triggering SHA
         id: checkout_caller
+        if: ${{ needs.profile.result == 'success' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
       - name: Checkout reusable evidence helper
         id: checkout_evidence
+        if: ${{ always() && needs.profile.result == 'success' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: ${{ job.workflow_repository }}
@@ -445,9 +447,114 @@ jobs:
             --image-refs "$IMAGE_REFS" \
             --jobs-json "$jobs_json" \
             --child-evidence-json "$child_evidence_json"
+      - name: Write status-only summary when runner trust fails
+        id: trust_failure_summary
+        if: ${{ always() && (needs.profile.result != 'success' || steps.checkout_caller.outcome != 'success' || steps.checkout_evidence.outcome != 'success') }}
+        shell: bash
+        env:
+          PROFILE: ${{ inputs.profile }}
+          IMAGE_REFS: ${{ inputs.image_refs }}
+          PROFILE_RESULT: ${{ needs.profile.result }}
+          STATIC_RESULT: ${{ needs.static-lint.result }}
+          FILESYSTEM_RESULT: ${{ needs.filesystem-security.result }}
+          DEPENDENCY_RESULT: ${{ needs.dependency-policy.result }}
+          SAST_RESULT: ${{ needs.sast.result }}
+          SUPPLY_CHAIN_RESULT: ${{ needs.supply-chain.result }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          PRODUCER_REPOSITORY: ${{ job.workflow_repository }}
+          PRODUCER_REF: ${{ job.workflow_ref }}
+          PRODUCER_SHA: ${{ job.workflow_sha }}
+          PRODUCER_FILE: ${{ job.workflow_file_path }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/security-suite
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          jobs = {
+              "profile": os.environ["PROFILE_RESULT"],
+              "static_lint": os.environ["STATIC_RESULT"],
+              "filesystem_security": os.environ["FILESYSTEM_RESULT"],
+              "dependency_policy": os.environ["DEPENDENCY_RESULT"],
+              "sast": os.environ["SAST_RESULT"],
+              "supply_chain": os.environ["SUPPLY_CHAIN_RESULT"],
+          }
+          allowed = {"success", "failure", "cancelled", "skipped"}
+          if any(value not in allowed for value in jobs.values()):
+              raise SystemExit("unexpected job result while writing trust-failure summary")
+
+          profile = os.environ["PROFILE"]
+          required = {"profile", "static_lint", "filesystem_security"}
+          if profile in {"python", "node", "monorepo"}:
+              required.update({"dependency_policy", "sast"})
+          if profile in {"compose", "infra", "monorepo"} and os.environ["IMAGE_REFS"].strip():
+              required.add("supply_chain")
+          unexpectedly_skipped = sorted(
+              name for name in required if jobs[name] == "skipped"
+          )
+          expected_skipped = sorted(
+              name for name, result in jobs.items()
+              if result == "skipped" and name not in required
+          )
+          failure_reason = (
+              "runner_trust_check_failed"
+              if jobs["profile"] != "success"
+              else "identity_checkout_failed"
+          )
+          payload = {
+              "schema_version": 2,
+              "profile": profile,
+              "jobs": jobs,
+              "required_jobs": sorted(required),
+              "expected_skipped": expected_skipped,
+              "unexpectedly_skipped": unexpectedly_skipped,
+              "result": "failed",
+              "failure_reason": failure_reason,
+              "source_checked": False,
+              "repository": os.environ["REPOSITORY"],
+              "run_id": os.environ["RUN_ID"],
+              "run_attempt": os.environ["RUN_ATTEMPT"],
+              "producer": {
+                  "repository": os.environ["PRODUCER_REPOSITORY"],
+                  "ref": os.environ["PRODUCER_REF"],
+                  "sha": os.environ["PRODUCER_SHA"],
+                  "file": os.environ["PRODUCER_FILE"],
+              },
+              "source_sha": None,
+              "conclusion": "failure",
+          }
+          summary_path = Path("artifacts/security-suite/summary.json")
+          summary_bytes = (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+          summary_path.write_bytes(summary_bytes)
+          outputs = {
+              "result": "failed",
+              "conclusion": "failure",
+              "repository": payload["repository"],
+              "run_id": payload["run_id"],
+              "run_attempt": payload["run_attempt"],
+              "producer": (
+                  f"{payload['producer']['repository']}/"
+                  f"{payload['producer']['file']}@{payload['producer']['sha']}"
+              ),
+              "producer_ref": payload["producer"]["ref"],
+              "producer_sha": payload["producer"]["sha"],
+              "source_sha": "",
+              "evidence_path": str(summary_path),
+              "evidence_sha256": hashlib.sha256(summary_bytes).hexdigest(),
+              "evidence_artifact_name": "security-suite-summary",
+          }
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              for name, value in outputs.items():
+                  output.write(f"{name}={value}\n")
+          PY
       - name: Upload suite summary
         id: upload
-        if: ${{ always() && steps.summary.outputs.evidence_manifest_path != '' }}
+        if: ${{ always() && (steps.summary.outputs.evidence_path != '' || steps.trust_failure_summary.outputs.evidence_path != '') }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: security-suite-summary
