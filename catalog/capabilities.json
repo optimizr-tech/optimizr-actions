@@ -1422,7 +1422,8 @@
         "projects_json": "",
         "retention_days": "",
         "runner_json": "",
-        "self_hosted_mode": ""
+        "self_hosted_mode": "",
+        "timeout_minutes": ""
       },
       "kind": "workflow",
       "known_limitations": "",
@@ -1438,7 +1439,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "ad5ec114503b9ede0e06cebc2d1527d6e50922557dc03f1092a0fdf581bfa149",
+      "source_sha256": "5fb28f5865fd9ed90460079186063c07d9b0676fb485dd780f7ea1508de63d7f",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1996,7 +1997,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "110ef56c47cbb3a751c0c96c1fb34a1aed7c70c33ede31fdcc822867dbcb7d96",
+      "source_sha256": "5a42cfe6f7b75c1e47e71545036b7e600b6a71bbdecb8dc410df86cbe24f3ab5",
       "trust_boundary": "trusted-pr"
     },
     {

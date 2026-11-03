@@ -26,6 +26,11 @@ on:
         required: false
         type: string
         default: "11"
+      timeout_minutes:
+        description: Per-project job timeout in minutes (30-45)
+        required: false
+        type: number
+        default: 30
       retention_days:
         description: Artifact retention period
         required: false
@@ -99,6 +104,7 @@ jobs:
         shell: bash
         env:
           PROJECTS_JSON: ${{ inputs.projects_json }}
+          TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -111,6 +117,13 @@ jobs:
           name_re = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")
           script_re = re.compile(r"^[A-Za-z0-9][A-Za-z0-9:_-]{0,79}$")
           phase_fields = ("lint_script", "format_script", "typecheck_script", "test_script", "build_script")
+
+          try:
+              timeout_minutes = int(os.environ["TIMEOUT_MINUTES"])
+          except ValueError:
+              raise SystemExit("timeout_minutes must be an integer between 30 and 45")
+          if not 30 <= timeout_minutes <= 45:
+              raise SystemExit("timeout_minutes must be between 30 and 45")
 
           def relative(value, label):
               if not isinstance(value, str) or not value or len(value) > 512 or "\\" in value:
@@ -162,7 +175,7 @@ jobs:
     name: Node validation (${{ matrix.project.name }})
     needs: prepare
     runs-on: ${{ fromJSON(inputs.runner_json) }}
-    timeout-minutes: 30
+    timeout-minutes: ${{ inputs.timeout_minutes }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}

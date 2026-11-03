@@ -26,4 +26,6 @@ jobs:
 
 The prepare job rejects traversal, duplicate names, unsupported managers and invalid script names before a matrix runner checks out code. The composite repeats path validation, executes package-manager arguments without a shell, rejects symlink artifacts and copies only declared outputs into a controlled artifact directory.
 
+The optional `timeout_minutes` input sets the maximum runtime for each project job. It accepts integer values from 30 through 45 and defaults to 30, preserving existing callers. The bound covers checkout, tool installation, cache setup, project scripts and evidence upload; it is per matrix job, not a total workflow budget. Raising it can keep a shared runner occupied for up to 15 additional minutes per project, so callers should opt in only with run evidence and after reviewing runner queue impact. Invalid values fail during matrix preparation before project jobs start.
+
 Rollback by returning the consumer to its prior explicit Node jobs while preserving frozen installs, lint, typecheck, tests and build.
