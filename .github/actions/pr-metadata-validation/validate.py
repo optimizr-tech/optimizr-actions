@@ -18,7 +18,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 ALLOWED_TYPES = {
-    "feat", "fix", "security", "config", "docs", "style", "refactor",
+    "feat", "fix", "security", "config", "deploy", "docs", "style", "refactor",
     "perf", "test", "build", "ci", "chore", "revert", "hotfix", "raw",
     "cleanup", "remove", "init",
 }
