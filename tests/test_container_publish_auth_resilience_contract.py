@@ -21,7 +21,12 @@ def _workflow() -> str:
 
 def _build_job() -> str:
     content = _workflow()
-    return content[content.index("  build:") : content.index("  aggregate:")]
+    return content[content.index("  build:") : content.index("  aggregate_policy:")]
+
+
+def _promote_job() -> str:
+    content = _workflow()
+    return content[content.index("  promote:") : content.index("  aggregate:")]
 
 
 def _step(job: str, name: str) -> str:
@@ -117,24 +122,23 @@ class ContainerPublishAuthResilienceContractTests(unittest.TestCase):
         for name in (
             "Evaluate and record image security decision",
             "Upload pre-promotion security evidence",
-            "Write image digest fragment",
+            "Write candidate digest fragment",
             "Require pre-promotion gates",
-            "Upload image digest fragment",
+            "Upload candidate digest fragment",
         ):
             with self.subTest(step=name):
                 self.assertIn(guarded, _step(job, name))
         self.assertNotIn("if: always() && steps.build.outcome == 'success'\n", job)
 
     def test_security_evidence_upload_must_succeed_before_tag_promotion(self) -> None:
-        job = _build_job()
-        names = re.findall(r"^      - name: (.+)$", job, re.MULTILINE)
-        evidence = _step(job, "Upload pre-promotion security evidence")
-        promote = _step(job, "Promote verified image by digest")
-
-        self.assertLess(
-            names.index("Upload pre-promotion security evidence"),
-            names.index("Promote verified image by digest"),
-        )
+        build = _build_job()
+        aggregate_policy = _workflow().split("  aggregate_policy:", 1)[1].split(
+            "  promote:", 1
+        )[0]
+        promote = _promote_job()
+        names = re.findall(r"^      - name: (.+)$", build, re.MULTILINE)
+        evidence = _step(build, "Upload pre-promotion security evidence")
+        self.assertLess(names.index("Upload pre-promotion security evidence"), names.index("Require pre-promotion gates"))
         self.assertIn("id: security-evidence", evidence)
         self.assertIn(
             "if-no-files-found: ${{ inputs.push && 'error' || 'warn' }}",
@@ -145,9 +149,10 @@ class ContainerPublishAuthResilienceContractTests(unittest.TestCase):
             "retention-days: ${{ inputs.artifact_retention_days }}",
             evidence,
         )
-        self.assertIn("success()", promote)
-        self.assertIn("steps.security-evidence.outcome == 'success'", promote)
-        gates = _step(job, "Require pre-promotion gates")
+        self.assertIn("needs: [validate, build, aggregate_policy]", promote)
+        self.assertIn("needs.aggregate_policy.result == 'success'", promote)
+        self.assertIn("needs: [validate, build]", aggregate_policy)
+        gates = _step(build, "Require pre-promotion gates")
         self.assertIn(
             "SECURITY_EVIDENCE_OUTCOME: ${{ steps.security-evidence.outcome }}",
             gates,
@@ -159,8 +164,9 @@ class ContainerPublishAuthResilienceContractTests(unittest.TestCase):
         verify = _step(job, "Verify quarantine SBOM and provenance")
         self.assertIn("if: inputs.push", verify)
         self.assertIn('image_ref="$CANDIDATE_IMAGE@$IMAGE_DIGEST"', verify)
-        promote = _step(job, "Promote verified image by digest")
-        self.assertIn("steps.verify-quarantine-attestations.outcome == 'success'", promote)
+        self.assertIn("ATTESTATION_VERIFIED: ${{ !inputs.push || steps.verify-quarantine-attestations.outcome == 'success' }}", job)
+        promote = _promote_job()
+        self.assertIn("--require-attestations", _workflow())
         self.assertIn("verify_published_digest.py", promote)
 
     def test_exported_layout_is_removed_even_on_failure(self) -> None:
@@ -172,10 +178,13 @@ class ContainerPublishAuthResilienceContractTests(unittest.TestCase):
         job = _build_job()
         permissions = job[job.index("    permissions:") : job.index("    strategy:")]
         self.assertEqual(
-            "    permissions:\n      contents: read\n      packages: write\n"
-            "      attestations: write\n      id-token: write\n",
+            "    permissions:\n      contents: read\n      packages: write\n",
             permissions,
         )
+        promote_permissions = _promote_job()[
+            _promote_job().index("    permissions:") : _promote_job().index("    strategy:")
+        ]
+        self.assertIn("      attestations: write\n      id-token: write\n", promote_permissions)
 
     def test_resilience_contract_is_documented(self) -> None:
         documentation = RESILIENCE_DOC.read_text(encoding="utf-8")
@@ -204,6 +213,9 @@ class ContainerPublishAuthResilienceContractTests(unittest.TestCase):
         self.assertEqual(1, len(entries))
         self.assertIn("publish_mode", entries[0]["inputs"])
         self.assertIn("publish_auth_retries", entries[0]["inputs"])
+        self.assertIn("security_aggregate_exception_validation", entries[0]["inputs"])
+        self.assertIn("security_aggregate_exception_set_complete", entries[0]["inputs"])
+        self.assertIn("security_aggregate_unchanged_images_json", entries[0]["inputs"])
 
 
 if __name__ == "__main__":

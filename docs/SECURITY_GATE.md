@@ -337,6 +337,27 @@ For a rebuilt image whose local ID changes, the reviewed exception can therefore
 }
 ```
 
+### Publisher complete-set exception validation
+
+`_container-build-publish.yml` can opt in to a validation barrier before any
+release digest is promoted. Set
+`security_aggregate_exception_validation: true` and explicitly confirm
+`security_aggregate_exception_set_complete: true`. The validator combines the
+candidate matrix's exact image digests with
+`security_aggregate_unchanged_images_json`, then checks every configured
+exception target against that complete set. The unchanged-image array uses
+`service`, an immutable `image` reference, and an optional
+`security_exceptions_file` path relative to the candidate source checkout.
+
+The barrier also rejects missing or duplicate matrix fragments, candidate SHA
+or evidence mismatches, duplicate active digests, unsafe/missing policy files,
+expired entries, and exception targets outside the final set. Build jobs upload
+only quarantine candidate fragments; promotion jobs require the aggregate
+validation artifact and a receipt matching their exact service and digest.
+The feature is opt-in for existing callers. With it disabled, the publisher
+still enforces the matrix-completeness and per-image evidence barrier while
+retaining the existing per-image exception policy behavior.
+
 ## Evidence
 
 Each target produces:

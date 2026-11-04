@@ -108,7 +108,7 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
             "Security gate for exact quarantine digest before promotion",
             "Promote verified image by digest",
             "verify_published_digest.py",
-            '--image-ref "$RELEASE_IMAGE"',
+            '--image-ref "$release_image"',
             '--expected-digest "$IMAGE_DIGEST"',
             "verify_attestations.py",
             "image_ref=\"$CANDIDATE_IMAGE@$IMAGE_DIGEST\"",
@@ -134,7 +134,7 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
 
     def test_build_uses_and_verifies_the_exact_candidate_source_sha(self) -> None:
         content = BUILD_WORKFLOW.read_text(encoding="utf-8")
-        build_job = content[content.index("  build:") : content.index("  aggregate:")]
+        build_job = content[content.index("  build:") : content.index("  aggregate_policy:")]
 
         checkout_start = build_job.index("      - name: Checkout source\n")
         checkout_end = build_job.index("\n      - name:", checkout_start + 1)
@@ -171,7 +171,7 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
 
     def test_matrix_security_gates_use_each_services_reviewed_exception_policy(self) -> None:
         content = BUILD_WORKFLOW.read_text(encoding="utf-8")
-        build_job = content[content.index("  build:") : content.index("  aggregate:")]
+        build_job = content[content.index("  build:") : content.index("  aggregate_policy:")]
 
         self.assertIn('policy = service.get("security_exceptions_file", "")', content)
         self.assertIn("has an unsafe security_exceptions_file", content)
@@ -184,7 +184,7 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
 
     def test_matrix_build_job_has_bounded_timeout_and_service_evidence(self) -> None:
         content = BUILD_WORKFLOW.read_text(encoding="utf-8")
-        build_job = content[content.index("  build:") : content.index("  aggregate:")]
+        build_job = content[content.index("  build:") : content.index("  aggregate_policy:")]
 
         self.assertIn("timeout-minutes: ${{ inputs.timeout_minutes }}", build_job)
         self.assertIn("name: Build ${{ matrix.service.name }}", build_job)
@@ -203,7 +203,7 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
 
     def test_build_cache_backend_is_selectable_and_local_path_is_required(self) -> None:
         content = BUILD_WORKFLOW.read_text(encoding="utf-8")
-        build_job = content[content.index("  build:") : content.index("  aggregate:")]
+        build_job = content[content.index("  build:") : content.index("  aggregate_policy:")]
 
         self.assertIn("cache_type:", content)
         self.assertIn("default: gha", content)
@@ -313,7 +313,7 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
 
         for needle in (
             "control_runner_json:",
-            "JSON labels for validation and manifest aggregation",
+            "JSON labels for validation, complete-set policy checks, and manifest aggregation",
             "default: '[\"ubuntu-latest\"]'",
             "runs-on: ${{ fromJSON(inputs.control_runner_json) }}",
         ):
@@ -321,7 +321,7 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
 
         self.assertEqual(
             content.count("runs-on: ${{ fromJSON(inputs.control_runner_json) }}"),
-            2,
+            3,
         )
         self.assertIn("`control_runner_json`", documentation)
         self.assertIn("dedicated self-hosted container-builder", documentation)
@@ -340,7 +340,8 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
         aggregate = content[content.index("  aggregate:"):]
 
         self.assertIn("merge-multiple: false", aggregate)
-        self.assertIn('rglob("release-fragment.json")', aggregate)
+        self.assertIn('rglob(fragment_name)', aggregate)
+        self.assertIn('"release-fragment.json" if os.environ["PUSHED"] == "true"', aggregate)
         self.assertNotIn("merge-multiple: true", aggregate)
         self.assertNotIn(
             'Path(os.environ["FRAGMENTS_DIR"]).glob("release-fragment.json")',
@@ -351,7 +352,7 @@ class ContainerBuildPublishContractTests(unittest.TestCase):
         content = BUILD_WORKFLOW.read_text(encoding="utf-8")
 
         self.assertIn("verify_published_digest.py", content)
-        self.assertIn('--image-ref "$RELEASE_IMAGE"', content)
+        self.assertIn('--image-ref "$release_image"', content)
         self.assertIn('--expected-digest "$IMAGE_DIGEST"', content)
         self.assertNotIn(
             'promoted_digest="$(docker buildx imagetools inspect "$RELEASE_IMAGE"',

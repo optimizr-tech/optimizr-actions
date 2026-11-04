@@ -24,8 +24,11 @@ queue wait and build.
 | `publish_mode` | string | `inline` | `inline` keeps the v1 behavior (BuildKit pushes from the exporter). `export-then-push` exports one OCI layout and publishes it separately. |
 | `publish_auth_retries` | number | `3` | `export-then-push` only: maximum credential refreshes after HTTP `401` for the whole publication (1-5). |
 
-No output, secret, or permission changes. The build job keeps exactly
-`contents: read`, `packages: write`, `attestations: write`, `id-token: write`.
+No caller input, output, secret, or permission changes. The build job has
+`contents: read` and `packages: write`; the separate promotion job retains
+`attestations: write` and `id-token: write` alongside those scopes. The caller
+must continue granting the same maximum permission set to the reusable
+workflow.
 
 With `push: true` and `publish_mode: export-then-push` the build job:
 
@@ -47,9 +50,12 @@ With `push: true` and `publish_mode: export-then-push` the build job:
      exponential backoff (1, 2, 4 ... seconds, capped at 30);
    - verifies that the candidate tag resolves to the expected digest;
 4. removes the OCI layout directory (also on failure);
-5. continues with the unchanged gates: quarantine SBOM/provenance
-   verification, exact-digest Trivy gate, promotion by digest with
-   `verify_published_digest.py`, digest fragment, and the aggregate manifest.
+5. continues with quarantine SBOM/provenance verification, the exact-digest
+   Trivy gate, and upload of a candidate fragment. The complete candidate
+   matrix is validated in a read-only control job. Only then does the separate
+   promotion matrix retag each exact digest with
+   `verify_published_digest.py` and upload release fragments for the aggregate
+   manifest.
 
 The publisher uses only the Python standard library, never follows registry
 redirects with credentials, never prints the credential, and allows plain HTTP
@@ -66,7 +72,9 @@ only for loopback test registries.
 | Layout root digest differs from the build digest | Fail before any registry call. |
 | Missing or tampered local blob | Fail closed before the tag is written. |
 | Registry reports another manifest digest, or the tag resolves to another digest | Fail closed. |
-| Build succeeded, publication failed | Security decision, evidence upload, digest fragment, and gate steps are skipped (`steps.publish.outcome != 'failure'`), matching an inline build failure; the aggregate manifest is not produced. |
+| Build or candidate publication failed | Security decision, evidence upload, candidate fragment, and gate steps are skipped (`steps.publish.outcome != 'failure'`), matching an inline build failure; aggregate validation, promotion, and the release manifest do not run. |
+| Candidate matrix is incomplete or aggregate validation fails | Promotion is skipped and the release manifest is not produced. |
+| A promotion or post-promotion digest verification fails | The aggregate release manifest is not produced. |
 | Invalid `publish_mode` or `publish_auth_retries` | The `validate` job fails before any build. |
 
 Operational notes:
@@ -78,7 +86,8 @@ Operational notes:
 - `inline` mode is byte-for-byte unchanged apart from the `push` expression
   (`inputs.push && inputs.publish_mode == 'inline'`, equal to `inputs.push`
   when the default is used) and the added `steps.publish.outcome` guard, which
-  is always satisfied when the publish step is skipped.
+  is always satisfied when the publish step is skipped. Both publication modes
+  now share the complete-matrix barrier before release-tag promotion.
 
 ## Migration
 

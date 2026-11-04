@@ -1185,7 +1185,7 @@
     },
     {
       "category": "build",
-      "evidence": "Matrix BuildKit images, immutable digest manifest, cache evidence and optional registry provenance",
+      "evidence": "Matrix BuildKit candidates, complete-set exception policy validation before immutable digest promotion, release manifest, cache evidence and optional registry provenance",
       "examples": [
         "uses: optimizr-tech/optimizr-actions/.github/workflows/_container-build-publish.yml@v1"
       ],
@@ -1208,6 +1208,9 @@
         "registry": "",
         "runner_json": "",
         "sbom": "",
+        "security_aggregate_exception_set_complete": "",
+        "security_aggregate_exception_validation": "",
+        "security_aggregate_unchanged_images_json": "",
         "security_db_max_age_hours": "",
         "security_ignore_unfixed": "",
         "security_remediation_window_enabled": "",
@@ -1220,7 +1223,7 @@
         "timeout_minutes": ""
       },
       "kind": "workflow",
-      "known_limitations": "Private GitHub artifact attestations require Enterprise Cloud; BuildKit provenance and SBOM remain enabled by default; persistent local BuildKit cache disk budget, cleanup, and same-service serialization are caller-managed",
+      "known_limitations": "Aggregate exception validation is opt-in and requires callers to declare the complete final image set; unchanged images must use immutable digests. Private GitHub artifact attestations require Enterprise Cloud; BuildKit provenance and SBOM remain enabled by default; persistent local BuildKit cache disk budget, cleanup, and same-service serialization are caller-managed",
       "maturity": "stable-v1",
       "metadata_status": "classified",
       "outputs": {
@@ -1235,7 +1238,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "d56eceb2e01ed6c6fb93878f0fc7998e368b4034f81944f23c8b10a03ce603ec",
+      "source_sha256": "c3b0bd83a2000db843fc50a7a4625a8e73ea1fd604665c01ee5fbd7de51c7753",
       "trust_boundary": "trusted-push"
     },
     {

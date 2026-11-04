@@ -8,17 +8,20 @@ emits BuildKit SBOM/provenance metadata, and uploads a `release-manifest.json` c
 digest-pinned image references.
 
 Publishing is opt-in through `push: true`. The registry write credential is
-only used by the build job and must be passed as a workflow secret. A push run
-first creates a unique, digest-addressed quarantine candidate. The exact
-candidate is scanned with the canonical Trivy security gate and its BuildKit
-attestation index plus SBOM and provenance predicates are verified against the
-candidate digest before `imagetools create` promotes that same digest to the SHA
-tags. Before promotion, the reusable uploads the publisher's security-gate
-evidence artifact. With `push: true`, missing evidence files or an unsuccessful
-upload blocks tag promotion; the manifest and deployment therefore cannot be
-emitted as successful. A candidate that fails either security verification
-cannot be promoted. The published SHA tags are convenience references;
-production must consume the manifest's `image@sha256:...` values.
+used only by the build and promotion jobs and must be passed as a workflow
+secret. A push run first creates a unique, digest-addressed quarantine
+candidate. The exact candidate is scanned with the canonical Trivy security
+gate and its BuildKit attestation index plus SBOM and provenance predicates are
+verified against the candidate digest. The matrix then uploads candidate
+fragments; no release tags are written during these build jobs. A read-only
+aggregate job verifies that every requested service has exactly one fragment
+bound to the candidate SHA, immutable digest, security evidence, and
+attestation result. Only after that barrier succeeds can the promotion matrix
+retag those exact digests. The publisher uploads a separate sanitized
+`container-policy-validation-<run-id>` artifact. Missing or partial evidence,
+or an unsuccessful evidence upload, blocks promotion and the release manifest.
+The published SHA tags are convenience references; production must consume
+the manifest's `image@sha256:...` values.
 
 Each service definition may include `security_exceptions_file`, a repository-
 relative path to that service's reviewed Optimizr exception policy. The reusable
@@ -27,6 +30,31 @@ service only. The path must use forward slashes, contain no `.` or `..` path
 segments, and omit shell metacharacters. Omitting the property preserves the
 default scan behavior. Per-service policies keep immutable image-ID scopes
 isolated when a matrix contains multiple images.
+
+Callers can opt in to validating those exception files against the complete
+final image set before any digest promotion:
+
+```yaml
+with:
+  security_aggregate_exception_validation: true
+  security_aggregate_exception_set_complete: true
+  security_aggregate_unchanged_images_json: >-
+    [{"service":"scheduler","image":"ghcr.io/optimizr/apps/scheduler@sha256:<64-lowercase-hex>","security_exceptions_file":"security/scheduler.json"}]
+```
+
+`services_json` supplies the rebuilt candidate services; the unchanged-images
+array supplies final images not rebuilt in this run. Together they must list
+the complete final set. Every unchanged image must use the configured
+registry/namespace, its service name, and an immutable SHA-256 digest. Policy
+paths are relative to the exact `candidate_sha` checkout. The aggregate check
+rejects missing or duplicate candidate fragments, digest or SHA mismatches,
+incomplete set declarations, unsafe or missing policy files, expired or
+out-of-set exception targets, and duplicate exception identities. The strict
+inputs default off, so existing callers retain per-image exception behavior.
+When enabled, set `security_aggregate_exception_set_complete: true` only after
+reviewing that both the rebuilt matrix and unchanged image list describe the
+whole final release. To roll back the opt-in, disable
+`security_aggregate_exception_validation` and remove its complete-set inputs.
 
 After promotion, the reusable performs a bounded read-after-write verification
 of the release tag. This tolerates short GHCR registry propagation delays while
@@ -43,8 +71,8 @@ provide this required input, so no caller migration is needed.
 
 GitHub validates the caller's permission ceiling before it creates jobs in a
 reusable workflow. Every caller job that uses this workflow must therefore
-declare the permissions required by the reusable build job, even when
-`push: false` or `github_attestation: false` is selected:
+declare the permissions required by the reusable build and promotion jobs,
+even when `push: false` or `github_attestation: false` is selected:
 
 ```yaml
 permissions:
@@ -60,14 +88,15 @@ the failure happens before the reusable can evaluate its inputs. The
 `github_attestation` input controls whether a GitHub artifact attestation is
 published; it does not remove the declared permission contract.
 
-The reusable accepts `runner_json` for the matrix build and
-`control_runner_json` for service-definition validation and release-manifest
-aggregation. Both default to `["ubuntu-latest"]` for backwards compatibility.
-Organizations that do not rely on GitHub-hosted billing should set both inputs
-to a dedicated self-hosted container-builder label with Docker, Buildx, Python,
-and artifact-download support. Do not point these jobs at a production service
-runner by default: the image matrix can contend for CPU, memory, disk, and
-Docker cache.
+The reusable accepts `runner_json` for matrix build and promotion jobs and
+`control_runner_json` for service-definition validation, complete-set policy
+validation, and release-manifest aggregation. Both default to
+`["ubuntu-latest"]` for backwards compatibility. Organizations that do not rely
+on GitHub-hosted billing can use a dedicated self-hosted container-builder
+label with Docker and Buildx for `runner_json`, and a trusted control runner
+with Python and artifact-download support for `control_runner_json`. Do not
+point build and promotion jobs at a production service runner by default: the
+image matrix can contend for CPU, memory, disk, and Docker cache.
 
 Each matrix image build defaults to a 150-minute timeout. Callers may set
 `timeout_minutes` from 1 through 360 for unusually long native builds; the
@@ -100,12 +129,15 @@ when `runner_json` selects a pool with enough simultaneously available builders
 and CPU, memory, disk, and BuildKit capacity; local cache paths remain isolated
 per service, but parallelism still increases host resource pressure.
 
-The build job checks out the exact reusable revision selected by GitHub through
-`job.workflow_repository` and `job.workflow_sha` into
+The build, policy-validation, and promotion jobs check out the exact reusable
+revision selected by GitHub through `job.workflow_repository` and
+`job.workflow_sha` into
 `.optimizr-actions-source`. Portable verification scripts and the composite
 security gate run from that checkout, never from the consumer repository. This
 keeps the caller responsible for Docker contexts and source files while the
-Actions repository remains the source of truth for its executable gates.
+Actions repository remains the source of truth for its executable gates. The
+policy-validation job reads exception files from a separate checkout of the
+exact candidate SHA and never executes that source tree.
 
 `_vps-monorepo-deploy.yml` and `_vps-self-hosted-deploy.yml` keep
 `deployment_mode: build` as their compatible default. Their
