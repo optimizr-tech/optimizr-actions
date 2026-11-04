@@ -302,7 +302,10 @@ class PublisherRemediationWindowWorkflowTests(unittest.TestCase):
     def test_promotion_depends_on_the_governed_decision_and_records_its_evidence(self) -> None:
         content = WORKFLOW_PATH.read_text(encoding="utf-8")
         self.assertIn("remediation_window_contract.py record", content)
-        self.assertIn("security-decision.outputs.allowed == 'true'", content)
+        self.assertIn("SECURITY_ALLOWED: ${{ steps.security-decision.outputs.allowed }}", content)
+        self.assertIn('[ "$SECURITY_ALLOWED" != true ]', content)
+        promote_job = content[content.index("  promote:") : content.index("  aggregate:")]
+        self.assertIn("needs.aggregate_policy.result == 'success'", promote_job)
         self.assertIn('"security_evidence"', content)
         self.assertIn("publisher-security-decision.json", content)
         self.assertIn('security_evidence.get("source_sha") != os.environ["CANDIDATE_SHA"]', content)

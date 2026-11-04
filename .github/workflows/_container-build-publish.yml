@@ -4,12 +4,12 @@ on:
   workflow_call:
     inputs:
       runner_json:
-        description: JSON labels for the build runner
+        description: JSON labels for matrix build and promotion runners
         required: false
         type: string
         default: '["ubuntu-latest"]'
       control_runner_json:
-        description: JSON labels for validation and manifest aggregation
+        description: JSON labels for validation, complete-set policy checks, and manifest aggregation
         required: false
         type: string
         default: '["ubuntu-latest"]'
@@ -140,6 +140,21 @@ on:
         required: false
         type: string
         default: ''
+      security_aggregate_exception_validation:
+        description: Opt in to validating exception policies against the complete final image set before any digest promotion
+        required: false
+        type: boolean
+        default: false
+      security_aggregate_exception_set_complete:
+        description: Confirm that services_json plus unchanged image refs describe the complete final image set
+        required: false
+        type: boolean
+        default: false
+      security_aggregate_unchanged_images_json:
+        description: JSON array of unchanged final images with immutable refs and optional exception policy paths
+        required: false
+        type: string
+        default: '[]'
     secrets:
       registry_username:
         description: Registry username used only when push is true
@@ -166,6 +181,8 @@ jobs:
       contents: read
     outputs:
       services_json: ${{ steps.validate.outputs.services_json }}
+      unchanged_images_json: ${{ steps.validate.outputs.unchanged_images_json }}
+      aggregate_exception_validation: ${{ steps.validate.outputs.aggregate_exception_validation }}
     steps:
       - name: Checkout exact reusable implementation for remediation validation
         if: inputs.security_remediation_window_enabled
@@ -197,6 +214,9 @@ jobs:
           PUBLISH_AUTH_RETRIES: ${{ inputs.publish_auth_retries }}
           NETWORK_RETRY_ATTEMPTS: ${{ inputs.network_retry_attempts }}
           NETWORK_RETRY_BACKOFF_SECONDS: ${{ inputs.network_retry_backoff_seconds }}
+          SECURITY_AGGREGATE_EXCEPTION_VALIDATION: ${{ inputs.security_aggregate_exception_validation }}
+          SECURITY_AGGREGATE_EXCEPTION_SET_COMPLETE: ${{ inputs.security_aggregate_exception_set_complete }}
+          SECURITY_AGGREGATE_UNCHANGED_IMAGES_JSON: ${{ inputs.security_aggregate_unchanged_images_json }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -281,8 +301,52 @@ jobs:
               if not isinstance(target, str) or "\n" in target:
                   raise SystemExit(f"service {name} has an invalid target")
 
+          try:
+              unchanged_images = json.loads(os.environ["SECURITY_AGGREGATE_UNCHANGED_IMAGES_JSON"])
+          except json.JSONDecodeError as exc:
+              raise SystemExit("security_aggregate_unchanged_images_json must be valid JSON") from exc
+          if not isinstance(unchanged_images, list):
+              raise SystemExit("security_aggregate_unchanged_images_json must be a JSON array")
+          strict_validation = os.environ["SECURITY_AGGREGATE_EXCEPTION_VALIDATION"] == "true"
+          set_complete = os.environ["SECURITY_AGGREGATE_EXCEPTION_SET_COMPLETE"] == "true"
+          if strict_validation and not set_complete:
+              raise SystemExit("strict exception validation requires security_aggregate_exception_set_complete=true")
+          if not strict_validation and (set_complete or unchanged_images):
+              raise SystemExit("complete-set declarations require security_aggregate_exception_validation=true")
+          unchanged_names = set()
+          if strict_validation:
+              registry = os.environ["REGISTRY"]
+              namespace = os.environ["IMAGE_NAMESPACE"]
+              if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]*(?::[0-9]+)?", registry):
+                  raise SystemExit("strict exception validation requires a registry hostname")
+              if not re.fullmatch(r"[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*", namespace):
+                  raise SystemExit("strict exception validation requires a safe image namespace")
+              for index, image in enumerate(unchanged_images):
+                  if not isinstance(image, dict) or set(image) - {"service", "image", "security_exceptions_file"}:
+                      raise SystemExit(f"unchanged_images[{index}] must contain only service, image, and security_exceptions_file")
+                  name = image.get("service")
+                  if not isinstance(name, str) or not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,62}", name):
+                      raise SystemExit(f"unchanged_images[{index}].service must be a bounded lowercase identifier")
+                  if name in names or name in unchanged_names:
+                      raise SystemExit(f"duplicate final image service: {name}")
+                  unchanged_names.add(name)
+                  image_ref = image.get("image")
+                  expected_prefix = f"{registry}/{namespace}/{name}@"
+                  if not isinstance(image_ref, str) or not image_ref.startswith(expected_prefix) or not re.fullmatch(r"sha256:[0-9a-f]{64}", image_ref[len(expected_prefix):]):
+                      raise SystemExit(f"unchanged_images[{index}].image must be an immutable digest ref for its service")
+                  policy = image.get("security_exceptions_file", "")
+                  if (
+                      not isinstance(policy, str)
+                      or len(policy) > 1024
+                      or (policy and not re.fullmatch(r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*", policy))
+                      or any(part in {".", ".."} for part in policy.split("/"))
+                  ):
+                      raise SystemExit(f"unchanged_images[{index}] has an unsafe security_exceptions_file")
+
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write("services_json=" + json.dumps(services, separators=(",", ":")) + "\n")
+              output.write("unchanged_images_json=" + json.dumps(unchanged_images, separators=(",", ":")) + "\n")
+              output.write("aggregate_exception_validation=" + str(strict_validation).lower() + "\n")
           PY
 
       - name: Validate remediation-window contract
@@ -303,8 +367,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-      attestations: write
-      id-token: write
     strategy:
       fail-fast: false
       max-parallel: ${{ inputs.max_parallel }}
@@ -594,59 +656,37 @@ jobs:
           if-no-files-found: ${{ inputs.push && 'error' || 'warn' }}
           retention-days: ${{ inputs.artifact_retention_days }}
 
-      - name: Promote verified image by digest
-        id: promote
-        if: >-
-          success() &&
-          inputs.push &&
-          steps.security-evidence.outcome == 'success' &&
-          steps.verify-quarantine-attestations.outcome == 'success' &&
-          steps.security-decision.outputs.allowed == 'true'
+      - name: Require pre-promotion gates
+        if: always() && steps.build.outcome == 'success' && steps.publish.outcome != 'failure'
         shell: bash
         env:
-          CANDIDATE_IMAGE: ${{ env.CANDIDATE_IMAGE }}
-          RELEASE_IMAGE: ${{ env.RELEASE_IMAGE }}
-          CANDIDATE_SHA: ${{ env.CANDIDATE_SHA }}
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          PUSH: ${{ inputs.push }}
+          SECURITY_ALLOWED: ${{ steps.security-decision.outputs.allowed }}
+          SECURITY_EVIDENCE_OUTCOME: ${{ steps.security-evidence.outcome }}
+          ATTESTATION_OUTCOME: ${{ inputs.push && steps.verify-quarantine-attestations.outcome || 'success' }}
         run: |
           set -euo pipefail
-          case "$IMAGE_DIGEST" in
-            sha256:[0-9a-f][0-9a-f]*) ;;
-            *) echo "::error::Buildx returned an invalid immutable digest" >&2; exit 1 ;;
-          esac
-          python3 "$RETRY_NETWORK" --label "imagetools create release tags" \
-            --attempts "$NETWORK_RETRY_ATTEMPTS" --backoff-seconds "$NETWORK_RETRY_BACKOFF_SECONDS" \
-            -- docker buildx imagetools create \
-            --tag "$RELEASE_IMAGE" \
-            --tag "$IMAGE_NAME:sha-$CANDIDATE_SHA" \
-            "$CANDIDATE_IMAGE@$IMAGE_DIGEST"
-          python3 .optimizr-actions-source/scripts/container_release/verify_published_digest.py \
-            --image-ref "$RELEASE_IMAGE" \
-            --expected-digest "$IMAGE_DIGEST"
+          if [ "$SECURITY_ALLOWED" != true ]; then
+            echo "::error::exact image security gate failed before publication/promotion" >&2
+            exit 1
+          fi
+          if [ "$PUSH" = true ] && { [ "$SECURITY_EVIDENCE_OUTCOME" != success ] || [ "$ATTESTATION_OUTCOME" != success ]; }; then
+            echo "::error::required security evidence upload or SBOM/provenance verification failed" >&2
+            exit 1
+          fi
 
-      - name: Attest published image provenance
-        if: inputs.push && steps.promote.outcome == 'success' && inputs.github_attestation
-        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45
-        with:
-          subject-name: ${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.build.outputs.digest }}
-          push-to-registry: true
-
-      - name: Write image digest fragment
+      - name: Write candidate digest fragment
         if: always() && steps.build.outcome == 'success' && steps.publish.outcome != 'failure'
         shell: bash
         env:
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-          IMAGE_TAG: ${{ env.RELEASE_IMAGE }}
           CANDIDATE_IMAGE: ${{ env.CANDIDATE_IMAGE }}
-          PUBLISHED: ${{ inputs.push && steps.promote.outcome == 'success' }}
           ATTESTATION_VERIFIED: ${{ !inputs.push || steps.verify-quarantine-attestations.outcome == 'success' }}
           SECURITY_OUTCOME: ${{ inputs.push && steps.prepromotion-security.outcome || steps.prepublish-security.outcome }}
           SECURITY_RESULT: ${{ inputs.push && steps.prepromotion-security.outputs.result || steps.prepublish-security.outputs.result }}
           SECURITY_CLASSIFICATION: ${{ inputs.push && steps.prepromotion-security.outputs.classification || steps.prepublish-security.outputs.classification }}
           SECURITY_EVIDENCE_PATH: artifacts/security-gate/publisher-security-decision.json
-          FRAGMENT_DIR: ${{ runner.temp }}/optimizr-container-manifest
+          FRAGMENT_DIR: ${{ runner.temp }}/optimizr-container-candidate
         run: |
           set -euo pipefail
           mkdir -p "$FRAGMENT_DIR"
@@ -659,14 +699,13 @@ jobs:
           digest = os.environ["IMAGE_DIGEST"]
           if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
               raise SystemExit("Buildx did not return an immutable image digest")
-          image_tag = os.environ["IMAGE_TAG"] if os.environ["PUBLISHED"] == "true" else os.environ["CANDIDATE_IMAGE"]
-          image_name = image_tag.rsplit(":", 1)[0]
           payload = {
               "service": os.environ["SERVICE_NAME"],
-              "image": f"{image_name}@{digest}",
-              "tag": image_tag,
+              "candidate_sha": os.environ["CANDIDATE_SHA"],
+              "image": f'{os.environ["CANDIDATE_IMAGE"].rsplit(":", 1)[0]}@{digest}',
+              "tag": os.environ["CANDIDATE_IMAGE"],
               "digest": digest,
-              "published": os.environ["PUBLISHED"] == "true",
+              "published": False,
               "attestation_verified": os.environ["ATTESTATION_VERIFIED"] == "true",
               "security_gate_outcome": os.environ["SECURITY_OUTCOME"],
               "security_result": os.environ["SECURITY_RESULT"],
@@ -679,44 +718,290 @@ jobs:
               raise SystemExit("security evidence is not bound to the built image digest")
           if payload["security_evidence"].get("source_sha") != os.environ["CANDIDATE_SHA"]:
               raise SystemExit("security evidence is not bound to the candidate source commit")
-          Path(os.environ["FRAGMENT_DIR"], "release-fragment.json").write_text(
+          Path(os.environ["FRAGMENT_DIR"], "candidate-fragment.json").write_text(
               json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8"
           )
           PY
 
-      - name: Require pre-promotion gates
-        if: always() && steps.build.outcome == 'success' && steps.publish.outcome != 'failure'
-        shell: bash
-        env:
-          PUSH: ${{ inputs.push }}
-          SECURITY_ALLOWED: ${{ steps.security-decision.outputs.allowed }}
-          SECURITY_EVIDENCE_OUTCOME: ${{ steps.security-evidence.outcome }}
-          ATTESTATION_OUTCOME: ${{ inputs.push && steps.verify-quarantine-attestations.outcome || 'success' }}
-          PROMOTE_OUTCOME: ${{ inputs.push && steps.promote.outcome || 'success' }}
-        run: |
-          set -euo pipefail
-          if [ "$SECURITY_ALLOWED" != true ]; then
-            echo "::error::exact image security gate failed before publication/promotion" >&2
-            exit 1
-          fi
-          if [ "$PUSH" = true ] && { [ "$SECURITY_EVIDENCE_OUTCOME" != success ] || [ "$ATTESTATION_OUTCOME" != success ] || [ "$PROMOTE_OUTCOME" != success ]; }; then
-            echo "::error::required security evidence upload, SBOM/provenance verification, or digest promotion failed" >&2
-            exit 1
-          fi
-
-      - name: Upload image digest fragment
+      - name: Upload candidate digest fragment
         if: always() && steps.build.outcome == 'success' && steps.publish.outcome != 'failure'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
+          name: container-candidate-${{ matrix.service.name }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/optimizr-container-candidate/candidate-fragment.json
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact_retention_days }}
+
+  aggregate_policy:
+    name: Validate complete image and exception set
+    needs: [validate, build]
+    if: needs.build.result == 'success'
+    runs-on: ${{ fromJSON(inputs.control_runner_json) }}
+    permissions:
+      contents: read
+    steps:
+      - name: Download candidate digest fragments
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: container-candidate-*-${{ github.run_id }}
+          merge-multiple: false
+          path: candidate-fragments
+
+      - name: Checkout exact reusable implementation
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .optimizr-actions-source
+          persist-credentials: false
+
+      - name: Checkout candidate policy files
+        if: inputs.security_aggregate_exception_validation
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ inputs.candidate_sha }}
+          path: candidate-source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate complete image and exception set
+        id: validation
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          REGISTRY: ${{ inputs.registry }}
+          IMAGE_NAMESPACE: ${{ inputs.image_namespace }}
+          SERVICES_JSON: ${{ needs.validate.outputs.services_json }}
+          UNCHANGED_IMAGES_JSON: ${{ needs.validate.outputs.unchanged_images_json }}
+          STRICT_VALIDATION: ${{ needs.validate.outputs.aggregate_exception_validation }}
+          PUSH: ${{ inputs.push }}
+          POLICY_ROOT: candidate-source
+        run: |
+          set -euo pipefail
+          arguments=(
+            --services-json "$SERVICES_JSON"
+            --candidate-fragments-dir candidate-fragments
+            --candidate-sha "$CANDIDATE_SHA"
+            --registry "$REGISTRY"
+            --image-namespace "$IMAGE_NAMESPACE"
+            --unchanged-images-json "$UNCHANGED_IMAGES_JSON"
+            --policy-root "$POLICY_ROOT"
+            --output publisher-exception-validation.json
+          )
+          if [ "$STRICT_VALIDATION" = true ]; then
+            arguments+=(--validate-policies --set-complete)
+          fi
+          if [ "$PUSH" = true ]; then
+            arguments+=(--require-promotion-authorized --require-attestations)
+          fi
+          export PYTHONPATH="$GITHUB_WORKSPACE/.optimizr-actions-source${PYTHONPATH:+:$PYTHONPATH}"
+          python3 -m scripts.container_release.validate_publisher_exception_set \
+            "${arguments[@]}"
+
+      - name: Upload sanitized policy validation evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: container-policy-validation-${{ github.run_id }}
+          path: publisher-exception-validation.json
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact_retention_days }}
+
+  promote:
+    name: Promote ${{ matrix.service.name }} after set validation
+    needs: [validate, build, aggregate_policy]
+    if: ${{ !cancelled() && inputs.push && needs.build.result == 'success' && needs.aggregate_policy.result == 'success' }}
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ inputs.max_parallel }}
+      matrix:
+        service: ${{ fromJSON(needs.validate.outputs.services_json) }}
+    env:
+      IMAGE_NAME: ${{ inputs.registry }}/${{ inputs.image_namespace }}/${{ matrix.service.name }}
+      SERVICE_NAME: ${{ matrix.service.name }}
+      CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      NETWORK_RETRY_ATTEMPTS: ${{ inputs.network_retry_attempts }}
+      NETWORK_RETRY_BACKOFF_SECONDS: ${{ inputs.network_retry_backoff_seconds }}
+      RETRY_NETWORK: .optimizr-actions-source/scripts/container_release/retry_network.py
+    steps:
+      - name: Checkout exact reusable implementation
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .optimizr-actions-source
+          persist-credentials: false
+
+      - name: Download candidate digest fragment
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: container-candidate-${{ matrix.service.name }}-${{ github.run_id }}
+          path: candidate-fragment
+
+      - name: Download aggregate policy validation evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: container-policy-validation-${{ github.run_id }}
+          path: policy-validation
+
+      - name: Verify aggregate receipt binds this candidate image
+        id: verify-aggregate-policy
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ env.CANDIDATE_SHA }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          SERVICE_NAME: ${{ env.SERVICE_NAME }}
+          STRICT_VALIDATION: ${{ needs.validate.outputs.aggregate_exception_validation }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          candidate = json.loads(Path("candidate-fragment/candidate-fragment.json").read_text(encoding="utf-8"))
+          receipt = json.loads(Path("policy-validation/publisher-exception-validation.json").read_text(encoding="utf-8"))
+          if receipt.get("candidate_sha") != os.environ["CANDIDATE_SHA"]:
+              raise SystemExit("aggregate validation receipt is bound to another candidate source commit")
+          expected_status = "validated" if os.environ["STRICT_VALIDATION"] == "true" else "not_requested"
+          expected_set_complete = os.environ["STRICT_VALIDATION"] == "true"
+          if (
+              receipt.get("status") != expected_status
+              or receipt.get("candidate_matrix_complete") is not True
+              or receipt.get("set_complete") is not expected_set_complete
+          ):
+              raise SystemExit("aggregate validation receipt does not authorize this image set")
+          if candidate.get("candidate_sha") != os.environ["CANDIDATE_SHA"]:
+              raise SystemExit("candidate fragment is bound to another source commit")
+          if candidate.get("service") != os.environ["SERVICE_NAME"]:
+              raise SystemExit("candidate fragment is for another service")
+          digest = candidate.get("digest", "")
+          if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+              raise SystemExit("candidate fragment has an invalid image digest")
+          expected_image = f'{os.environ["IMAGE_NAME"]}@{digest}'
+          if candidate.get("image") != expected_image:
+              raise SystemExit("candidate fragment does not match the configured image repository")
+          if candidate.get("attestation_verified") is not True:
+              raise SystemExit("candidate fragment is missing verified quarantine attestations")
+          if candidate.get("security_evidence", {}).get("promotion_authorized") is not True:
+              raise SystemExit("candidate fragment lacks per-image promotion authorization")
+          matches = [item for item in receipt.get("images", []) if item.get("service") == os.environ["SERVICE_NAME"]]
+          if len(matches) != 1 or matches[0].get("image") != expected_image:
+              raise SystemExit("aggregate validation receipt does not include this exact candidate image")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("image_digest=" + digest + "\n")
+          PY
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+
+      - name: Log in to GHCR for promotion
+        id: registry-login
+        continue-on-error: true
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ secrets.registry_username }}
+          password: ${{ secrets.registry_password }}
+
+      - name: Retry GHCR login before promotion
+        if: steps.registry-login.outcome == 'failure'
+        shell: bash
+        env:
+          REGISTRY: ${{ inputs.registry }}
+          REGISTRY_USERNAME: ${{ secrets.registry_username }}
+          REGISTRY_PASSWORD: ${{ secrets.registry_password }}
+        run: |
+          set -euo pipefail
+          python3 "$RETRY_NETWORK" --label "docker login $REGISTRY" \
+            --attempts "$NETWORK_RETRY_ATTEMPTS" --backoff-seconds "$NETWORK_RETRY_BACKOFF_SECONDS" \
+            --prior-failed-attempts 1 --stdin-env REGISTRY_PASSWORD \
+            -- docker login "$REGISTRY" --username "$REGISTRY_USERNAME" --password-stdin
+
+      - name: Promote verified image by digest
+        id: promote-image
+        if: steps.verify-aggregate-policy.outcome == 'success'
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ steps.verify-aggregate-policy.outputs.image_digest }}
+        run: |
+          set -euo pipefail
+          candidate_image="${IMAGE_NAME}:candidate-${CANDIDATE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          release_image="${IMAGE_NAME}:${CANDIDATE_SHA}"
+          case "$IMAGE_DIGEST" in
+            sha256:[0-9a-f][0-9a-f]*) ;;
+            *) echo "::error::Buildx returned an invalid immutable digest" >&2; exit 1 ;;
+          esac
+          python3 "$RETRY_NETWORK" --label "imagetools create release tags" \
+            --attempts "$NETWORK_RETRY_ATTEMPTS" --backoff-seconds "$NETWORK_RETRY_BACKOFF_SECONDS" \
+            -- docker buildx imagetools create \
+            --tag "$release_image" \
+            --tag "$IMAGE_NAME:sha-$CANDIDATE_SHA" \
+            "$candidate_image@$IMAGE_DIGEST"
+          python3 .optimizr-actions-source/scripts/container_release/verify_published_digest.py \
+            --image-ref "$release_image" \
+            --expected-digest "$IMAGE_DIGEST"
+
+      - name: Attest published image provenance
+        if: steps.promote-image.outcome == 'success' && inputs.github_attestation
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.verify-aggregate-policy.outputs.image_digest }}
+          push-to-registry: true
+
+      - name: Write promoted image digest fragment
+        if: success()
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ steps.verify-aggregate-policy.outputs.image_digest }}
+          ATTESTATION_VERIFIED: true
+          SECURITY_EVIDENCE_PATH: candidate-fragment/candidate-fragment.json
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          candidate = json.loads(Path(os.environ["SECURITY_EVIDENCE_PATH"]).read_text(encoding="utf-8"))
+          digest = os.environ["IMAGE_DIGEST"]
+          payload = {
+              "service": os.environ["SERVICE_NAME"],
+              "image": candidate["image"],
+              "tag": f'{os.environ["IMAGE_NAME"]}:{os.environ["CANDIDATE_SHA"]}',
+              "digest": digest,
+              "published": True,
+              "attestation_verified": True,
+              "security_gate_outcome": candidate["security_gate_outcome"],
+              "security_result": candidate["security_result"],
+              "security_classification": candidate["security_classification"],
+              "security_evidence": candidate["security_evidence"],
+          }
+          Path("release-fragment.json").write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+
+      - name: Upload promoted image digest fragment
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
           name: container-manifest-${{ matrix.service.name }}-${{ github.run_id }}
-          path: ${{ runner.temp }}/optimizr-container-manifest/release-fragment.json
+          path: release-fragment.json
           if-no-files-found: error
           retention-days: ${{ inputs.artifact_retention_days }}
 
   aggregate:
     name: Aggregate release manifest
-    needs: build
-    if: needs.build.result == 'success'
+    needs: [validate, build, aggregate_policy, promote]
+    if: ${{ !cancelled() && needs.validate.result == 'success' && needs.build.result == 'success' && needs.aggregate_policy.result == 'success' && (!inputs.push || needs.promote.result == 'success') }}
     runs-on: ${{ fromJSON(inputs.control_runner_json) }}
     permissions:
       contents: read
@@ -728,12 +1013,18 @@ jobs:
       - name: Download image digest fragments
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
-          pattern: container-manifest-*-${{ github.run_id }}
+          pattern: ${{ inputs.push && format('container-manifest-*-{0}', github.run_id) || format('container-candidate-*-{0}', github.run_id) }}
           # Keep each artifact in its own directory. Every service intentionally
           # uploads the same filename; merging them would concatenate/overwrite
           # fragments on self-hosted runners before the JSON parser sees them.
           merge-multiple: false
           path: fragments
+
+      - name: Download aggregate policy validation evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: container-policy-validation-${{ github.run_id }}
+          path: policy-validation
 
       - name: Create release manifest
         id: manifest
@@ -742,8 +1033,9 @@ jobs:
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
           IMAGE_NAMESPACE: ${{ inputs.image_namespace }}
           REGISTRY: ${{ inputs.registry }}
-          SERVICES_JSON: ${{ inputs.services_json }}
+          SERVICES_JSON: ${{ needs.validate.outputs.services_json }}
           PUSHED: ${{ inputs.push }}
+          SECURITY_AGGREGATE_EXCEPTION_VALIDATION: ${{ needs.validate.outputs.aggregate_exception_validation }}
           REPOSITORY: ${{ github.repository }}
           FRAGMENTS_DIR: fragments
         run: |
@@ -757,7 +1049,8 @@ jobs:
           expected = json.loads(os.environ["SERVICES_JSON"])
           expected_names = {item["name"] for item in expected}
           fragments = []
-          for path in sorted(Path(os.environ["FRAGMENTS_DIR"]).rglob("release-fragment.json")):
+          fragment_name = "release-fragment.json" if os.environ["PUSHED"] == "true" else "candidate-fragment.json"
+          for path in sorted(Path(os.environ["FRAGMENTS_DIR"]).rglob(fragment_name)):
               fragments.append(json.loads(path.read_text(encoding="utf-8")))
           if {item.get("service") for item in fragments} != expected_names:
               raise SystemExit("release manifest does not contain exactly the requested services")
@@ -781,6 +1074,22 @@ jobs:
                   raise SystemExit("published release manifest contains an unpublished image")
               if os.environ["PUSHED"] == "true" and not item.get("attestation_verified"):
                   raise SystemExit("published release manifest is missing attestation verification")
+              if os.environ["PUSHED"] != "true":
+                  item.pop("candidate_sha", None)
+
+          validation = json.loads(
+              Path("policy-validation/publisher-exception-validation.json").read_text(encoding="utf-8")
+          )
+          if validation.get("candidate_sha") != os.environ["CANDIDATE_SHA"]:
+              raise SystemExit("policy validation evidence does not match the candidate source commit")
+          expected_status = "validated" if os.environ["SECURITY_AGGREGATE_EXCEPTION_VALIDATION"] == "true" else "not_requested"
+          expected_set_complete = os.environ["SECURITY_AGGREGATE_EXCEPTION_VALIDATION"] == "true"
+          if (
+              validation.get("status") != expected_status
+              or validation.get("candidate_matrix_complete") is not True
+              or validation.get("set_complete") is not expected_set_complete
+          ):
+              raise SystemExit("policy validation evidence does not match the requested validation mode")
 
           manifest = {
               "schema_version": "1.0",
