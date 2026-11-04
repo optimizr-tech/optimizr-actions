@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REQUIRES_LINUX_FLOCK = (
     os.name != "nt" and shutil.which("bash") and shutil.which("flock")
 )
-MARKER_TIMEOUT_SECONDS = 20
+MARKER_TIMEOUT_SECONDS = 60
 
 
 @unittest.skipUnless(
@@ -64,12 +64,7 @@ if [[ "$args" == *--skip-db-update* ]]; then
   fi
   if [[ -n "${TRIVY_SCAN_MARKER:-}" ]]; then
     : > "$TRIVY_SCAN_MARKER"
-    deadline=$((SECONDS + 8))
     while [[ ! -f "$TRIVY_SCAN_RELEASE" ]]; do
-      if ((SECONDS >= deadline)); then
-        echo scan-wait-timeout >> "$TRIVY_LOG"
-        exit 20
-      fi
       sleep 0.05
     done
   fi
@@ -155,6 +150,7 @@ trivy --cache-dir "$OPTIMIZR_TRIVY_CACHE_DIR" image \
         processes: list[subprocess.Popen[str]] = []
         process_outputs: dict[subprocess.Popen[str], tuple[str, str]] = {}
         marker_failure: tuple[str, Path, subprocess.Popen[str]] | None = None
+        overlap_failure = False
         try:
             first = subprocess.Popen(
                 ["bash", "-c", self.shared_scan_script()],
@@ -179,6 +175,8 @@ trivy --cache-dir "$OPTIMIZR_TRIVY_CACHE_DIR" image \
                 processes.append(second)
                 if not self.wait_for_marker(second_marker, second):
                     marker_failure = ("second", second_marker, second)
+                elif first.poll() is not None:
+                    overlap_failure = True
         finally:
             release.touch()
             for process in processes:
@@ -196,6 +194,16 @@ trivy --cache-dir "$OPTIMIZR_TRIVY_CACHE_DIR" image \
                     stdout,
                     stderr,
                 )
+                + f"; {self.process_diagnostics(processes, process_outputs)}"
+                + f"; trivy_log={self.read_trivy_log()!r}"
+            )
+
+        if overlap_failure:
+            self.fail(
+                "first repository scan exited before the second repository scan "
+                "started; "
+                f"{self.process_diagnostics(processes, process_outputs)}; "
+                f"trivy_log={self.read_trivy_log()!r}"
             )
 
         for process in processes:
@@ -236,6 +244,23 @@ trivy --cache-dir "$OPTIMIZR_TRIVY_CACHE_DIR" image \
                 except ProcessLookupError:
                     pass
                 return process.communicate(timeout=5)
+
+    @staticmethod
+    def process_diagnostics(
+        processes: list[subprocess.Popen[str]],
+        process_outputs: dict[subprocess.Popen[str], tuple[str, str]],
+    ) -> str:
+        return "; ".join(
+            f"process[{index}] exit_code={process.returncode}; "
+            f"stdout={process_outputs[process][0]!r}; "
+            f"stderr={process_outputs[process][1]!r}"
+            for index, process in enumerate(processes, start=1)
+        )
+
+    def read_trivy_log(self) -> list[str]:
+        if not self.trivy_log.exists():
+            return []
+        return self.trivy_log.read_text(encoding="utf-8").splitlines()
 
     @staticmethod
     def marker_failure_message(
