@@ -129,14 +129,6 @@ jobs:
           ref: ${{ github.sha }}
           clean: true
           persist-credentials: false
-      - name: Checkout reusable evidence helper
-        id: checkout_evidence
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          repository: ${{ job.workflow_repository }}
-          ref: ${{ job.workflow_sha }}
-          path: .optimizr-actions-source
-          persist-credentials: false
       - name: Verify checkout integrity
         uses: optimizr-tech/optimizr-actions/.github/actions/checkout-integrity@v1
         with:
@@ -147,6 +139,15 @@ jobs:
           image_refs: ${{ inputs.image_refs }}
           trivy_version: ${{ inputs.trivy_version }}
           cache_scope: ${{ inputs.self_hosted_mode == 'ephemeral-pr' && 'repository' || inputs.trivy_cache_scope }}
+      - name: Checkout reusable evidence helper
+        id: checkout_evidence
+        if: always()
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .optimizr-actions-source
+          persist-credentials: false
       - name: Write SHA-bound evidence bundle
         id: bundle
         if: ${{ always() && steps.checkout_evidence.outcome == 'success' }}
