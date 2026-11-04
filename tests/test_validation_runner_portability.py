@@ -57,6 +57,32 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
                 self.assertIn("clean: true", text)
                 self.assertIn("checkout-integrity@v1", text)
 
+    def test_evidence_helper_checkout_happens_after_integrity_verification(self):
+        validation_steps = {
+            "_dependency-policy.yml": "Enforce dependency policy",
+            "_sast-gate.yml": "Run local SAST profiles",
+            "_security-gate.yml": "Run portable security gate",
+            "_static-lint.yml": "Run portable static lint",
+            "_supply-chain-evidence.yml": "Generate image evidence",
+        }
+        for name, validation_step in validation_steps.items():
+            text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
+            with self.subTest(workflow=name):
+                verification = text.index("Verify checkout integrity")
+                validation = text.index(validation_step)
+                helper = text.index("Checkout reusable evidence helper")
+                bundle = text.index("Write SHA-bound evidence bundle")
+                self.assertLess(verification, validation)
+                self.assertLess(validation, helper)
+                self.assertLess(helper, bundle)
+
+                helper_end = text.find("\n      - name:", helper)
+                helper_block = text[helper:helper_end]
+                self.assertRegex(
+                    helper_block,
+                    r"(?m)^\s+if:\s+always\(\)\s*$",
+                )
+
     def test_matrix_reusables_require_materialized_paths_before_consuming_workspace(self):
         security = (
             ROOT / ".github/workflows/_quality-gate-collect-security.yml"

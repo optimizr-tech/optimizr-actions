@@ -146,14 +146,6 @@ jobs:
           clean: true
           fetch-depth: 0
           persist-credentials: false
-      - name: Checkout reusable evidence helper
-        id: checkout_evidence
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          repository: ${{ job.workflow_repository }}
-          ref: ${{ job.workflow_sha }}
-          path: .optimizr-actions-source
-          persist-credentials: false
       - name: Derive tracked dependency paths
         id: checkout_paths
         shell: bash
@@ -228,6 +220,15 @@ jobs:
           cache_scope: ${{ inputs.self_hosted_mode == 'ephemeral-pr' && 'repository' || inputs.trivy_cache_scope }}
           node_version: ${{ inputs.node_version }}
           npm_version: ${{ inputs.npm_version }}
+      - name: Checkout reusable evidence helper
+        id: checkout_evidence
+        if: always()
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .optimizr-actions-source
+          persist-credentials: false
       - name: Write SHA-bound evidence bundle
         id: bundle
         if: ${{ always() && steps.checkout_evidence.outcome == 'success' }}
