@@ -1,0 +1,86 @@
+name: _ci-status-gate
+
+# Stable status aggregation only. This workflow never checks out or executes caller code.
+on:
+  workflow_call:
+    inputs:
+      runner_json:
+        description: Required explicit runner label array for this status-only job
+        required: true
+        type: string
+      test_result:
+        description: Result from the caller's candidate or trusted-main test job
+        required: true
+        type: string
+      metadata_result:
+        description: Result from the caller's PR metadata job
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  ci-status-gate:
+    name: CI status gate
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: 2
+    steps:
+      - name: Validate caller result values and report the stable CI status
+        shell: bash
+        env:
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          TEST_RESULT: ${{ inputs.test_result }}
+          METADATA_RESULT: ${{ inputs.metadata_result }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message || '' }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          runner_labels = json.loads(os.environ["RUNNER_JSON"])
+          if (
+              not isinstance(runner_labels, list)
+              or not runner_labels
+              or any(not isinstance(label, str) or not label for label in runner_labels)
+          ):
+              raise SystemExit("runner_json must be a non-empty JSON string array")
+
+          allowed_results = {"success", "failure", "cancelled", "skipped"}
+          test_result = os.environ["TEST_RESULT"]
+          metadata_result = os.environ["METADATA_RESULT"]
+          if test_result not in allowed_results or metadata_result not in allowed_results:
+              raise SystemExit("caller job result is missing or unrecognized")
+
+          event_name = os.environ["EVENT_NAME"]
+          if event_name == "pull_request":
+              if metadata_result != "success":
+                  raise SystemExit(f"PR metadata validation failed: {metadata_result}")
+              if test_result not in {"success", "skipped"}:
+                  raise SystemExit(f"PR validation failed: {test_result}")
+              if test_result == "skipped":
+                  print(
+                      "PR metadata passed; candidate validation was skipped. "
+                      "This status is not evidence that candidate code was tested."
+                  )
+              else:
+                  print("PR metadata and caller validation passed.")
+              sys.exit(0)
+
+          if event_name in {"push", "workflow_dispatch"}:
+              if test_result == "success":
+                  print("Trusted-main validation passed.")
+                  sys.exit(0)
+              if (
+                  event_name == "push"
+                  and test_result == "skipped"
+                  and "[skip-tests]" in os.environ["HEAD_COMMIT_MESSAGE"]
+              ):
+                  print("Trusted-main tests were explicitly skipped by commit marker.")
+                  sys.exit(0)
+              raise SystemExit(f"trusted-main validation failed: {test_result}")
+
+          raise SystemExit(f"unsupported workflow event: {event_name}")
+          PY

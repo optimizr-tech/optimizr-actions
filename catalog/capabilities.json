@@ -1152,6 +1152,32 @@
       "trust_boundary": "untrusted-pr"
     },
     {
+      "category": "governance",
+      "evidence": "Status aggregation of caller metadata and validation job results",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_ci-status-gate.yml@<immutable-commit-sha>"
+      ],
+      "inputs": {
+        "metadata_result": "",
+        "runner_json": "",
+        "test_result": ""
+      },
+      "kind": "workflow",
+      "known_limitations": "Status-only contract; caller controls supplied job results. A passing skipped PR suite is not candidate execution evidence or a release attestation.",
+      "maturity": "stable-v1",
+      "metadata_status": "classified",
+      "outputs": {},
+      "path": ".github/workflows/_ci-status-gate.yml",
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "7609cb20544880d31aace65ccef37f165c091113379654047a603a827d10a9d2",
+      "trust_boundary": "untrusted-pr"
+    },
+    {
       "category": "test",
       "evidence": "Commitlint results over the PR commit range",
       "examples": [
@@ -1346,7 +1372,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "16e94638557117f803cd459a86564ea6e50af9d88d2847ea51cc8e5a453239a0",
+      "source_sha256": "47b5ce1899d5cfec222d53b5cfcbaae0576acc426119c8f7352ca03b83eee719",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1893,7 +1919,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "3957a0f912649e8f61759649e49f0dc8971529ac7e0c1f51568b8307b1b87541",
+      "source_sha256": "6650f9db8f03d7fe3e64f420d36ec971262897122b754dde9fbc8b0ec63e3c0f",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -1944,7 +1970,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "416ab44ba2d3cc6583026baf8309121e29e04dec33f0d1c9d858f6f1de815e90",
+      "source_sha256": "916721405cea13e2a2c8d98994c1b3a85d88bdb7cba9e18733463ec1cb14993f",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -2075,7 +2101,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "4b63821fa405b994bc11c4e8c457c9bd04afb1833778db634081186619dd8fbb",
+      "source_sha256": "d40afa2d3a35ef950e78f766e1c16bc2d7ccf7c538d2a019ff638e2cd4601fc9",
       "trust_boundary": "trusted-pr"
     },
     {
@@ -2143,7 +2169,7 @@
         "self-hosted-persistent",
         "self-hosted-ephemeral"
       ],
-      "source_sha256": "a569239ee8d4506ee2bfbb2ac27efe0adef0fa5432d0401489e5708e16945557",
+      "source_sha256": "faec5cfe6ddb1a37c5cc87121aedcf3c1dbfbb7646fe89d922bde9139aab1ecf",
       "trust_boundary": "trusted-pr"
     },
     {
