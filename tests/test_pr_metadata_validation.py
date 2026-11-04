@@ -78,6 +78,12 @@ class PRMetadataValidationTests(unittest.TestCase):
     def test_valid_org_subject_passes(self):
         self.assertEqual([], module.validate_subject(":shield: security(ci): isolate metadata", "title"))
 
+    def test_deploy_subject_passes_for_pr_title_and_commit(self):
+        subject = ":rocket: deploy(ci): verify promotion evidence"
+
+        self.assertEqual([], module.validate_subject(subject, "PR title"))
+        self.assertEqual([], module.validate_subject(subject, "commit 1"))
+
     def test_verified_dependabot_group_commit_can_exceed_72_characters(self):
         pr, item, subject = verified_dependabot_group_case()
 
