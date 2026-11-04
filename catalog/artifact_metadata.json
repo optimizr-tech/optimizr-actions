@@ -406,6 +406,14 @@
       "evidence": "Protected GitLab delivery job serializing a service and delegating to the shared executor",
       "examples": ["extends: .optimizr-delivery"],
       "known_limitations": "Requires a protected GitLab runner tag, protected runner attestation variable, and consumer-owned entrypoint"
+    },
+    ".github/workflows/_ci-status-gate.yml": {
+      "category": "governance",
+      "runner": ["hosted", "self-hosted-persistent", "self-hosted-ephemeral"],
+      "trust_boundary": "untrusted-pr",
+      "evidence": "Status aggregation of caller metadata and validation job results",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_ci-status-gate.yml@<immutable-commit-sha>"],
+      "known_limitations": "Status-only contract; caller controls supplied job results. A passing skipped PR suite is not candidate execution evidence or a release attestation."
     }
   }
 }
