@@ -66,6 +66,9 @@ GITHUB_WEB_FLOW_LOGIN = "web-flow"
 DEPENDABOT_COMMIT_AUTHOR_EMAIL_RE = re.compile(
     r"^(?P<id>\d+)\+dependabot\[bot\]@users\.noreply\.github\.com$"
 )
+DEPENDABOT_TITLE_PREFIX_RE = re.compile(
+    r"^:arrow_up: chore\(deps(?:-[a-z0-9]+)*\): "
+)
 DEPENDABOT_GROUP_SUMMARY_RE = re.compile(
     r"(?im)^Bumps the .+ group with \d+ updates?(?: in the .+ directory)?:"
 )
@@ -91,7 +94,7 @@ def validate_subject(
     subject: str,
     label: str,
     *,
-    max_length: int = SUBJECT_MAX_LENGTH,
+    max_length: int | None = SUBJECT_MAX_LENGTH,
 ) -> list[ValidationFailure]:
     failures: list[ValidationFailure] = []
     try:
@@ -123,7 +126,7 @@ def validate_subject(
         failures.append(ValidationFailure(label, "description is shorter than 4 characters"))
     if description.endswith("."):
         failures.append(ValidationFailure(label, "remove the trailing period"))
-    if len(subject) > max_length:
+    if max_length is not None and len(subject) > max_length:
         failures.append(
             ValidationFailure(label, f"must be at most {max_length} characters; got {len(subject)}")
         )
@@ -250,6 +253,19 @@ def resolve_effective_pr_title(title: str, pr: dict, commits: list[dict]) -> str
         ):
             return subject
     return title
+
+
+def is_dependabot_dependency_pr_title(title: str, pr: dict) -> bool:
+    """Allow the title length exception only for an API-verified Dependabot PR title."""
+    if not isinstance(pr, dict) or pr.get("title") != title:
+        return False
+    user = pr.get("user")
+    return (
+        isinstance(user, dict)
+        and user.get("login") == DEPENDABOT_LOGIN
+        and user.get("type") == "Bot"
+        and DEPENDABOT_TITLE_PREFIX_RE.match(title) is not None
+    )
 
 
 def validate_commit_metadata(pr: dict, item: dict, label: str) -> list[ValidationFailure]:
@@ -657,10 +673,9 @@ def main() -> int:
     if not re.fullmatch(r"[0-9a-fA-F]{40}", expected_head):
         failures.append(ValidationFailure("metadata input", "head SHA must contain 40 hexadecimal characters"))
 
-    # An over-length title may be a generated Dependabot group title; defer
-    # only that case until the verified commits are fetched. Every other
-    # title failure is reported immediately, and the deferred title is
-    # re-validated at the strict limit after compaction.
+    # Defer only an over-length title until trusted PR metadata is fetched.
+    # That response decides whether verified group compaction or the narrow
+    # Dependabot dependency-title length exception applies.
     title_failures = validate_subject(title, "PR title")
     title_deferred = bool(title_failures) and all(
         "at most" in failure.message for failure in title_failures
@@ -699,8 +714,18 @@ def main() -> int:
         return 1
 
     if title_deferred:
+        effective_title = resolve_effective_pr_title(title, pr, commits)
+        title_max_length = (
+            None
+            if is_dependabot_dependency_pr_title(title, pr)
+            else SUBJECT_MAX_LENGTH
+        )
         failures.extend(
-            validate_subject(resolve_effective_pr_title(title, pr, commits), "PR title")
+            validate_subject(
+                effective_title,
+                "PR title",
+                max_length=title_max_length,
+            )
         )
 
     actual_base = str(((pr.get("base") or {}).get("sha") or ""))

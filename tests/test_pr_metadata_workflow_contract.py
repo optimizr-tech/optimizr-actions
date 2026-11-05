@@ -33,6 +33,15 @@ class PRMetadataWorkflowContractTests(unittest.TestCase):
         self.assertNotIn("github.workspace", text.lower())
         self.assertNotIn("checkout", text.lower())
 
+    def test_dependabot_title_exception_uses_api_author_without_caller_input(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        action = ACTION.read_text(encoding="utf-8")
+        validator = VALIDATOR.read_text(encoding="utf-8")
+
+        self.assertIn('pr.get("user")', validator)
+        self.assertNotIn("pr_author:", workflow)
+        self.assertNotIn("pr_author:", action)
+
     def test_validator_uses_api_and_never_executes_candidate_code(self):
         text = VALIDATOR.read_text(encoding="utf-8")
         self.assertIn("/commits?per_page=100", text)
