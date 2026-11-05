@@ -1,5 +1,11 @@
+import json
+import os
 from pathlib import Path
+import re
 import unittest
+from unittest.mock import patch
+
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -103,6 +109,7 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
             "_commitlint.yml",
             "_validate-pr.yml",
             "_node-project-test.yml",
+            "_python-uv-test.yml",
             "_quality-gate-collect-security.yml",
             "_quality-gate-collect-dup.yml",
             "_quality-gate-pr.yml",
@@ -118,8 +125,8 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
                 self.assertIn('"ephemeral" not in labels', text)
                 self.assertIn('os.environ["EVENT_NAME"] != "pull_request"', text)
 
-    def test_trusted_pr_mode_is_available_for_authorized_persistent_validation(self):
-        for name in (
+    def test_candidate_reusables_reject_persistent_trusted_pr_mode(self):
+        workflows = (
             "_python-uv-test.yml",
             "_node-project-test.yml",
             "_security-suite.yml",
@@ -128,15 +135,98 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
             "_dependency-policy.yml",
             "_sast-gate.yml",
             "_supply-chain-evidence.yml",
-        ):
-            text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
+        )
+        cases = (
+            ("trusted-main", "push", "refs/heads/main", ["self-hosted", "Linux"], True),
+            (
+                "trusted-main",
+                "workflow_dispatch",
+                "refs/heads/main",
+                ["self-hosted", "Linux"],
+                True,
+            ),
+            (
+                "trusted-main",
+                "pull_request",
+                "refs/pull/1/merge",
+                ["self-hosted", "Linux"],
+                False,
+            ),
+            (
+                "trusted-pr",
+                "pull_request",
+                "refs/pull/1/merge",
+                ["self-hosted", "Linux", "local-docker"],
+                False,
+            ),
+            (
+                "ephemeral-pr",
+                "pull_request",
+                "refs/pull/1/merge",
+                ["self-hosted", "Linux", "ephemeral"],
+                True,
+            ),
+            (
+                "ephemeral-pr",
+                "pull_request",
+                "refs/pull/1/merge",
+                ["self-hosted", "Linux", "local-docker"],
+                False,
+            ),
+            (
+                "ephemeral-pr",
+                "push",
+                "refs/heads/main",
+                ["self-hosted", "Linux", "ephemeral"],
+                False,
+            ),
+        )
+
+        for name in workflows:
+            path = ROOT / ".github/workflows" / name
+            text = path.read_text(encoding="utf-8")
             with self.subTest(workflow=name):
-                self.assertIn("trusted-pr", text)
-                trusted_pr_index = text.index('mode == "trusted-pr"')
-                ephemeral_index = text.index('mode == "ephemeral-pr"')
-                trusted_pr_block = text[trusted_pr_index:ephemeral_index]
-                self.assertIn('os.environ["EVENT_NAME"] != "pull_request"', trusted_pr_block)
-                self.assertNotIn('"ephemeral" not in labels', trusted_pr_block)
+                self.assertNotIn('mode == "trusted-pr"', text)
+                self.assertNotIn("trusted-pr requires pull_request", text)
+
+                workflow = yaml.safe_load(text)
+                guards = []
+                for job in workflow["jobs"].values():
+                    if not isinstance(job, dict):
+                        continue
+                    for step in job.get("steps", []):
+                        if step.get("name") != "Validate runner trust contract":
+                            continue
+                        match = re.fullmatch(
+                            r"python3 - <<'PY'\n(?P<body>.*?)\nPY",
+                            step["run"].strip(),
+                            flags=re.DOTALL,
+                        )
+                        self.assertIsNotNone(match, name)
+                        guards.append(match.group("body"))
+
+                self.assertTrue(guards, f"{name} has no runner trust guard")
+                for guard in guards:
+                    for mode, event, ref, labels, expected in cases:
+                        environment = {
+                            "RUNNER_JSON": json.dumps(labels),
+                            "SELF_HOSTED_MODE": mode,
+                            "EVENT_NAME": event,
+                            "EVENT_REF": ref,
+                        }
+                        with self.subTest(
+                            workflow=name,
+                            mode=mode,
+                            event=event,
+                            labels=labels,
+                        ), patch.dict(os.environ, environment):
+                            try:
+                                exec(compile(guard, name, "exec"), {})
+                            except SystemExit as exc:
+                                accepted = exc.code in (None, 0)
+                            else:
+                                accepted = True
+                            self.assertEqual(accepted, expected)
 
     def test_explicit_optional_skip_remains_caller_controlled(self):
         for name in (

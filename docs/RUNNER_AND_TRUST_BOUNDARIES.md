@@ -9,7 +9,7 @@ capability catalog (`catalog/capabilities.json`).
 | Runner | Execution model | When to use |
 | --- | --- | --- |
 | `hosted` | Fresh GitHub-managed VM per job; no long-lived state | Default for validation, lint, tests and gates on trusted PRs; deterministic, no secret exposure beyond scoped secrets |
-| `self-hosted-persistent` | Long-lived machine; shared Docker daemon, caches and volumes; can hold deployment state | Deploy, post-deploy verification, negative probes, postgres migration and any step that needs persistent infrastructure or docker compose state |
+| `self-hosted-persistent` | Long-lived machine; shared Docker daemon, caches and volumes; can hold deployment state | Trusted-main validation, metadata-only PR checks, deploy, post-deploy verification, negative probes, postgres migration and other trusted infrastructure steps |
 | `self-hosted-ephemeral` | One-shot self-hosted runner registration on an operator-proven isolated host; registration alone does not establish host/daemon isolation | Self-hosted PR validation of candidate code (directive #159): the only self-hosted mode that may execute untrusted PR code, with the same evidence |
 
 ### Hosted
@@ -23,9 +23,10 @@ capability catalog (`catalog/capabilities.json`).
 
 - Long-lived machine with shared caches and infrastructure; the only kind
   that can meaningfully hold deployment state.
-- **Trust boundary**: only `trusted-push` and (with explicit review)
-  `trusted-pr` paths may run here. Unverified PR code must not reach a
-  persistent runner; see `docs/VALIDATION_AUTHORIZATION.md`.
+- **Trust boundary**: trusted-main jobs and metadata-only PR jobs may run here.
+  Candidate PR code must not reach a persistent runner, even when the PR comes
+  from a trusted actor or has passed review. Metadata-only checks may use
+  `metadata-pr` only when they do not check out or execute candidate code.
 - Preferred for: `_vps-*-deploy`, `_post-deploy-verification`,
   `_negative-probes`, `_postgres-major-logical-migration`.
 
@@ -34,56 +35,65 @@ capability catalog (`catalog/capabilities.json`).
 - The one-shot runner registration processes one job and deregisters afterward;
   this alone does not destroy or isolate the underlying host, Docker daemon,
   disk, network, or credentials.
-- Untrusted candidate code may run only after InfraOps proves host/daemon
-  separation, clean identity and cleanup on success, failure, cancellation and
-  timeout. The candidate canary uses the operator-managed
-  `isolated-pr-canary` label; never assign it to shared WSL/`local-docker`
-  runners. See `docs/CANDIDATE_FUNCTIONAL_CANARY.md` and InfraOps #160.
+- Candidate code may run only after InfraOps proves host/daemon separation,
+  clean identity and cleanup on success, failure, cancellation and timeout.
+  The reusable contract requires `self_hosted_mode: ephemeral-pr` and the
+  operator-managed `ephemeral` runner label. InfraOps must assign that label
+  only to the proven isolated pool; never assign it to shared WSL or
+  `local-docker` runners. Registration and a label alone do not prove
+  isolation. The specific canary also uses the `isolated-pr-canary` label
+  defined by InfraOps. See `docs/CANDIDATE_FUNCTIONAL_CANARY.md` and InfraOps
+  #160.
 - This is the correct mode for validating untrusted PR code on self-hosted
   runners (directive #159); metadata-only PR validation uses `metadata-pr`
   instead (see `docs/CI_SKIP_CONTRACT.md` for the historical `[skip-tests]`
   contract, superseded by directive #159).
 
-### Authorized persistent pull request
+### Candidate pull requests
 
-```text
-runner_json = ["self-hosted", "Linux", "<service>"]
-self_hosted_mode = trusted-pr
-```
+`trusted-pr` is a source-trust classification, not permission to run candidate
+code on a persistent runner. Self-hosted candidate validation must use
+`self_hosted_mode: ephemeral-pr` and request the operator-managed `ephemeral`
+label. The job reaches candidate checkout only on a runner that actually has
+that label. Trusted actor status and review approval do not change this
+requirement. When the isolated pool is unavailable, keep the PR path
+metadata-only; do not fall back to a persistent runner.
 
-This mode is for pull requests that have already passed the consumer's
-reviewed authorization boundary. It does not require the `ephemeral` label,
-but it still requires a self-hosted Linux runner and the `pull_request` event.
-The reusable validates runner shape and event only; the caller remains
-responsible for actor approval, fork policy, protected environments and the
-absence of production secrets. Do not use `trusted-pr` for untrusted forks.
+Removing the legacy `trusted-pr` self-hosted mode is a breaking reusable
+contract change for callers pinned to `@v1`. Do not move the floating `v1` tag
+for this change. Before releasing a new major contract, inventory and migrate
+callers: keep candidate PR checks on `_pr-metadata.yml` with `metadata-pr`,
+keep full tests on `trusted-main` after merge to `main`, and use `ephemeral-pr`
+only where an operator-proven isolated pool exists. Until then, do not add a
+code-executing `@v1` reusable to a persistent runner group's workflow allowlist
+for candidate PR validation.
 
 ## Trust boundaries
 
 | Boundary | Meaning |
 | --- | --- |
 | `trusted-push` | Pushes to protected branches; deployment-like and evidence-producing contracts |
-| `trusted-pr` | Pull requests from trusted actors/approvers that already passed authorization |
+| `trusted-pr` | Pull requests from trusted actors/approvers; this classification does not authorize persistent self-hosted execution |
 | `untrusted-pr` | Pull requests from forks or otherwise unverified actors; validation only, no secrets |
 
 Rules of thumb:
 
-- A contract tagged `untrusted-pr` must never require secrets; on self-hosted
-  runners it runs only in `ephemeral-pr` mode, with one deliberate exception:
-  `_pr-metadata.yml` also keeps `metadata-pr` (persistent, read-only metadata)
-  because it never checks out or executes candidate code and holds no secrets.
-- A contract tagged `trusted-pr` may run on hosted or on self-hosted only
-  behind `validation-authorization`.
-- A contract tagged `trusted-push` is for push/deploy paths; when a reusable
-  also supports `trusted-pr`, the authorization action decides the actual
-  boundary at runtime.
+- A candidate-code contract tagged `trusted-pr` or `untrusted-pr` may not run
+  on a persistent self-hosted runner. Self-hosted PR candidate validation
+  requires `ephemeral-pr`; `_pr-metadata.yml` may use `metadata-pr` only because
+  it reads metadata through the API and never checks out candidate code.
+- A contract tagged `trusted-push` is for push/deploy paths and may use
+  `trusted-main` only for a push or dispatch on `refs/heads/main`.
+- `validation-authorization` determines whether a PR actor/source passes the
+  caller's review policy; it does not grant persistent-runner access.
 
 ## Default matrix
 
 51 of 64 artifacts support all three runner kinds with the caller-selectable
 `runner_json` input; their trust boundary is the union
-(`trusted-push`/`trusted-pr`/`untrusted-pr`) and the caller restricts it via
-`validation-authorization`.
+(`trusted-push`/`trusted-pr`/`untrusted-pr`). These describe source trust and
+do not override runner policy: no candidate code runs on a persistent
+self-hosted runner, regardless of actor classification.
 
 Notable restrictions recorded in the catalog:
 
@@ -107,7 +117,9 @@ boundary:
 
 1. Read the artifact's `trust_boundary`.
 2. Pick the cheapest compatible runner kind from its `runner` list.
-3. For PRs on self-hosted, pass through `validation-authorization`.
+3. For PR candidates on self-hosted, require `ephemeral-pr` and the protected
+   `ephemeral` label. Persistent self-hosted runners are limited to trusted-main
+   and metadata-only PR work.
 
 The organization audit flags reusables that support self-hosted runners but
 are only ever called from hosted jobs in repositories that already run
