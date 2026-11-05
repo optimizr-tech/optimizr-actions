@@ -583,6 +583,10 @@ GENERATED_GROUP_SUBJECT = ":arrow_up: chore(deps): bump actions/create-github-ap
 GENERATED_GROUP_TITLE = (
     f"{GENERATED_GROUP_SUBJECT} from 3.2.0 to 3.3.0 in the gha-minor-patch group"
 )
+DEPENDABOT_DEPENDENCY_TITLE = (
+    ":arrow_up: chore(deps-dev): bump undici from 7.30.1 to 8.12.3 "
+    "in /frontend/apps/admin"
+)
 
 
 class DependabotTitleCompactionTests(unittest.TestCase):
@@ -593,6 +597,39 @@ class DependabotTitleCompactionTests(unittest.TestCase):
             "dependency-group: gha-minor-patch",
         )
         return pr, [item], subject
+
+    def run_main(self, title, pr, commits):
+        base_sha = "a" * 40
+        head_sha = "b" * 40
+        pr.setdefault("title", title)
+        pr.update(
+            {
+                "state": "open",
+                "merged": False,
+                "merged_at": None,
+                "base": {"sha": base_sha},
+                "head": {
+                    **pr["head"],
+                    "sha": head_sha,
+                    "repo": {"full_name": "o/r"},
+                },
+            }
+        )
+        env = {
+            "INPUT_REPOSITORY": "o/r",
+            "INPUT_TOKEN": "t",
+            "INPUT_PR_TITLE": title,
+            "INPUT_PR_BODY": "Body text",
+            "INPUT_PR_NUMBER": "7",
+            "INPUT_BASE_SHA": base_sha,
+            "INPUT_HEAD_SHA": head_sha,
+        }
+        with patch.dict(module.os.environ, env, clear=True), patch.object(
+            module, "fetch_pr_metadata", return_value=(pr, commits)
+        ), patch.object(module, "fetch_branch_history", return_value=[]), patch.object(
+            module, "emit_failure"
+        ) as emitted:
+            return module.main(), emitted
 
     def test_generated_group_title_compacts_to_verified_commit_subject(self):
         pr, commits, subject = self.case()
@@ -677,6 +714,48 @@ class DependabotTitleCompactionTests(unittest.TestCase):
         self.assertEqual(1, code)
         self.assertTrue(
             any("at most 72" in c.args[0].message for c in emitted.call_args_list)
+        )
+
+    def test_main_accepts_long_dependabot_dependency_title(self):
+        pr, commits, _ = self.case()
+
+        self.assertGreater(len(DEPENDABOT_DEPENDENCY_TITLE), 72)
+        code, emitted = self.run_main(DEPENDABOT_DEPENDENCY_TITLE, pr, commits)
+
+        self.assertEqual(0, code, emitted.call_args_list)
+
+    def test_main_keeps_72_character_limit_for_human_dependency_title(self):
+        pr, commits, _ = self.case()
+        pr["user"] = {"login": "human-maintainer", "type": "User", "id": 1}
+        pr["head"]["ref"] = "feature/dependency-update"
+
+        code, emitted = self.run_main(DEPENDABOT_DEPENDENCY_TITLE, pr, commits)
+
+        self.assertEqual(1, code)
+        self.assertTrue(
+            any("at most 72 characters" in call.args[0].message for call in emitted.call_args_list)
+        )
+
+    def test_main_keeps_72_character_limit_for_dependabot_title_outside_dependency_pattern(self):
+        pr, commits, _ = self.case()
+        title = DEPENDABOT_DEPENDENCY_TITLE.replace("chore(deps-dev)", "chore(ci)")
+
+        code, emitted = self.run_main(title, pr, commits)
+
+        self.assertEqual(1, code)
+        self.assertTrue(
+            any("at most 72 characters" in call.args[0].message for call in emitted.call_args_list)
+        )
+
+    def test_main_does_not_exempt_title_that_differs_from_github_api_metadata(self):
+        pr, commits, _ = self.case()
+        pr["title"] = "short title from GitHub API"
+
+        code, emitted = self.run_main(DEPENDABOT_DEPENDENCY_TITLE, pr, commits)
+
+        self.assertEqual(1, code)
+        self.assertTrue(
+            any("at most 72 characters" in call.args[0].message for call in emitted.call_args_list)
         )
 
 

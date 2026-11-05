@@ -11,10 +11,21 @@ The required inputs remain `token` (read-only), `repository`, `pr_number`,
 `scan_changed_files` remains `false` by default. Outputs remain `result` and
 `commit_count`; no new permission or caller input is required.
 
-## Commit subject length
+## PR title and commit subject length
 
 PR titles and ordinary commit subjects remain limited to 72 characters. A
-longer commit subject is accepted only when the GitHub API metadata for that
+longer PR title skips only that length check when the GitHub API response for
+the current PR reports `user.login: dependabot[bot]`, `user.type: Bot`, and the
+title starts with `:arrow_up: chore(deps): ` or
+`:arrow_up: chore(deps-<scope>): `. The supplied event title must exactly match
+the title returned by the API. Human-authored PRs and bot titles outside that
+prefix remain limited to 72 characters. The exception does not change the
+title or waive its other checks: allowed gitmoji, conventional type/scope,
+ASCII-only text, minimum description length, English wording, and no trailing
+period still apply. The bot identity comes from the existing read-only PR
+metadata GET; there is no caller-supplied author input.
+
+A longer commit subject is accepted only when the GitHub API metadata for that
 individual commit shows all of the following:
 
 - the open PR and commit author are the `dependabot[bot]` account, with the
@@ -26,20 +37,20 @@ individual commit shows all of the following:
   path-qualified form emitted by npm/yarn groups, `in the <directory> directory`)
   and the `dependency-group` field.
 
-The exception is per commit and capped at 200 characters. Every other subject
-rule still applies, including ASCII, conventional format, language, and
-trailing-period checks. Missing or inconsistent API fields fail closed. The
-PR title is always validated with the normal 72-character limit, even on a
-Dependabot PR. Signature-verification fields are read from GitHub's commit API
-response; see [REST API commit signature verification](https://docs.github.com/en/rest/commits/commits#signature-verification-object).
+The commit exception is per commit and capped at 200 characters. Every other
+subject rule still applies, including ASCII, conventional format, language,
+and trailing-period checks. Missing or inconsistent API fields fail closed.
+Signature-verification fields are read from GitHub's commit API response; see
+[REST API commit signature verification](https://docs.github.com/en/rest/commits/commits#signature-verification-object).
 
 ## Dependabot group PR title compaction
 
 Dependabot names grouped-update PRs `<commit subject> from X to Y in the <group>
 group` (for example 109 characters for `actions/create-github-app-token` in
-`gha-minor-patch`), while its signed commit subject stays short. The 72-character
-limit is **not** raised and nothing is bypassed; the validator instead
-*compacts the title it checks*, in memory only:
+`gha-minor-patch`), while its signed commit subject stays short. The validator
+can *compact the title it checks*, in memory only, under the following stronger
+signature checks. This group-title compaction remains separate from the
+bot-only dependency-title length rule above:
 
 1. The title is over 72 characters and has no other title defect.
 2. The PR and one of its commits satisfy the full verified Dependabot group
@@ -50,10 +61,10 @@ limit is **not** raised and nothing is bypassed; the validator instead
 
 When all hold, the commit subject (which must itself be at most 72 characters,
 or at most 200 under the commit rule) replaces the title for validation, and
-then the normal strict title rules run on it. If any condition fails, the original
-title is validated and a title over 72 characters fails with
-`must be at most 72 characters`. Human PRs, edited titles, unverified commits
-and arbitrary suffixes are never compacted.
+then the normal strict title rules run on it. If compaction does not apply, the
+original title is validated; only the separate Dependabot dependency-title
+exception can skip its 72-character check. Human-authored PRs, unverified
+commits, and arbitrary suffixes are never compacted.
 
 The PR title on GitHub is **not edited**: no write permission, no extra token
 scope and no candidate code execution are added (the job keeps
@@ -102,8 +113,8 @@ after the release. Dependabot configs that already shorten the commit subject
 
 This is a narrow backward-compatible validation exception: inputs, outputs,
 permissions, and consumer configuration do not change, so consumers need no
-migration. It does not waive PR-title validation or any other subject check,
-and it does not execute candidate code. The change does not move the floating
-`v1` tag; normal release validation and human-approved publication remain
-required before consumers receive it. Rollback is to revert the
+migration. It does not waive the title's other checks or any commit-subject
+check, and it does not execute candidate code. The change does not move the
+floating `v1` tag; normal release validation and human-approved publication
+remain required before consumers receive it. Rollback is to revert the
 implementation through the same reviewed release path.
