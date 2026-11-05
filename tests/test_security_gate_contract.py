@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -83,6 +84,53 @@ class SecurityGateContractTests(unittest.TestCase):
         self.assertIn("trivy_cache_scope:", validation_gate)
         self.assertIn("default: shared", validation_gate)
         self.assertIn("trivy_cache_scope: ${{ inputs.trivy_cache_scope }}", validation_gate)
+
+    def test_trivy_cache_scope_defaults_to_shared_and_keeps_repository(self) -> None:
+        action_default = re.compile(
+            r"^  cache_scope:\n(?:    .*\n)*?    default: (\S+)\n", re.MULTILINE
+        )
+        for action in (
+            ".github/actions/security-gate/action.yml",
+            ".github/actions/dependency-policy/action.yml",
+            ".github/actions/supply-chain-evidence/action.yml",
+            ".github/actions/trivy-scan/action.yml",
+        ):
+            with self.subTest(action=action):
+                content = read(action)
+                match = action_default.search(content)
+                self.assertIsNotNone(match)
+                self.assertEqual(match.group(1), "shared")
+                self.assertIn("repository preserves isolated caches", content)
+
+        workflow_default = re.compile(
+            r"^      (trivy_cache_scope|security_trivy_cache_scope):\n"
+            r"(?:        .*\n)*?        default: (\S+)\n",
+            re.MULTILINE,
+        )
+        for workflow in (
+            ".github/workflows/_security-gate.yml",
+            ".github/workflows/_dependency-policy.yml",
+            ".github/workflows/_supply-chain-evidence.yml",
+            ".github/workflows/_trivy-scan.yml",
+            ".github/workflows/_security-suite.yml",
+            ".github/workflows/_validation-gate.yml",
+            ".github/workflows/_vps-self-hosted-deploy.yml",
+            ".github/workflows/_vps-monorepo-deploy.yml",
+            ".github/workflows/_container-build-publish.yml",
+            ".github/workflows/_container-candidate-promote.yml",
+        ):
+            with self.subTest(workflow=workflow):
+                defaults = [m.group(2) for m in workflow_default.finditer(read(workflow))]
+                self.assertTrue(defaults)
+                self.assertEqual(set(defaults), {"shared"})
+
+        # Explicit repository scope stays accepted by the helper and the docs.
+        self.assertIn('_CACHE_SCOPES = {"repository", "shared"}', read("scripts/security_gate/cache.py"))
+        self.assertIn("cache_scope must be repository or shared", read("scripts/security_gate/trivy-cache.sh"))
+        self.assertIn(
+            "| `security_trivy_cache_scope` | `shared` |",
+            read("docs/SECURITY_GATE.md"),
+        )
 
     def test_trivy_actions_use_governed_versioned_cache_helper(self) -> None:
         for action in (
