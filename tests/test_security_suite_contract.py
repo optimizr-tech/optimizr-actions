@@ -83,7 +83,14 @@ class SecuritySuiteContractTests(unittest.TestCase):
 
     def test_suite_enforces_runner_trust_before_children(self):
         self.assertIn("self_hosted_mode:", self.text)
-        self.assertIn("trusted-pr", self.text)
+        self.assertNotIn("trusted-pr", self.text)
+        self.assertIn("description: none, trusted-main, or ephemeral-pr", self.text)
+        self.assertIn('mode == "trusted-main"', self.text)
+        self.assertIn('mode == "ephemeral-pr"', self.text)
+        self.assertIn(
+            "self-hosted validation requires mode trusted-main or ephemeral-pr",
+            self.text,
+        )
         self.assertIn(
             'hosted validation must use ["ubuntu-latest"] with mode=none',
             self.text,

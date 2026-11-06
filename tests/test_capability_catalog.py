@@ -5,7 +5,9 @@ import unittest
 from scripts.capability_catalog.catalog import build_catalog, render_catalog
 from scripts.capability_catalog.metadata import (
     CATEGORIES,
+    METADATA_ONLY_PR_MODE,
     RUNNER_KINDS,
+    SELF_HOSTED_EXECUTION_MODES,
     TRUST_BOUNDARIES,
 )
 
@@ -34,6 +36,14 @@ ENTRY_KEYS = {
 
 class CapabilityCatalogTests(unittest.TestCase):
     maxDiff = None
+
+    def test_self_hosted_execution_modes_are_separate_from_trust_boundaries(self):
+        self.assertEqual(
+            ("none", "trusted-main", "ephemeral-pr"),
+            SELF_HOSTED_EXECUTION_MODES,
+        )
+        self.assertEqual("metadata-pr", METADATA_ONLY_PR_MODE)
+        self.assertIn("trusted-pr", TRUST_BOUNDARIES)
 
     def test_catalog_discovers_and_sorts_public_artifacts(self) -> None:
         catalog = build_catalog(ROOT)

@@ -16,6 +16,10 @@ CATEGORIES: Final = (
     "operations-adapter",
 )
 TRUST_BOUNDARIES: Final = ("trusted-push", "trusted-pr", "untrusted-pr")
+# `trusted-pr` remains a catalog trust boundary, but it is not an execution
+# mode. Candidate PR code on self-hosted runners requires an ephemeral runner.
+SELF_HOSTED_EXECUTION_MODES: Final = ("none", "trusted-main", "ephemeral-pr")
+METADATA_ONLY_PR_MODE: Final = "metadata-pr"
 RUNNER_KINDS: Final = ("hosted", "self-hosted-persistent", "self-hosted-ephemeral")
 METADATA_SCHEMA_VERSION: Final = 1
 CURATED_KEYS: Final = frozenset(

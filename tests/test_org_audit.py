@@ -429,7 +429,7 @@ jobs:
             {finding.rule_id for finding in findings},
         )
 
-    def test_accepts_governed_persistent_pr_reusable_callers(self):
+    def test_rejects_removed_trusted_pr_mode_for_reusable_callers(self):
         workflows = {
             ".github/workflows/commitlint.yml": """
 on:
@@ -458,8 +458,7 @@ jobs:
         )
         rules = {finding.rule_id for finding in findings}
 
-        self.assertNotIn("HOSTED_PR_CODE_VALIDATION", rules)
-        self.assertNotIn("SELF_HOSTED_PR_WITHOUT_GOVERNED_MODE", rules)
+        self.assertIn("SELF_HOSTED_PR_WITHOUT_GOVERNED_MODE", rules)
 
     def test_accepts_metadata_reusable_callers_as_canonical_pr_checks(self):
         workflows = {
