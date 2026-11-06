@@ -23,9 +23,9 @@ capability catalog (`catalog/capabilities.json`).
 
 - Long-lived machine with shared caches and infrastructure; the only kind
   that can meaningfully hold deployment state.
-- **Trust boundary**: only `trusted-push` and (with explicit review)
-  `trusted-pr` paths may run here. Unverified PR code must not reach a
-  persistent runner; see `docs/VALIDATION_AUTHORIZATION.md`.
+- **Execution mode**: only `trusted-main` jobs for `push` or
+  `workflow_dispatch` on `refs/heads/main` may run here. Candidate PR code must
+  never reach a persistent runner; see `docs/VALIDATION_AUTHORIZATION.md`.
 - Preferred for: `_vps-*-deploy`, `_post-deploy-verification`,
   `_negative-probes`, `_postgres-major-logical-migration`.
 
@@ -44,19 +44,19 @@ capability catalog (`catalog/capabilities.json`).
   instead (see `docs/CI_SKIP_CONTRACT.md` for the historical `[skip-tests]`
   contract, superseded by directive #159).
 
-### Authorized persistent pull request
+### Self-hosted execution modes
 
-```text
-runner_json = ["self-hosted", "Linux", "<service>"]
-self_hosted_mode = trusted-pr
-```
+| `self_hosted_mode` | Requirement |
+| --- | --- |
+| `none` | Hosted runner selection only; use for the default `ubuntu-latest` path |
+| `trusted-main` | `push` or `workflow_dispatch` on `refs/heads/main` |
+| `ephemeral-pr` | `pull_request` and an `ephemeral` runner label; candidate code is permitted only after isolation and cleanup are proven |
 
-This mode is for pull requests that have already passed the consumer's
-reviewed authorization boundary. It does not require the `ephemeral` label,
-but it still requires a self-hosted Linux runner and the `pull_request` event.
-The reusable validates runner shape and event only; the caller remains
-responsible for actor approval, fork policy, protected environments and the
-absence of production secrets. Do not use `trusted-pr` for untrusted forks.
+`metadata-pr` is a separate, metadata-only exception used by
+`_pr-metadata.yml`: it cannot check out or execute candidate code and has no
+secrets. `trusted-pr` remains a catalog trust-boundary classification below;
+it is not a supported self-hosted execution mode and never authorizes candidate
+code on a persistent runner.
 
 ## Trust boundaries
 
@@ -72,18 +72,20 @@ Rules of thumb:
   runners it runs only in `ephemeral-pr` mode, with one deliberate exception:
   `_pr-metadata.yml` also keeps `metadata-pr` (persistent, read-only metadata)
   because it never checks out or executes candidate code and holds no secrets.
-- A contract tagged `trusted-pr` may run on hosted or on self-hosted only
-  behind `validation-authorization`.
+- A contract tagged `trusted-pr` describes PR provenance/authorization for the
+  artifact; it is not an execution mode. On self-hosted runners, candidate PR
+  code still requires `ephemeral-pr`; otherwise use hosted validation.
 - A contract tagged `trusted-push` is for push/deploy paths; when a reusable
-  also supports `trusted-pr`, the authorization action decides the actual
-  boundary at runtime.
+  supports `trusted-main`, that mode restricts execution to the protected main
+  branch.
 
 ## Default matrix
 
 51 of 64 artifacts support all three runner kinds with the caller-selectable
 `runner_json` input; their trust boundary is the union
-(`trusted-push`/`trusted-pr`/`untrusted-pr`) and the caller restricts it via
-`validation-authorization`.
+(`trusted-push`/`trusted-pr`/`untrusted-pr`). Trust-boundary classification
+does not grant a self-hosted execution mode: persistent jobs require
+`trusted-main`, while candidate PR code requires `ephemeral-pr`.
 
 Notable restrictions recorded in the catalog:
 

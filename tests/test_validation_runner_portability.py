@@ -118,7 +118,15 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
                 self.assertIn('"ephemeral" not in labels', text)
                 self.assertIn('os.environ["EVENT_NAME"] != "pull_request"', text)
 
-    def test_trusted_pr_mode_is_available_for_authorized_persistent_validation(self):
+    def test_no_reusable_workflow_exposes_the_removed_trusted_pr_mode(self):
+        for path in sorted((ROOT / ".github/workflows").glob("_*.yml")):
+            text = path.read_text(encoding="utf-8")
+            if "workflow_call:" not in text:
+                continue
+            with self.subTest(workflow=path.name):
+                self.assertNotIn("trusted-pr", text)
+
+    def test_self_hosted_validation_reusables_offer_only_supported_modes(self):
         for name in (
             "_python-uv-test.yml",
             "_node-project-test.yml",
@@ -131,12 +139,16 @@ class ValidationRunnerPortabilityTests(unittest.TestCase):
         ):
             text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
             with self.subTest(workflow=name):
-                self.assertIn("trusted-pr", text)
-                trusted_pr_index = text.index('mode == "trusted-pr"')
-                ephemeral_index = text.index('mode == "ephemeral-pr"')
-                trusted_pr_block = text[trusted_pr_index:ephemeral_index]
-                self.assertIn('os.environ["EVENT_NAME"] != "pull_request"', trusted_pr_block)
-                self.assertNotIn('"ephemeral" not in labels', trusted_pr_block)
+                self.assertIn(
+                    "description: none, trusted-main, or ephemeral-pr",
+                    text,
+                )
+                self.assertIn('mode == "trusted-main"', text)
+                self.assertIn('mode == "ephemeral-pr"', text)
+                self.assertIn(
+                    "self-hosted validation requires mode trusted-main or ephemeral-pr",
+                    text,
+                )
 
     def test_explicit_optional_skip_remains_caller_controlled(self):
         for name in (
