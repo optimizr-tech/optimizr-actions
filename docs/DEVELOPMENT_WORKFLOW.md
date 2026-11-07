@@ -83,6 +83,14 @@ repository's owner with this public-repository policy. Any branch protection
 rule must use the metadata check for PRs and retain full trusted-main
 validation as a prerequisite to publishing `v1`.
 
+## Quality gate section in PR bodies
+
+PRs de serviço carregam uma seção `## Quality gate` gerada localmente por
+`python -m scripts.quality_gate.local`. Níveis de custo, regra de pilha, origem
+do baseline e proibições estão em
+[PR_QUALITY_GATE_SECTION.md](PR_QUALITY_GATE_SECTION.md). A seção é convenção,
+não check obrigatório.
+
 ## Owner runner prerequisites
 
 The restricted owner runner (`wsl-ci-2`, group `local-docker-owner`) is a
