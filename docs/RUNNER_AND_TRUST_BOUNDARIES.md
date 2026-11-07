@@ -91,7 +91,7 @@ Notable restrictions recorded in the catalog:
 
 | Artifact | Runner | Boundary | Why |
 | --- | --- | --- | --- |
-| `_semantic-release.yml` | hosted | trusted-push | Release orchestration must run on managed runners |
+| `_semantic-release.yml` | hosted, self-hosted-persistent, self-hosted-ephemeral | trusted-push; ephemeral self-hosted may run PRs | Persistent Linux runners accept only push/workflow_dispatch on main; hosted and ephemeral runners keep their existing caller-event behavior |
 | `_dependabot-security-automerge.yml` | hosted default; explicit group-scoped self-hosted metadata | trusted-push | API-only native auto-merge from a trusted base caller; write token, no candidate checkout; separate group authorization required |
 | `_quality-gate.yml` | hosted | trusted-pr | Gate over PR evaluation on managed runners |
 | `pnpm-setup` action | hosted | trusted-pr | Node package-manager bootstrap |

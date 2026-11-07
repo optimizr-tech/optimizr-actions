@@ -20,6 +20,10 @@ For production package-less releases, `_semantic-release.yml` validates that `jo
 
 Callers may also set `validate_only: true` to run setup, changelog compatibility validation, and the semantic-release dry-run without executing the release or updating a badge. Its default is `false`; regular release behavior is unchanged.
 
+## Runner trust
+
+Both the release and badge jobs validate the requested runner labels as their first step, before checkout. The exact hosted label set `["ubuntu-latest"]` remains available for any caller event. Linux self-hosted runners carrying the `ephemeral` label remain available for any event, including pull requests. Persistent Linux self-hosted runners are accepted only for `push` or `workflow_dispatch` on `refs/heads/main`; pull requests and other refs fail closed before repository code is checked out. Non-Linux self-hosted configurations, malformed runner-label inputs, and hosted label sets other than the exact supported set are rejected. The `ephemeral` label must be reserved for disposable runners by the runner-group configuration; this workflow cannot establish that a runner is actually ephemeral from labels alone.
+
 The semantic-release runtime and plugins are installed ephemerally with `--package-lock=false`. The reusable does not regenerate `package-lock.json` and does not use `npm install --package-lock-only`.
 
 The four default plugins (`@semantic-release/commit-analyzer`, `@semantic-release/release-notes-generator`, `@semantic-release/npm`, and `@semantic-release/github`) are provided by the pinned `semantic-release` runtime and are not installed again as independent latest packages. Reinstalling a default plugin can override the version selected by semantic-release and create an incompatible plugin/dependency combination. Additional plugins declared by the release configuration and explicit `semantic_release_extra_packages` retain the existing ephemeral installation behavior.
