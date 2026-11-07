@@ -93,6 +93,47 @@ jobs:
     runs-on: ${{ fromJSON(inputs.runs_on) }}
     timeout-minutes: 15
     steps:
+      - name: Validate runner trust contract
+        shell: bash
+        env:
+          RUNS_ON_JSON: ${{ inputs.runs_on }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          try:
+              labels = json.loads(os.environ["RUNS_ON_JSON"])
+          except (TypeError, ValueError) as error:
+              raise SystemExit("runs_on must be valid JSON") from error
+          if not isinstance(labels, list) or not labels or any(
+              not isinstance(value, str) or not value for value in labels
+          ):
+              raise SystemExit("runs_on must be a non-empty JSON string array")
+
+          if labels == ["ubuntu-latest"]:
+              raise SystemExit(0)
+
+          if "self-hosted" not in labels or "Linux" not in labels:
+              raise SystemExit(
+                  'release must use ["ubuntu-latest"] or a Linux self-hosted runner'
+              )
+
+          if "ephemeral" in labels:
+              raise SystemExit(0)
+
+          if (
+              os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"}
+              or os.environ["EVENT_REF"] != "refs/heads/main"
+          ):
+              raise SystemExit(
+                  "persistent self-hosted release requires push/workflow_dispatch "
+                  "on refs/heads/main"
+              )
+          PY
+
       - name: Validate protected-main inputs
         if: inputs.protected_main_mode
         shell: bash
@@ -444,6 +485,47 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Validate runner trust contract
+        shell: bash
+        env:
+          RUNS_ON_JSON: ${{ inputs.runs_on }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          try:
+              labels = json.loads(os.environ["RUNS_ON_JSON"])
+          except (TypeError, ValueError) as error:
+              raise SystemExit("runs_on must be valid JSON") from error
+          if not isinstance(labels, list) or not labels or any(
+              not isinstance(value, str) or not value for value in labels
+          ):
+              raise SystemExit("runs_on must be a non-empty JSON string array")
+
+          if labels == ["ubuntu-latest"]:
+              raise SystemExit(0)
+
+          if "self-hosted" not in labels or "Linux" not in labels:
+              raise SystemExit(
+                  'release must use ["ubuntu-latest"] or a Linux self-hosted runner'
+              )
+
+          if "ephemeral" in labels:
+              raise SystemExit(0)
+
+          if (
+              os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"}
+              or os.environ["EVENT_REF"] != "refs/heads/main"
+          ):
+              raise SystemExit(
+                  "persistent self-hosted release requires push/workflow_dispatch "
+                  "on refs/heads/main"
+              )
+          PY
+
       - name: Checkout released branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1  # v6.0.2
         with:

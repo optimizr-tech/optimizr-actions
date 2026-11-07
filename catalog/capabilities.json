@@ -2031,7 +2031,7 @@
     },
     {
       "category": "release",
-      "evidence": "Semantic release dry-run results with optional release badge update",
+      "evidence": "Semantic release dry-run results with runner trust validation and optional release badge update",
       "examples": [],
       "inputs": {
         "actions_ref": "",
@@ -2050,7 +2050,7 @@
         "working_directory": ""
       },
       "kind": "workflow",
-      "known_limitations": "Consume via immutable SHA per governance contract",
+      "known_limitations": "Persistent Linux runners require push or workflow_dispatch on main; reserve the ephemeral label for disposable runners; consume via immutable SHA per governance contract",
       "maturity": "stable-v1",
       "metadata_status": "classified",
       "outputs": {},
@@ -2061,9 +2061,11 @@
         "pull-requests": "write"
       },
       "runner": [
-        "hosted"
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
       ],
-      "source_sha256": "38b95bb786c5e7dc9d8c998295d04e4063d88bcfdd5c06c6dc56f2000de8f17c",
+      "source_sha256": "68999e44c52368fcdfa807552a20500dd95eed882d9690693dd8c595476974c6",
       "trust_boundary": "trusted-push"
     },
     {

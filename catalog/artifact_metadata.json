@@ -320,10 +320,10 @@
       "known_limitations": "trusted-pr requires an explicitly authorized persistent runner; the reusable validates the pull_request event and runner labels but not actor approval"
     },
     ".github/workflows/_semantic-release.yml": {
-      "runner": ["hosted"],
+      "runner": ["hosted", "self-hosted-persistent", "self-hosted-ephemeral"],
       "trust_boundary": "trusted-push",
-      "evidence": "Semantic release dry-run results with optional release badge update",
-      "known_limitations": "Consume via immutable SHA per governance contract"
+      "evidence": "Semantic release dry-run results with runner trust validation and optional release badge update",
+      "known_limitations": "Persistent Linux runners require push or workflow_dispatch on main; reserve the ephemeral label for disposable runners; consume via immutable SHA per governance contract"
     },
     ".github/workflows/_static-lint.yml": {
       "trust_boundary": "trusted-pr",
