@@ -1,0 +1,2 @@
+# Shell scripts always LF (Linux CI, Docker, VPS).
+*.sh text eol=lf

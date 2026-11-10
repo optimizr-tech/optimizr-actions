@@ -30,6 +30,11 @@ class PublicRepositoryPolicyTests(unittest.TestCase):
         self.assertIn("*.py[cod]", gitignore)
         self.assertIn(".worktrees/", gitignore)
 
+    def test_gitattributes_enforces_lf_for_shell_scripts(self) -> None:
+        self.assertTrue((ROOT / ".gitattributes").is_file())
+        gitattributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+        self.assertIn("*.sh text eol=lf", gitattributes)
+
 
 if __name__ == "__main__":
     unittest.main()
