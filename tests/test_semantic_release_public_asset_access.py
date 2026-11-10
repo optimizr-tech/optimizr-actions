@@ -38,6 +38,19 @@ class SemanticReleasePublicAssetAccessTests(unittest.TestCase):
                     with urlopen(request, timeout=15) as response:
                         content = response.read()
                 except HTTPError as error:
+                    error_body = ""
+                    try:
+                        error_body = error.read().decode("utf-8", errors="ignore").lower()
+                    except Exception:
+                        pass
+                    if error.code == 403 and (
+                        error.headers.get("X-RateLimit-Remaining") == "0"
+                        or "rate limit" in error_body
+                        or "rate limit" in str(getattr(error, "reason", "")).lower()
+                    ):
+                        self.skipTest(
+                            f"anonymous read of {path}@{self.ref} hit GitHub API rate limit (403)"
+                        )
                     self.fail(
                         f"anonymous read of {path}@{self.ref} failed with HTTP "
                         f"{error.code}; no authorization header was sent"
