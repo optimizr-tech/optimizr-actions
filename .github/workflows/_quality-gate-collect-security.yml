@@ -158,10 +158,36 @@ jobs:
           expected_sha: ${{ github.sha }}
           required_paths_json: ${{ matrix.required_paths_json }}
 
+      - name: Resolve uv version
+        id: uv-version
+        if: matrix.tool != 'pnpm-audit'
+        shell: bash
+        env:
+          # Organization default; consumers override it with tool.uv.required-version
+          # (pyproject.toml) or required-version (uv.toml). An exact version lets
+          # setup-uv hit the self-hosted tool cache instead of fetching the
+          # "latest" manifest over the network on every job.
+          DEFAULT_UV_VERSION: "0.13.7"
+        run: |
+          set -euo pipefail
+          root="${GITHUB_WORKSPACE}"
+          declared=false
+          if [ -f "$root/uv.toml" ] && grep -Eq '^[[:space:]]*required-version[[:space:]]*=' "$root/uv.toml"; then
+            declared=true
+          elif [ -f "$root/pyproject.toml" ] && awk '/^\[tool\.uv\][[:space:]]*$/{f=1;next} /^\[/{f=0} f && /^[[:space:]]*required-version[[:space:]]*=/{found=1} END{exit !found}' "$root/pyproject.toml"; then
+            declared=true
+          fi
+          if [ "$declared" = true ]; then
+            echo "version=" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$DEFAULT_UV_VERSION" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install uv
         if: matrix.tool != 'pnpm-audit'
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d  # v10.0.1
         with:
+          version: ${{ steps.uv-version.outputs.version }}
           enable-cache: true
 
       - name: Sync Python dependencies

@@ -18,6 +18,11 @@ When a consumer declares `tool.uv.required-version`, setup-uv resolves that
 exact project version and the gate never installs a second uv that could
 shadow it. This keeps lock validation, export, and audit commands on one
 reproducible toolchain.
+When the consumer declares no uv version, every organization action and
+reusable workflow passes the exact organization default (`0.13.7`) to
+setup-uv. An exact version is served from the self-hosted runner tool cache;
+without it setup-uv downloads the "latest" manifest on every job, and a
+network timeout there fails the gate.
 The dependency-policy gate disables setup-uv's GitHub Actions cache. Lock validation can finish without populating a cache directory, so the post-job cache saver cannot turn a successful validation into a failure. The Python lockfile checks remain enabled.
 
 For Node projects, the organization defaults are Node 24 and npm 12.0.2. The

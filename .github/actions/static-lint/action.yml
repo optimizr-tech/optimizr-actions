@@ -20,9 +20,34 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Resolve uv version
+      id: uv-version
+      shell: bash
+      env:
+        # Organization default; consumers override it with tool.uv.required-version
+        # (pyproject.toml) or required-version (uv.toml). An exact version lets
+        # setup-uv hit the self-hosted tool cache instead of fetching the
+        # "latest" manifest over the network on every job.
+        DEFAULT_UV_VERSION: "0.13.7"
+      run: |
+        set -euo pipefail
+        root="${GITHUB_WORKSPACE}"
+        declared=false
+        if [ -f "$root/uv.toml" ] && grep -Eq '^[[:space:]]*required-version[[:space:]]*=' "$root/uv.toml"; then
+          declared=true
+        elif [ -f "$root/pyproject.toml" ] && awk '/^\[tool\.uv\][[:space:]]*$/{f=1;next} /^\[/{f=0} f && /^[[:space:]]*required-version[[:space:]]*=/{found=1} END{exit !found}' "$root/pyproject.toml"; then
+          declared=true
+        fi
+        if [ "$declared" = true ]; then
+          echo "version=" >> "$GITHUB_OUTPUT"
+        else
+          echo "version=$DEFAULT_UV_VERSION" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Setup uv
       uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
       with:
+        version: ${{ steps.uv-version.outputs.version }}
         python-version: "3.12"
 
     - name: Install controlled lint tools
