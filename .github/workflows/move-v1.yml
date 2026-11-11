@@ -219,6 +219,8 @@ jobs:
       - name: Install validation Python toolchain
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
         with:
+          # Exact version: hits the runner tool cache instead of the "latest" manifest.
+          version: "0.13.7"
           python-version: '3.14'
           enable-cache: false
 
