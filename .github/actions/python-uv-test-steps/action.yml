@@ -170,7 +170,7 @@ runs:
       with:
         version: ${{ steps.uv-version.outputs.version }}
         python-version: ${{ inputs.python_version }}
-        enable-cache: true
+        enable-cache: auto  # persistent self-hosted UV_CACHE_DIR; GitHub-hosted only
 
     - name: Validate Python project materialization
       shell: bash

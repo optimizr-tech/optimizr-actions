@@ -19,6 +19,31 @@ The two trusted VPS deploy reusables invoke the canonical prune action with
 `allow_global_prune: true` explicitly because that daemon is shared; any other
 consumer gets workspace cleanup only unless it makes the same reviewed opt-in.
 
+## Actions cache on persistent self-hosted runners
+
+The local self-hosted pool keeps tool caches on the host: `UV_CACHE_DIR` and
+the npm cache directory point to persistent paths. On those runners the
+GitHub Actions cache only adds work. Saving it compresses the whole persistent
+directory, and restoring it downloads and extracts a copy of data already on
+disk. On 2026-11-12, `setup-uv` spent 12.5 minutes in `tar -z` over the
+persistent uv cache before the job was cancelled. In another job, `setup-node`
+restored a 346 MB npm cache into the persistent `~/.npm` at 1.5-3 MB/s. The
+network itself was healthy (25 MB/s down, 11 MB/s up); the saturated host CPU
+made compression and extraction the bottleneck.
+
+Rules:
+
+- `astral-sh/setup-uv` uses `enable-cache: auto` (GitHub-hosted only) or
+  `false`. Never `true`.
+- `actions/setup-node` steps without a job-local store set
+  `package-manager-cache: ${{ runner.environment == 'github-hosted' }}`. An
+  explicit npm cache uses
+  `cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}`.
+- Steps that restore a job-local pnpm store (`runner.temp`) keep `cache: pnpm`.
+  That store is not persistent, so the cache still saves downloads.
+
+`tests/test_self_hosted_cache_contract.py` enforces these rules.
+
 ## Migration
 
 Callers that consume `_container-build-publish.yml` may set `max_parallel`.
