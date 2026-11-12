@@ -291,10 +291,10 @@ trivy --cache-dir "$OPTIMIZR_TRIVY_CACHE_DIR" image \
             start_new_session=True,
         )
 
-        self.assertFalse(self.wait_for_marker(marker, process, timeout_seconds=0.1))
-        stdout, stderr = self.collect_process_output(process, timeout_seconds=0.1)
+        self.assertFalse(self.wait_for_marker(marker, process, timeout_seconds=2.0))
+        stdout, stderr = self.collect_process_output(process, timeout_seconds=2.0)
         message = self.marker_failure_message(
-            "test", marker, process, 0.1, stdout, stderr
+            "test", marker, process, 2.0, stdout, stderr
         )
 
         self.assertIsNotNone(process.returncode)
