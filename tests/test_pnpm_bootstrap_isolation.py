@@ -74,9 +74,10 @@ class PnpmBootstrapIsolationTests(unittest.TestCase):
                         self.assertNotIn("PNPM_CONFIG_STORE_DIR", step.get("env", {}))
                 if job_name == "collect-security":
                     self.assertEqual(prepare["if"], "matrix.tool == 'pnpm-audit'")
-                    cache = next(step for step in steps if step.get("name") == "Initialize pnpm cache")
-                    self.assertEqual(cache["with"]["cache"], "pnpm")
-                    self.assertLess(steps.index(install), steps.index(cache))
+                    self.assertNotIn("Initialize pnpm cache", [step.get("name") for step in steps])
+                    for step in steps:
+                        if str(step.get("uses", "")).startswith("actions/setup-node@"):
+                            self.assertNotIn("cache", step.get("with", {}))
 
     def test_store_preparation_exports_the_real_directory(self) -> None:
         bash = shutil.which("bash")
