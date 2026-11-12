@@ -197,7 +197,9 @@ jobs:
     needs: [scope]
     if: needs.scope.outputs.publish == 'true'
     runs-on: ${{ needs.scope.outputs.runner_mode == 'github-hosted-recovery' && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","local-docker"]') }}
-    timeout-minutes: 10
+    # The full contract battery takes ~6 min on an idle shared pool but ~10 min
+    # under load (2026-11-12: all steps green, job cancelled at the 10 min bound).
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:

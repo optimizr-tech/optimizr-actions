@@ -139,6 +139,13 @@ class MoveV1RecoveryContractTests(unittest.TestCase):
         self.assertIn("$0.12", self.runbook)
         self.assertIn("does not fetch or verify", self.runbook)
 
+    def test_validate_job_has_headroom_for_loaded_shared_runners(self) -> None:
+        start = self.workflow.index("\n  validate:\n")
+        end = self.workflow.index("\n    permissions:", start)
+        match = re.search(r"timeout-minutes: (\d+)", self.workflow[start:end])
+        self.assertIsNotNone(match)
+        self.assertGreaterEqual(int(match.group(1)), 20)
+
 
 if __name__ == "__main__":
     unittest.main()
