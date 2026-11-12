@@ -45,6 +45,20 @@ def _resolver_script() -> str:
     raise AssertionError("resolver step missing")
 
 
+class SecurityCollectorNoCacheContract(unittest.TestCase):
+    def test_security_collector_does_not_enable_uv_or_pnpm_cache(self) -> None:
+        path = ROOT / ".github/workflows/_quality-gate-collect-security.yml"
+        for steps in _steps(path):
+            for step in steps:
+                uses = str(step.get("uses", ""))
+                with_ = step.get("with") or {}
+                if uses.startswith("astral-sh/setup-uv@"):
+                    self.assertEqual(str(with_.get("enable-cache")).lower(), "false")
+                if uses.startswith(("actions/setup-node@", "actions/cache@")):
+                    self.assertNotIn("cache", with_)
+                self.assertNotEqual(step.get("name"), "Initialize pnpm cache")
+
+
 class UvVersionPinContract(unittest.TestCase):
     def test_every_setup_uv_receives_resolved_version(self) -> None:
         seen = 0

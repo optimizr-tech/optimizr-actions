@@ -42,6 +42,8 @@ when pip-audit exits non-zero for discovered vulnerabilities, so findings still
 reach the quality gate; the collector still fails closed if no report is
 produced after the retry window.
 
+The security collector (`_quality-gate-collect-security.yml`) disables the setup-uv cache and the setup-node pnpm cache: the scans take minutes, and cache restore/save over slow GitHub cache traffic on self-hosted runners hung jobs past the 15 minute bound.
+
 The sanitized toolchain evidence records detected ecosystems, requested Node/npm versions, and resolved Python/Node/npm versions. It does not contain environment variables, registry credentials, package contents, or install logs.
 
 ```yaml
