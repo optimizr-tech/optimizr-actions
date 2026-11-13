@@ -408,14 +408,18 @@ jobs:
         ports:
           - 5672:5672
         # Early probes must use the server user to avoid a root-owned Erlang cookie.
+        # On the shared self-hosted host the broker took ~6 min to boot with
+        # 0.5 CPU and its Ra/WAL store on SATA (serve run 43446344683), past the
+        # 120s grace. One CPU, tmpfs data and a 300s grace keep it inside the window.
         options: >-
           --memory 1g
-          --cpus 0.50
+          --cpus 1.0
+          --tmpfs /var/lib/rabbitmq:rw,size=256m
           --pids-limit 128
           --health-cmd "su-exec rabbitmq rabbitmq-diagnostics -q check_running"
           --health-interval 10s
           --health-timeout 30s
-          --health-start-period 120s
+          --health-start-period 300s
           --health-start-interval 10s
           --health-retries 5
     steps:
@@ -523,14 +527,18 @@ jobs:
         ports:
           - 5672:5672
         # Early probes must use the server user to avoid a root-owned Erlang cookie.
+        # On the shared self-hosted host the broker took ~6 min to boot with
+        # 0.5 CPU and its Ra/WAL store on SATA (serve run 43446344683), past the
+        # 120s grace. One CPU, tmpfs data and a 300s grace keep it inside the window.
         options: >-
           --memory 1g
-          --cpus 0.50
+          --cpus 1.0
+          --tmpfs /var/lib/rabbitmq:rw,size=256m
           --pids-limit 128
           --health-cmd "su-exec rabbitmq rabbitmq-diagnostics -q check_running"
           --health-interval 10s
           --health-timeout 30s
-          --health-start-period 120s
+          --health-start-period 300s
           --health-start-interval 10s
           --health-retries 5
     steps:
