@@ -15,7 +15,8 @@ class ResourceGuardContractTests(unittest.TestCase):
         self.assertEqual(2, text.count("--memory 256m"))
         self.assertEqual(4, text.count("--pids-limit 128"))
         self.assertEqual(2, text.count("--pids-limit 64"))
-        self.assertEqual(4, text.count("--cpus 0.50"))
+        self.assertEqual(2, text.count("--cpus 0.50"))
+        self.assertEqual(2, text.count("--cpus 1.0\n"))
         self.assertEqual(2, text.count("--cpus 0.25"))
 
     def test_container_builds_are_serial_by_default_and_bounded(self) -> None:

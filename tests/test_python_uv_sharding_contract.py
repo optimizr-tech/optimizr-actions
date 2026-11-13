@@ -85,7 +85,9 @@ class PythonUvShardingContractTests(unittest.TestCase):
                     match.group("job"),
                 )
                 self.assertIsNotNone(rabbitmq)
-                self.assertIn("--health-start-period 120s", rabbitmq.group("service"))
+                self.assertIn("--health-start-period 300s", rabbitmq.group("service"))
+                self.assertIn("--cpus 1.0", rabbitmq.group("service"))
+                self.assertIn("--tmpfs /var/lib/rabbitmq:rw,size=256m", rabbitmq.group("service"))
                 self.assertIn("--health-start-interval 10s", rabbitmq.group("service"))
 
     def test_rabbitmq_healthcheck_uses_the_server_user_for_cookie_access(self) -> None:
