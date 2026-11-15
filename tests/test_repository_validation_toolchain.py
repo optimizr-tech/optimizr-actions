@@ -53,7 +53,7 @@ class RepositoryValidationToolchainTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_explicit_npm_version_is_accepted(self):
-        result = self._validate(node_version="24", npm_version="10.9.3", pnpm_version="")
+        result = self._validate(node_version="24", npm_version="12.0.2", pnpm_version="")
 
         self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -64,7 +64,7 @@ class RepositoryValidationToolchainTests(unittest.TestCase):
 
     def test_invalid_explicit_npm_version_is_still_rejected(self):
         result = self._validate(
-            node_version="24", npm_version="10.9.3;echo unsafe", pnpm_version=""
+            node_version="24", npm_version="12.0.2;echo unsafe", pnpm_version=""
         )
 
         self.assertEqual(result.returncode, 2)
