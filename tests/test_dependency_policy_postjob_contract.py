@@ -94,6 +94,14 @@ class DependencyPolicyUvPostJobContractTests(unittest.TestCase):
         self.assertIn("UV_PYTHON=\"$python_version\" uv lock --check", uv_case)
         self.assertIn("uv lock --check", uv_case)
 
+    def test_python_consumers_disable_uv_post_job_cache(self):
+        setup_uv = self.step("Setup uv")
+        self.assertEqual(
+            setup_uv["if"],
+            "steps.ecosystems.outputs.python_required == 'true'",
+        )
+        self.assertEqual(setup_uv["with"].get("enable-cache"), "false")
+
     def test_python_poetry_consumer_keeps_its_lockfile_validation(self):
         ecosystems = self.detect(
             {
