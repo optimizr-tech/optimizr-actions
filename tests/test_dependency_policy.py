@@ -60,6 +60,147 @@ class DependencyPolicyTests(unittest.TestCase):
             with self.assertRaises(PolicyError):
                 load_policy(path, today="2026-07-20")
 
+    def _load_single_exception_policy(self, path, exception, today="2026-11-17"):
+        path.write_text(json.dumps({"version": 1, "exceptions": [exception]}))
+        return load_policy(path, today=today)
+
+    @staticmethod
+    def _trivy_report(*findings):
+        return {
+            "Results": [
+                {
+                    "Target": target,
+                    "Vulnerabilities": [
+                        {
+                            "VulnerabilityID": identifier,
+                            "PkgName": package,
+                            "Severity": "HIGH",
+                        }
+                    ],
+                }
+                for target, identifier, package in findings
+            ]
+        }
+
+    def test_targeted_exception_suppresses_only_exact_trivy_target(self):
+        advisory = "GHSA-fc5q-39xc-vjpf"
+        package = "picomatch"
+        exception = {
+            "kind": "vulnerability",
+            "id": advisory,
+            "package": package,
+            "target": "package-lock.json",
+            "owner": "test-owner",
+            "statement": "Test fixture for a root development-only dependency.",
+            "expires": "2026-12-17",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "policy.json"
+            policy = self._load_single_exception_policy(path, exception)
+            decision = evaluate_report(
+                self._trivy_report(
+                    ("package-lock.json", advisory, package),
+                    ("frontend/apps/admin/pnpm-lock.yaml", advisory, package),
+                    ("frontend/apps/storefront/pnpm-lock.yaml", advisory, package),
+                    ("scripts/package-lock.json", advisory, package),
+                    ("package-lock.json", "GHSA-other", package),
+                    ("package-lock.json", advisory, "another-package"),
+                ),
+                policy,
+            )
+
+            self.assertEqual(
+                decision["suppressed"],
+                [
+                    {
+                        "kind": "vulnerability",
+                        "id": advisory,
+                        "package": package,
+                        "severity": "HIGH",
+                        "target": "package-lock.json",
+                    }
+                ],
+            )
+            self.assertEqual(
+                [(item["target"], item["id"], item["package"]) for item in decision["blocking"]],
+                [
+                    ("frontend/apps/admin/pnpm-lock.yaml", advisory, package),
+                    ("frontend/apps/storefront/pnpm-lock.yaml", advisory, package),
+                    ("scripts/package-lock.json", advisory, package),
+                    ("package-lock.json", "GHSA-other", package),
+                    ("package-lock.json", advisory, "another-package"),
+                ],
+            )
+            self.assertFalse(decision["passed"])
+
+    def test_legacy_exception_without_target_keeps_v1_cross_target_matching(self):
+        exception = {
+            "kind": "vulnerability",
+            "id": "GHSA-fc5q-39xc-vjpf",
+            "package": "picomatch",
+            "owner": "test-owner",
+            "statement": "Existing v1 exception.",
+            "expires": "2026-12-17",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "policy.json"
+            policy = self._load_single_exception_policy(path, exception)
+            decision = evaluate_report(
+                self._trivy_report(
+                    ("package-lock.json", "GHSA-fc5q-39xc-vjpf", "picomatch"),
+                    ("frontend/apps/admin/pnpm-lock.yaml", "GHSA-fc5q-39xc-vjpf", "picomatch"),
+                    ("frontend/apps/storefront/pnpm-lock.yaml", "GHSA-fc5q-39xc-vjpf", "picomatch"),
+                ),
+                policy,
+            )
+
+            self.assertEqual(
+                [item["target"] for item in decision["suppressed"]],
+                [
+                    "package-lock.json",
+                    "frontend/apps/admin/pnpm-lock.yaml",
+                    "frontend/apps/storefront/pnpm-lock.yaml",
+                ],
+            )
+            self.assertEqual(decision["blocking"], [])
+
+    def test_targeted_exception_expiry_is_valid_through_expiry_date(self):
+        exception = {
+            "kind": "vulnerability",
+            "id": "GHSA-fc5q-39xc-vjpf",
+            "package": "picomatch",
+            "target": "package-lock.json",
+            "owner": "test-owner",
+            "statement": "Expires at the end of this date.",
+            "expires": "2026-12-17",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "policy.json"
+            self.assertEqual(
+                len(self._load_single_exception_policy(path, exception, "2026-12-17")["exceptions"]),
+                1,
+            )
+            with self.assertRaises(PolicyError):
+                self._load_single_exception_policy(path, exception, "2026-12-18")
+
+    def test_targeted_exception_requires_a_non_empty_exact_target(self):
+        exception = {
+            "kind": "vulnerability",
+            "id": "GHSA-fc5q-39xc-vjpf",
+            "package": "picomatch",
+            "owner": "test-owner",
+            "statement": "Temporary exact-target exception.",
+            "expires": "2026-12-17",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "policy.json"
+            for target in ("", "   ", " package-lock.json ", None, ["package-lock.json"]):
+                with self.subTest(target=target):
+                    with self.assertRaises(PolicyError):
+                        self._load_single_exception_policy(
+                            path, {**exception, "target": target}
+                        )
+
 
 if __name__ == "__main__":
     unittest.main()
