@@ -106,10 +106,18 @@ def load_policy(path: Path, today: str | None = None) -> dict[str, Any]:
             raise PolicyError("exceptions require kind, id, package, owner, statement, and expires")
         if any(not isinstance(entry.get(field), str) or not entry[field].strip() for field in required):
             raise PolicyError("exception fields must be non-empty strings")
+        target = entry.get("target")
+        if "target" in entry and (
+            not isinstance(target, str) or not target.strip() or target != target.strip()
+        ):
+            raise PolicyError("exception target must be a non-empty, trimmed Trivy target")
         expiry = date.fromisoformat(entry["expires"])
         if expiry < current:
             raise PolicyError(f"expired dependency exception: {entry['id']} ({entry['expires']})")
-        normalized.append({field: entry[field] for field in sorted(required)})
+        normalized_entry = {field: entry[field] for field in sorted(required)}
+        if "target" in entry:
+            normalized_entry["target"] = target
+        normalized.append(normalized_entry)
     return {
         "version": 1,
         "block_severities": list(dict.fromkeys(severities)),
@@ -118,11 +126,14 @@ def load_policy(path: Path, today: str | None = None) -> dict[str, Any]:
     }
 
 
-def _excepted(policy: dict[str, Any], kind: str, identifier: str, package: str) -> bool:
+def _excepted(
+    policy: dict[str, Any], kind: str, identifier: str, package: str, target: str
+) -> bool:
     return any(
         entry["kind"] == kind
         and entry["id"] == identifier
         and entry["package"] in {package, "*"}
+        and ("target" not in entry or entry["target"] == target)
         for entry in policy["exceptions"]
     )
 
@@ -144,7 +155,7 @@ def evaluate_report(report: dict[str, Any], policy: dict[str, Any], today: str |
             if severity not in policy["block_severities"]:
                 continue
             finding = {"kind": "vulnerability", "id": identifier, "package": package, "severity": severity, "target": target}
-            (suppressed if _excepted(policy, "vulnerability", identifier, package) else blocking).append(finding)
+            (suppressed if _excepted(policy, "vulnerability", identifier, package, target) else blocking).append(finding)
         for license_item in result.get("Licenses", []) or []:
             if not isinstance(license_item, dict):
                 continue
@@ -153,7 +164,7 @@ def evaluate_report(report: dict[str, Any], policy: dict[str, Any], today: str |
             if identifier not in policy["denied_licenses"]:
                 continue
             finding = {"kind": "license", "id": identifier, "package": package, "severity": "POLICY", "target": target}
-            (suppressed if _excepted(policy, "license", identifier, package) else blocking).append(finding)
+            (suppressed if _excepted(policy, "license", identifier, package, target) else blocking).append(finding)
     return {"blocking": blocking, "suppressed": suppressed, "passed": not blocking}
 
 
