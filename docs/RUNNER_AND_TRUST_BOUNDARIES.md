@@ -23,9 +23,11 @@ capability catalog (`catalog/capabilities.json`).
 
 - Long-lived machine with shared caches and infrastructure; the only kind
   that can meaningfully hold deployment state.
-- **Execution mode**: only `trusted-main` jobs for `push` or
-  `workflow_dispatch` on `refs/heads/main` may run here. Candidate PR code must
-  never reach a persistent runner; see `docs/VALIDATION_AUTHORIZATION.md`.
+- **Execution mode**: `trusted-main` jobs for `push` or `workflow_dispatch`
+  on `refs/heads/main` may run here. `_semantic-release.yml` also accepts
+  `workflow_run` only when its event payload records a successful `push` from
+  `main` in the same repository. Candidate PR code must never reach a
+  persistent runner; see `docs/VALIDATION_AUTHORIZATION.md`.
 - Preferred for: `_vps-*-deploy`, `_post-deploy-verification`,
   `_negative-probes`, `_postgres-major-logical-migration`.
 
@@ -91,7 +93,7 @@ Notable restrictions recorded in the catalog:
 
 | Artifact | Runner | Boundary | Why |
 | --- | --- | --- | --- |
-| `_semantic-release.yml` | hosted, self-hosted-persistent, self-hosted-ephemeral | trusted-push; ephemeral self-hosted may run PRs | Persistent Linux runners accept only push/workflow_dispatch on main; hosted and ephemeral runners keep their existing caller-event behavior |
+| `_semantic-release.yml` | hosted, self-hosted-persistent, self-hosted-ephemeral | trusted-push; ephemeral self-hosted may run PRs | Persistent Linux runners accept push/workflow_dispatch on main and workflow_run only for successful same-repository main pushes; hosted and ephemeral runners keep their existing caller-event behavior |
 | `_dependabot-security-automerge.yml` | hosted default; explicit group-scoped self-hosted metadata | trusted-push | API-only native auto-merge from a trusted base caller; write token, no candidate checkout; separate group authorization required |
 | `_quality-gate.yml` | hosted | trusted-pr | Gate over PR evaluation on managed runners |
 | `pnpm-setup` action | hosted | trusted-pr | Node package-manager bootstrap |

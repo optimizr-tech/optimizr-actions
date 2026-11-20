@@ -50,12 +50,48 @@ class SemanticReleaseRunnerTrustTests(unittest.TestCase):
                 self.assertGreater(step_names.index(checkout_name), 0)
         self.assertEqual(sources[0], sources[1])
 
-    def assert_guard(self, labels: str, event: str, ref: str, succeeds: bool) -> None:
+    def test_workflow_run_trust_fields_come_from_github_event_context(self) -> None:
+        for job_name in ("release", "update-release-badge"):
+            with self.subTest(job=job_name):
+                step = self.jobs[job_name]["steps"][0]
+                env = step["env"]
+                self.assertEqual("${{ github.event.workflow_run.event }}", env["WORKFLOW_RUN_EVENT"])
+                self.assertEqual(
+                    "${{ github.event.workflow_run.head_branch }}",
+                    env["WORKFLOW_RUN_HEAD_BRANCH"],
+                )
+                self.assertEqual(
+                    "${{ github.event.workflow_run.head_repository.full_name }}",
+                    env["WORKFLOW_RUN_HEAD_REPOSITORY"],
+                )
+                self.assertEqual(
+                    "${{ github.event.workflow_run.conclusion }}",
+                    env["WORKFLOW_RUN_CONCLUSION"],
+                )
+                self.assertEqual("${{ github.repository }}", env["REPOSITORY"])
+
+    def assert_guard(
+        self,
+        labels: str,
+        event: str,
+        ref: str,
+        succeeds: bool,
+        *,
+        origin_event: str = "",
+        origin_branch: str = "",
+        origin_repository: str = "",
+        origin_conclusion: str = "",
+    ) -> None:
         script = guard_source(self.jobs["release"]["steps"][0])
         env = {
             "RUNS_ON_JSON": labels,
             "EVENT_NAME": event,
             "EVENT_REF": ref,
+            "REPOSITORY": "optimizr-tech/optimizr-serve",
+            "WORKFLOW_RUN_EVENT": origin_event,
+            "WORKFLOW_RUN_HEAD_BRANCH": origin_branch,
+            "WORKFLOW_RUN_HEAD_REPOSITORY": origin_repository,
+            "WORKFLOW_RUN_CONCLUSION": origin_conclusion,
         }
         with patch.dict(os.environ, env, clear=False):
             try:
@@ -81,6 +117,33 @@ class SemanticReleaseRunnerTrustTests(unittest.TestCase):
         for event in ("push", "workflow_dispatch"):
             with self.subTest(event=event):
                 self.assert_guard(labels, event, "refs/heads/main", True)
+
+    def test_persistent_runner_accepts_only_successful_same_repo_main_push_workflow_run(
+        self,
+    ) -> None:
+        labels = '["self-hosted","Linux","serve"]'
+        trusted_origin = {
+            "origin_event": "push",
+            "origin_branch": "main",
+            "origin_repository": "optimizr-tech/optimizr-serve",
+            "origin_conclusion": "success",
+        }
+        self.assert_guard(
+            labels, "workflow_run", "refs/heads/feature", True, **trusted_origin
+        )
+
+        rejected_origins = (
+            {**trusted_origin, "origin_event": "pull_request"},
+            {**trusted_origin, "origin_repository": "fork/optimizr-serve"},
+            {**trusted_origin, "origin_branch": "develop"},
+            {**trusted_origin, "origin_conclusion": "failure"},
+            {**trusted_origin, "origin_conclusion": "cancelled"},
+        )
+        for origin in rejected_origins:
+            with self.subTest(origin=origin):
+                self.assert_guard(
+                    labels, "workflow_run", "refs/heads/main", False, **origin
+                )
 
     def test_persistent_runner_rejects_pr_and_non_main_refs(self) -> None:
         labels = '["self-hosted","Linux","local-docker"]'
