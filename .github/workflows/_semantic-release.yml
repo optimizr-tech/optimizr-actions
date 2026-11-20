@@ -99,6 +99,11 @@ jobs:
           RUNS_ON_JSON: ${{ inputs.runs_on }}
           EVENT_NAME: ${{ github.event_name }}
           EVENT_REF: ${{ github.ref }}
+          REPOSITORY: ${{ github.repository }}
+          WORKFLOW_RUN_EVENT: ${{ github.event.workflow_run.event }}
+          WORKFLOW_RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WORKFLOW_RUN_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          WORKFLOW_RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
         run: |
           python3 - <<'PY'
           import json
@@ -124,13 +129,23 @@ jobs:
           if "ephemeral" in labels:
               raise SystemExit(0)
 
-          if (
-              os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"}
-              or os.environ["EVENT_REF"] != "refs/heads/main"
-          ):
+          event_name = os.environ["EVENT_NAME"]
+          trusted_main_event = (
+              event_name in {"push", "workflow_dispatch"}
+              and os.environ["EVENT_REF"] == "refs/heads/main"
+          )
+          trusted_workflow_run = (
+              event_name == "workflow_run"
+              and os.environ["WORKFLOW_RUN_EVENT"] == "push"
+              and os.environ["WORKFLOW_RUN_HEAD_BRANCH"] == "main"
+              and os.environ["WORKFLOW_RUN_HEAD_REPOSITORY"].casefold()
+              == os.environ["REPOSITORY"].casefold()
+              and os.environ["WORKFLOW_RUN_CONCLUSION"] == "success"
+          )
+          if not (trusted_main_event or trusted_workflow_run):
               raise SystemExit(
-                  "persistent self-hosted release requires push/workflow_dispatch "
-                  "on refs/heads/main"
+                  "persistent self-hosted release requires trusted main push, "
+                  "workflow_dispatch, or successful same-repository main push workflow_run"
               )
           PY
 
@@ -492,6 +507,11 @@ jobs:
           RUNS_ON_JSON: ${{ inputs.runs_on }}
           EVENT_NAME: ${{ github.event_name }}
           EVENT_REF: ${{ github.ref }}
+          REPOSITORY: ${{ github.repository }}
+          WORKFLOW_RUN_EVENT: ${{ github.event.workflow_run.event }}
+          WORKFLOW_RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WORKFLOW_RUN_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          WORKFLOW_RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
         run: |
           python3 - <<'PY'
           import json
@@ -517,13 +537,23 @@ jobs:
           if "ephemeral" in labels:
               raise SystemExit(0)
 
-          if (
-              os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"}
-              or os.environ["EVENT_REF"] != "refs/heads/main"
-          ):
+          event_name = os.environ["EVENT_NAME"]
+          trusted_main_event = (
+              event_name in {"push", "workflow_dispatch"}
+              and os.environ["EVENT_REF"] == "refs/heads/main"
+          )
+          trusted_workflow_run = (
+              event_name == "workflow_run"
+              and os.environ["WORKFLOW_RUN_EVENT"] == "push"
+              and os.environ["WORKFLOW_RUN_HEAD_BRANCH"] == "main"
+              and os.environ["WORKFLOW_RUN_HEAD_REPOSITORY"].casefold()
+              == os.environ["REPOSITORY"].casefold()
+              and os.environ["WORKFLOW_RUN_CONCLUSION"] == "success"
+          )
+          if not (trusted_main_event or trusted_workflow_run):
               raise SystemExit(
-                  "persistent self-hosted release requires push/workflow_dispatch "
-                  "on refs/heads/main"
+                  "persistent self-hosted release requires trusted main push, "
+                  "workflow_dispatch, or successful same-repository main push workflow_run"
               )
           PY
 
