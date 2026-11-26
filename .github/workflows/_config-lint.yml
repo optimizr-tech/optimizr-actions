@@ -1,0 +1,88 @@
+name: _config-lint
+
+on:
+  workflow_call:
+    inputs:
+      runner_json:
+        description: JSON array of runner labels
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      self_hosted_mode:
+        description: none, trusted-main, or ephemeral-pr
+        required: false
+        type: string
+        default: none
+      policy_file:
+        description: Repository-relative versioned config lint policy JSON
+        required: false
+        type: string
+        default: .github/config-lint-policy.json
+      compose_files:
+        description: Space-separated repository-relative Compose file globs; empty auto-discovers tracked Compose YAML
+        required: false
+        type: string
+        default: ''
+permissions:
+  contents: read
+jobs:
+  config-lint:
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Validate runner trust contract
+        shell: bash
+        env:
+          RUNNER_JSON: ${{ inputs.runner_json }}
+          SELF_HOSTED_MODE: ${{ inputs.self_hosted_mode }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if not isinstance(labels, list) or not labels or any(
+              not isinstance(value, str) or not value for value in labels
+          ):
+              raise SystemExit("runner_json must be a non-empty JSON string array")
+          mode = os.environ["SELF_HOSTED_MODE"]
+          if "self-hosted" not in labels:
+              if labels != ["ubuntu-latest"] or mode != "none":
+                  raise SystemExit('hosted validation must use ["ubuntu-latest"] with mode=none')
+              raise SystemExit(0)
+          if "Linux" not in labels:
+              raise SystemExit("self-hosted validation requires the Linux label")
+          if mode == "trusted-main":
+              if os.environ["EVENT_NAME"] not in {"push", "workflow_dispatch"} or os.environ["EVENT_REF"] != "refs/heads/main":
+                  raise SystemExit("trusted-main requires push/workflow_dispatch on refs/heads/main")
+          elif mode == "ephemeral-pr":
+              if os.environ["EVENT_NAME"] != "pull_request" or "ephemeral" not in labels:
+                  raise SystemExit("ephemeral-pr requires pull_request and an ephemeral runner label")
+          else:
+              raise SystemExit("self-hosted validation requires mode trusted-main or ephemeral-pr")
+          PY
+      - name: Checkout caller source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Checkout reusable config lint runner
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .optimizr-actions-source
+          persist-credentials: false
+      - name: Validate configuration policy and files
+        env:
+          CALLER_ROOT: ${{ github.workspace }}
+          POLICY_FILE: ${{ inputs.policy_file }}
+          COMPOSE_FILES: ${{ inputs.compose_files }}
+        run: >-
+          python3 .optimizr-actions-source/scripts/config_lint/runner.py
+          --root "$CALLER_ROOT" --policy "$POLICY_FILE"
+          --compose-files "$COMPOSE_FILES"

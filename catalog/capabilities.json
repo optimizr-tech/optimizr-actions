@@ -1210,6 +1210,35 @@
       "trust_boundary": "untrusted-pr"
     },
     {
+      "category": "security",
+      "evidence": "Hadolint and Docker Compose policy annotations and job summary",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_config-lint.yml@v1"
+      ],
+      "inputs": {
+        "compose_files": "",
+        "policy_file": "",
+        "runner_json": "",
+        "self_hosted_mode": ""
+      },
+      "kind": "workflow",
+      "known_limitations": "Requires Docker Compose on the selected runner and a consumer-owned versioned policy file",
+      "maturity": "stable-v1",
+      "metadata_status": "classified",
+      "outputs": {},
+      "path": ".github/workflows/_config-lint.yml",
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "e80af0a4d86a751c3527a47761d326b792ae40a0e77bfc35acab8024f64b4680",
+      "trust_boundary": "untrusted-pr"
+    },
+    {
       "category": "build",
       "evidence": "Matrix BuildKit candidates, complete-set exception policy validation before immutable digest promotion, release manifest, cache evidence and optional registry provenance",
       "examples": [
@@ -2482,6 +2511,26 @@
       ],
       "source_sha256": "550c64b6a3fb33e2729cb343fa20eb86c7626c2a4a41c45c594f1bb29f2e840a",
       "trust_boundary": "trusted-push"
+    },
+    {
+      "category": "security",
+      "evidence": "Versioned Hadolint and Compose policy defaults for a consumer",
+      "examples": [],
+      "inputs": {},
+      "kind": "template",
+      "known_limitations": "Template; copy into consumer repository and review per-service requirements and exceptions",
+      "maturity": "canonical-template",
+      "metadata_status": "classified",
+      "outputs": {},
+      "path": "templates/config-lint-policy.json",
+      "permissions": {},
+      "runner": [
+        "hosted",
+        "self-hosted-persistent",
+        "self-hosted-ephemeral"
+      ],
+      "source_sha256": "8300ec6d9a44e1887d7a74b0c7ccacceadb014272e6da8a3c0e6d9a732d0c68a",
+      "trust_boundary": "untrusted-pr"
     },
     {
       "category": "operations-adapter",

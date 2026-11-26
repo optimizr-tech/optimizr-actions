@@ -230,6 +230,14 @@
       "known_limitations": "compose_env accepts only non-secret single-line placeholders; runner/Docker control variables are reserved",
       "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_docker-compose-validate.yml@v1"]
     },
+    ".github/workflows/_config-lint.yml": {
+      "category": "security",
+      "runner": ["hosted", "self-hosted-persistent", "self-hosted-ephemeral"],
+      "trust_boundary": "untrusted-pr",
+      "evidence": "Hadolint and Docker Compose policy annotations and job summary",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_config-lint.yml@v1"],
+      "known_limitations": "Requires Docker Compose on the selected runner and a consumer-owned versioned policy file"
+    },
     ".github/workflows/_negative-probes.yml": {
       "runner": ["self-hosted-persistent"],
       "trust_boundary": "trusted-push",
@@ -398,6 +406,13 @@
       "trust_boundary": "untrusted-pr",
       "evidence": "PR validation workflow scaffold wiring the canonical reusable",
       "known_limitations": "Template; copy into consumer repository"
+    },
+    "templates/config-lint-policy.json": {
+      "category": "security",
+      "runner": ["hosted", "self-hosted-persistent", "self-hosted-ephemeral"],
+      "trust_boundary": "untrusted-pr",
+      "evidence": "Versioned Hadolint and Compose policy defaults for a consumer",
+      "known_limitations": "Template; copy into consumer repository and review per-service requirements and exceptions"
     },
     "templates/gitlab/optimizr-delivery.yml": {
       "category": "operations-adapter",
