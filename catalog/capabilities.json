@@ -1307,6 +1307,39 @@
       "trust_boundary": "trusted-push"
     },
     {
+      "category": "test",
+      "evidence": "Sanitized passive ZAP reports with severity counts",
+      "examples": [
+        "uses: optimizr-tech/optimizr-actions/.github/workflows/_dast-baseline.yml@v1"
+      ],
+      "inputs": {
+        "fail_on": "",
+        "max_duration_minutes": "",
+        "rules_file": "",
+        "runner_json": "",
+        "targets": ""
+      },
+      "kind": "workflow",
+      "known_limitations": "Requires a trusted Linux self-hosted Docker runner and public HTTPS targets",
+      "maturity": "stable-v1",
+      "metadata_status": "classified",
+      "outputs": {
+        "high_count": "",
+        "informational_count": "",
+        "low_count": "",
+        "medium_count": ""
+      },
+      "path": ".github/workflows/_dast-baseline.yml",
+      "permissions": {
+        "contents": "read"
+      },
+      "runner": [
+        "self-hosted-persistent"
+      ],
+      "source_sha256": "6d1da1e59eddfaec0b8b7a716baacb7f280529ced86ae9fea63d5b5ee5a188fb",
+      "trust_boundary": "trusted-push"
+    },
+    {
       "category": "security",
       "evidence": "Dependabot security automerge decisions bounded by minor/patch policy",
       "examples": [],

@@ -1,0 +1,210 @@
+name: _dast-baseline
+on:
+  workflow_call:
+    inputs:
+      targets:
+        description: JSON array of public HTTPS URLs to scan
+        required: true
+        type: string
+      max_duration_minutes:
+        description: Maximum spider time per target (1-5 minutes)
+        required: false
+        type: number
+        default: 2
+      rules_file:
+        description: Optional caller repository-relative ZAP rules file
+        required: false
+        type: string
+        default: ''
+      fail_on:
+        description: Minimum alert risk that fails the workflow (high, medium, low, informational)
+        required: false
+        type: string
+        default: high
+      runner_json:
+        description: JSON runner labels; use a trusted Linux self-hosted runner
+        required: false
+        type: string
+        default: '["self-hosted","Linux"]'
+    outputs:
+      high_count:
+        description: Sanitized count of high-risk alerts
+        value: ${{ jobs.dast.outputs.high_count }}
+      medium_count:
+        description: Sanitized count of medium-risk alerts
+        value: ${{ jobs.dast.outputs.medium_count }}
+      low_count:
+        description: Sanitized count of low-risk alerts
+        value: ${{ jobs.dast.outputs.low_count }}
+      informational_count:
+        description: Sanitized count of informational alerts
+        value: ${{ jobs.dast.outputs.informational_count }}
+permissions:
+  contents: read
+jobs:
+  dast:
+    name: Passive ZAP baseline
+    if: contains(inputs.runner_json, 'self-hosted') && contains(inputs.runner_json, 'Linux') && !contains(inputs.runner_json, 'ubuntu-latest')
+    runs-on: ${{ fromJSON(inputs.runner_json) }}
+    timeout-minutes: 65
+    outputs:
+      high_count: ${{ steps.report.outputs.high_count }}
+      medium_count: ${{ steps.report.outputs.medium_count }}
+      low_count: ${{ steps.report.outputs.low_count }}
+      informational_count: ${{ steps.report.outputs.informational_count }}
+    steps:
+      - name: Validate runner trust boundary
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref }}
+          RUNNER_JSON: ${{ inputs.runner_json }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if not isinstance(labels, list) or not labels or any(not isinstance(item, str) for item in labels):
+              raise SystemExit("runner_json must be a non-empty JSON string array")
+          if "self-hosted" not in labels or "Linux" not in labels or "ubuntu-latest" in labels:
+              raise SystemExit("DAST requires a Linux self-hosted runner")
+          event = os.environ["EVENT_NAME"]
+          ref = os.environ["REF_NAME"]
+          if not ((event in {"push", "schedule", "workflow_dispatch"}) and ref == "refs/heads/main"):
+              raise SystemExit("DAST requires schedule, push, or workflow_dispatch on the consumer main branch")
+          PY
+
+      - name: Checkout caller at triggering SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Checkout reusable workflow source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .optimizr-actions-source
+          persist-credentials: false
+
+      - name: Validate targets and prepare scoped rules
+        id: validate
+        shell: bash
+        env:
+          TARGETS: ${{ inputs.targets }}
+          MAX_MINUTES: ${{ inputs.max_duration_minutes }}
+          RULES_FILE: ${{ inputs.rules_file }}
+          RUNNER_JSON: ${{ inputs.runner_json }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import ipaddress
+          import json
+          import os
+          import re
+          import socket
+          from pathlib import Path
+          from urllib.parse import urlsplit
+
+          targets = json.loads(os.environ["TARGETS"])
+          if not isinstance(targets, list) or not 1 <= len(targets) <= 10:
+              raise SystemExit("targets must be a JSON array containing 1-10 URLs")
+          minutes = int(os.environ["MAX_MINUTES"])
+          if not 1 <= minutes <= 5:
+              raise SystemExit("max_duration_minutes must be between 1 and 5")
+          labels = json.loads(os.environ["RUNNER_JSON"])
+          if not isinstance(labels, list) or "self-hosted" not in labels or "Linux" not in labels:
+              raise SystemExit("DAST requires a Linux self-hosted runner")
+          rules = os.environ["RULES_FILE"]
+          if rules:
+              rule_path = Path(rules)
+              if rule_path.is_absolute() or ".." in rule_path.parts or not rule_path.is_file():
+                  raise SystemExit("rules_file must name an existing repository-relative file")
+          for target in targets:
+              if not isinstance(target, str):
+                  raise SystemExit("each target must be a URL string")
+              parsed = urlsplit(target)
+              if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+                  raise SystemExit("targets must be credential-free HTTPS URLs")
+              if parsed.query or parsed.fragment:
+                  raise SystemExit("target URLs must not contain query strings or fragments")
+              try:
+                  addresses = {ipaddress.ip_address(item[4][0]) for item in socket.getaddrinfo(parsed.hostname, parsed.port or 443)}
+              except (OSError, ValueError):
+                  raise SystemExit("target host must resolve before scanning")
+              if not addresses or any(not address.is_global for address in addresses):
+                  raise SystemExit("target host must resolve only to public IP addresses")
+          Path(".dast-baseline").mkdir(exist_ok=True)
+          Path(".dast-baseline/targets.json").write_text(json.dumps(targets), encoding="utf-8")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"count={len(targets)}\nminutes={minutes}\nrules_file={rules}\n")
+          PY
+
+      - name: Run passive baseline scans
+        id: scan
+        shell: bash
+        env:
+          TARGETS: ${{ inputs.targets }}
+          RULES_FILE: ${{ inputs.rules_file }}
+          MAX_MINUTES: ${{ inputs.max_duration_minutes }}
+        run: |
+          set -uo pipefail
+          mkdir -p .dast-baseline/raw
+          mapfile -t targets < <(python3 -c 'import json,os; print("\n".join(json.loads(os.environ["TARGETS"])))')
+          index=0
+          failed=0
+          for target in "${targets[@]}"; do
+            index=$((index + 1))
+            rules=""
+            if [[ -n "$RULES_FILE" ]]; then rules="$(cat -- "$RULES_FILE")"$'\n'; fi
+            host="$(TARGET="$target" python3 -c 'import os; from urllib.parse import urlsplit; print(urlsplit(os.environ["TARGET"]).hostname)')"
+            host_re="$(HOST="$host" python3 -c 'import os,re; print(re.escape(os.environ["HOST"]))')"
+            printf '%s* OUTOFSCOPE ^https?://(?!(?i:%s)(?::[0-9]+)?(?:/|$))\n' "$rules" "$host_re" > ".dast-baseline/raw/rules-$index.conf"
+            TARGET="$target" python3 - <<'PY' > ".dast-baseline/raw/context-$index.context"
+          import os
+          import re
+          from urllib.parse import urlsplit
+
+          target = urlsplit(os.environ["TARGET"])
+          host = re.escape(target.hostname or "")
+          port = f"(?::{target.port})?" if target.port else "(?::443)?"
+          print("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+          print("<configuration><context><name>DAST</name><desc>Host-confined passive scan</desc><inscope>true</inscope>")
+          print(f"<incregexes>^{target.scheme}://(?i:{host}){port}(?:/.*)?$</incregexes>")
+          print("<excregexes></excregexes></context></configuration>")
+          PY
+            status=0
+            docker run --rm --network bridge --memory 2g --cpus 1 --pids-limit 256 \
+              -v "$PWD/.dast-baseline/raw:/zap/wrk/:rw" \
+              'ghcr.io/zaproxy/zaproxy@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af' \
+              zap-baseline.py -t "$target" -m "$MAX_MINUTES" -T "$((MAX_MINUTES + 5))" \
+              -c "/zap/wrk/rules-$index.conf" -n "/zap/wrk/context-$index.context" \
+              -J "raw-$index.json" -r "raw-$index.html" \
+              -I -s -z "-config spider.maxDepth=5 -config spider.maxChildren=100 -config spider.threadCount=2" || status=$?
+            if (( status > 2 )) || [[ ! -s ".dast-baseline/raw/raw-$index.json" ]]; then failed=1; fi
+          done
+          echo "scanner_failed=$failed" >> "$GITHUB_OUTPUT"
+
+      - name: Create sanitized reports and enforce fail_on
+        id: report
+        if: always()
+        shell: bash
+        env:
+          FAIL_ON: ${{ inputs.fail_on }}
+          RULES_FILE: ${{ inputs.rules_file }}
+          SCANNER_FAILED: ${{ steps.scan.outputs.scanner_failed }}
+        run: |
+          set -euo pipefail
+          python3 .optimizr-actions-source/scripts/dast_baseline/report.py
+
+      - name: Upload sanitized DAST reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: dast-baseline-reports
+          path: .dast-baseline/reports
+          if-no-files-found: error
+          retention-days: 14

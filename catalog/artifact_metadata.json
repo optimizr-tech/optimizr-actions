@@ -303,6 +303,13 @@
       "evidence": "Repository-owned validation results with exact-SHA, commit-bound evidence",
       "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_repository-validation.yml@v1"]
     },
+    ".github/workflows/_dast-baseline.yml": {
+      "runner": ["self-hosted-persistent"],
+      "trust_boundary": "trusted-push",
+      "evidence": "Sanitized passive ZAP reports with severity counts",
+      "examples": ["uses: optimizr-tech/optimizr-actions/.github/workflows/_dast-baseline.yml@v1"],
+      "known_limitations": "Requires a trusted Linux self-hosted Docker runner and public HTTPS targets"
+    },
     ".github/workflows/_sast-gate.yml": {
       "trust_boundary": "trusted-pr",
       "evidence": "SAST gate results with expiring exact baselines",
