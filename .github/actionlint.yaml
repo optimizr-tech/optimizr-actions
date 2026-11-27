@@ -58,3 +58,9 @@ paths:
   .github/workflows/_semantic-release.yml:
     ignore:
       - 'property "workflow_(repository|sha)" is not defined in object type .+'
+  .github/workflows/_dast-baseline.yml:
+    ignore:
+      - 'property "workflow_(repository|sha)" is not defined in object type .+'
+  .github/workflows/_config-lint.yml:
+    ignore:
+      - 'property "workflow_(repository|sha)" is not defined in object type .+'
