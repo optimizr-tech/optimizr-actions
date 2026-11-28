@@ -55,6 +55,14 @@ class DastWorkdirPermissionTests(unittest.TestCase):
         self.assertRegex(before_run, r"chmod\s+(?:0?644|a\+r)\s+[^\n]*context-\$index\.context")
         self.assertIn("/zap/wrk/", scan_block)
 
+    def test_generated_outofscope_rule_is_tab_separated_for_zap(self):
+        # ZAP -c rules file: "<plugin>\t<IGNORE|WARN|FAIL|OUTOFSCOPE>\t<url regex>".
+        # Space-separated lines are rejected ("Unexpected number of tokens") and
+        # the scan never runs (serve run 46101654667).
+        line = next(l for l in self.workflow.splitlines() if "OUTOFSCOPE" in l and "printf" in l)
+        self.assertIn(r"*\tOUTOFSCOPE\t^https?://", line)
+        self.assertNotIn("* OUTOFSCOPE ", line)
+
     def test_missing_scan_output_marks_scanner_failed(self):
         self.assertRegex(self.workflow, re.escape('[[ ! -s ".dast-baseline/raw/raw-$index.json" ]]'))
         self.assertIn('echo "scanner_failed=$failed" >> "$GITHUB_OUTPUT"', self.workflow)
