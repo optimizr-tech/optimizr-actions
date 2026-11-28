@@ -148,8 +148,9 @@ def run_hadolint(root: Path, files: list[Path], policy: dict, failures: list[dic
     for path in files:
         relative = path.relative_to(root).as_posix()
         result = subprocess.run(
+            # The hadolint image has no ENTRYPOINT: the binary must be the command.
             ["docker", "run", "--rm", "-v", f"{root}:/workspace:ro", HADOLINT_IMAGE,
-             "--format", "json", f"/workspace/{relative}"],
+             "hadolint", "--format", "json", f"/workspace/{relative}"],
             cwd=root, capture_output=True, text=True,
         )
         if result.returncode not in (0, 1):
