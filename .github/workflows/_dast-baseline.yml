@@ -165,7 +165,8 @@ jobs:
             if [[ -n "$RULES_FILE" ]]; then rules="$(cat -- "$RULES_FILE")"$'\n'; fi
             host="$(TARGET="$target" python3 -c 'import os; from urllib.parse import urlsplit; print(urlsplit(os.environ["TARGET"]).hostname)')"
             host_re="$(HOST="$host" python3 -c 'import os,re; print(re.escape(os.environ["HOST"]))')"
-            printf '%s* OUTOFSCOPE ^https?://(?!(?i:%s)(?::[0-9]+)?(?:/|$))\n' "$rules" "$host_re" > ".dast-baseline/raw/rules-$index.conf"
+            # ZAP rules files are tab-separated: <plugin>\t<action>\t<url regex>.
+            printf '%s*\tOUTOFSCOPE\t^https?://(?!(?i:%s)(?::[0-9]+)?(?:/|$))\n' "$rules" "$host_re" > ".dast-baseline/raw/rules-$index.conf"
             TARGET="$target" python3 - <<'PY' > ".dast-baseline/raw/context-$index.context"
           import os
           import re
