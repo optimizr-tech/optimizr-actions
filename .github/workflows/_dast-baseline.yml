@@ -153,6 +153,9 @@ jobs:
         run: |
           set -uo pipefail
           mkdir -p .dast-baseline/raw
+          # ZAP runs as the unprivileged `zap` user: the bind-mounted work dir must be
+          # writable and the rules/context inputs readable by a different UID.
+          chmod 0777 .dast-baseline/raw
           mapfile -t targets < <(python3 -c 'import json,os; print("\n".join(json.loads(os.environ["TARGETS"])))')
           index=0
           failed=0
@@ -176,6 +179,7 @@ jobs:
           print(f"<incregexes>^{target.scheme}://(?i:{host}){port}(?:/.*)?$</incregexes>")
           print("<excregexes></excregexes></context></configuration>")
           PY
+            chmod 0644 ".dast-baseline/raw/rules-$index.conf" ".dast-baseline/raw/context-$index.context"
             status=0
             docker run --rm --network bridge --memory 2g --cpus 1 --pids-limit 256 \
               -v "$PWD/.dast-baseline/raw:/zap/wrk/:rw" \
